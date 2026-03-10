@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   keyboardView: { flex: 1 },
   loadingContainer: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
-  scrollContent: { flexGrow: 1, padding: 24, justifyContent: 'flex-end', paddingBottom: 60 },
+  scrollContent: { flexGrow: 1, padding: 24, justifyContent: 'center' },
   heroSection: { alignItems: 'center', marginBottom: 16 },
   iconContainer: {
     width: 80, height: 80, borderRadius: 20,
