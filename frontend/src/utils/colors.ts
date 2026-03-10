@@ -1,0 +1,18 @@
+export const Colors = {
+  background: '#09090b',
+  surface: '#18181b',
+  surfaceHighlight: '#27272a',
+  border: '#3f3f46',
+  textPrimary: '#f4f4f5',
+  textSecondary: '#a1a1aa',
+  textMuted: '#71717a',
+  primary: '#22c55e',
+  primaryDark: '#16a34a',
+  destructive: '#ef4444',
+  swishBrand: '#D41420',
+  swishGradientEnd: '#F78F30',
+  white: '#ffffff',
+  black: '#000000',
+  warning: '#f59e0b',
+  info: '#3b82f6',
+};

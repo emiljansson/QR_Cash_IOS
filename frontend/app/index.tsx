@@ -1,30 +1,238 @@
-import { Text, View, StyleSheet, Image } from "react-native";
+import React, { useState, useEffect } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { useAuth } from '../src/contexts/AuthContext';
+import { Colors } from '../src/utils/colors';
+import { Ionicons } from '@expo/vector-icons';
 
-const EXPO_PUBLIC_BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+export default function LoginScreen() {
+  const { user, loading, login } = useAuth();
+  const router = useRouter();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-export default function Index() {
-  console.log(EXPO_PUBLIC_BACKEND_URL, "EXPO_PUBLIC_BACKEND_URL");
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace('/(tabs)/pos');
+    }
+  }, [user, loading]);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError('Fyll i alla fält');
+      return;
+    }
+    setError('');
+    setSubmitting(true);
+    try {
+      await login(email.trim(), password);
+      router.replace('/(tabs)/pos');
+    } catch (e: any) {
+      setError(e.message || 'Inloggningen misslyckades');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <View style={styles.container}>
-      <Image
-        source={require("../assets/images/app-image.png")}
-        style={styles.image}
-      />
-    </View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.heroSection}>
+          <View style={styles.iconContainer}>
+            <Ionicons name="qr-code" size={48} color={Colors.primary} />
+          </View>
+          <Text style={styles.title}>QR-Kassan</Text>
+          <Text style={styles.subtitle}>Kassasystem med Swish-betalning</Text>
+          <View style={styles.badgeRow}>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>100% Gratis</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Logga in</Text>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color={Colors.destructive} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>E-post</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="mail-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+              <TextInput
+                testID="login-email-input"
+                style={styles.input}
+                placeholder="din@email.se"
+                placeholderTextColor={Colors.textMuted}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Lösenord</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+              <TextInput
+                testID="login-password-input"
+                style={styles.input}
+                placeholder="Ditt lösenord"
+                placeholderTextColor={Colors.textMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            testID="login-submit-btn"
+            style={[styles.loginButton, submitting && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={submitting}
+            activeOpacity={0.8}
+          >
+            {submitting ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.loginButtonText}>Logga in</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="guest-login-btn"
+            style={styles.guestButton}
+            onPress={() => {
+              setEmail('Guest1');
+              setPassword('Guest1');
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-outline" size={16} color={Colors.textSecondary} />
+            <Text style={styles.guestButtonText}>Testa med gästkonto</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>eller</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            testID="register-link-btn"
+            style={styles.registerButton}
+            onPress={() => router.push('/register')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.registerButtonText}>Skapa nytt konto</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.features}>
+          <View style={styles.featureItem}>
+            <Ionicons name="qr-code-outline" size={20} color={Colors.primary} />
+            <Text style={styles.featureText}>Swish QR-koder</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="flash-outline" size={20} color={Colors.primary} />
+            <Text style={styles.featureText}>Blixtsnabbt</Text>
+          </View>
+          <View style={styles.featureItem}>
+            <Ionicons name="people-outline" size={20} color={Colors.primary} />
+            <Text style={styles.featureText}>För föreningar</Text>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0c0c0c",
-    alignItems: "center",
-    justifyContent: "center",
+  container: { flex: 1, backgroundColor: Colors.background },
+  loadingContainer: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: { flexGrow: 1, padding: 24, justifyContent: 'center' },
+  heroSection: { alignItems: 'center', marginBottom: 32 },
+  iconContainer: {
+    width: 80, height: 80, borderRadius: 20,
+    backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center',
+    marginBottom: 16, borderWidth: 1, borderColor: Colors.border,
   },
-  image: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "contain",
+  title: { fontSize: 32, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -1 },
+  subtitle: { fontSize: 16, color: Colors.textSecondary, marginTop: 4 },
+  badgeRow: { marginTop: 12 },
+  badge: {
+    backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12,
   },
+  badgeText: { color: Colors.white, fontSize: 12, fontWeight: '600' },
+  card: {
+    backgroundColor: Colors.surface, borderRadius: 16, padding: 24,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  cardTitle: { fontSize: 20, fontWeight: '600', color: Colors.textPrimary, marginBottom: 20 },
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239,68,68,0.1)',
+    padding: 12, borderRadius: 8, marginBottom: 16, gap: 8,
+  },
+  errorText: { color: Colors.destructive, fontSize: 14, flex: 1 },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '500', color: Colors.textSecondary, marginBottom: 6 },
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.background, borderRadius: 10,
+    borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12,
+  },
+  inputIcon: { marginRight: 8 },
+  input: { flex: 1, height: 48, color: Colors.textPrimary, fontSize: 16 },
+  eyeIcon: { padding: 4 },
+  loginButton: {
+    backgroundColor: Colors.primary, height: 52, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center', marginTop: 8,
+  },
+  buttonDisabled: { opacity: 0.6 },
+  loginButtonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  guestButton: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    marginTop: 12, gap: 6, padding: 8,
+  },
+  guestButtonText: { color: Colors.textSecondary, fontSize: 14 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 16 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { color: Colors.textMuted, fontSize: 12, marginHorizontal: 12 },
+  registerButton: {
+    borderWidth: 1, borderColor: Colors.border, height: 48, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  registerButtonText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '500' },
+  features: { flexDirection: 'row', justifyContent: 'center', marginTop: 32, gap: 24 },
+  featureItem: { alignItems: 'center', gap: 4 },
+  featureText: { color: Colors.textSecondary, fontSize: 11 },
 });
