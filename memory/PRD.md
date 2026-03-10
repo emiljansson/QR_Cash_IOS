@@ -13,11 +13,14 @@ Swish POS (Point of Sale) system converted from React web to Expo/React Native w
 1. **Login/Register** - Email/password auth with session tokens
 2. **POS Terminal** - Product grid, shopping cart, Swish QR & cash payment
 3. **Admin Panel** - PIN-protected: product CRUD, stats, settings
-4. **Order History** - View/filter orders (all, paid, pending)
-5. **Profile** - User info, subscription status, logout
+4. **Order History** - View/filter orders, expand for details, email receipts
+5. **Profile** - User info, subscription status with dates, logout
 6. **Customer Display** - Standalone screen at /display with 4-digit pairing code, shows items + Swish QR
 7. **Pair Display** - Connect customer displays from POS via /pair-display
-8. **Superadmin** - User management, system settings (backend routes available)
+8. **Parked Carts** - Save/restore/delete carts, send to display
+9. **Email Receipts** - Send order receipts via email (requires Resend API key)
+10. **Subscription Management** - View subscription status, start/end dates
+11. **Superadmin** - User management, system settings (backend routes available)
 
 ## Test Credentials
 - **User**: test@test.se / test123
@@ -52,6 +55,7 @@ Kaffe (25 kr), Latte (35 kr), Kanelbulle (30 kr), Smörgås (55 kr), Vatten (15 
 - `app/(tabs)/profile.tsx` - User profile
 - `app/display.tsx` - Customer display (standalone, no auth)
 - `app/pair-display.tsx` - Pair display management (auth required)
+- `app/parked-carts.tsx` - Parked carts management
 - `src/contexts/AuthContext.tsx` - Auth state management
 - `src/utils/api.ts` - API client
 - `src/utils/colors.ts` - Color theme
