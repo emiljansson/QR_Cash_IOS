@@ -171,6 +171,15 @@ export default function LoginScreen() {
             <Text style={styles.featureText}>För föreningar</Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          testID="superadmin-link"
+          style={styles.superadminLink}
+          onPress={() => router.push('/superadmin')}
+        >
+          <Ionicons name="shield-checkmark-outline" size={14} color={Colors.textMuted} />
+          <Text style={styles.superadminLinkText}>Superadmin</Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -235,4 +244,9 @@ const styles = StyleSheet.create({
   features: { flexDirection: 'row', justifyContent: 'center', marginTop: 32, gap: 24 },
   featureItem: { alignItems: 'center', gap: 4 },
   featureText: { color: Colors.textSecondary, fontSize: 11 },
+  superadminLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 4, marginTop: 16, padding: 8,
+  },
+  superadminLinkText: { color: Colors.textMuted, fontSize: 11 },
 });
