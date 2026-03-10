@@ -214,9 +214,6 @@ export default function POSScreen() {
             <Ionicons name="tv-outline" size={18} color={Colors.primary} />
             <Text style={styles.displayBtnText}>Skärm</Text>
           </TouchableOpacity>
-          <TouchableOpacity testID="refresh-products-btn" onPress={loadProducts} style={styles.refreshBtn}>
-            <Ionicons name="refresh" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -395,7 +392,6 @@ const styles = StyleSheet.create({
     borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)',
   },
   displayBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '500' },
-  refreshBtn: { padding: 8 },
   productGrid: { padding: 8 },
   productRow: { gap: 8, paddingHorizontal: 8 },
   productCard: {
