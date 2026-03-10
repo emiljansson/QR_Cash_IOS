@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Alert,
+  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -28,7 +28,7 @@ export default function RegisterScreen() {
     setError('');
     setSubmitting(true);
     try {
-      const msg = await register(form);
+      await register(form);
       setSuccess(true);
     } catch (e: any) {
       setError(e.message || 'Registreringen misslyckades');
@@ -41,18 +41,24 @@ export default function RegisterScreen() {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push('/');
+    }
+  };
+
   if (success) {
     return (
       <View style={styles.container}>
-        <View style={styles.successCard}>
-          <View style={styles.successIcon}>
-            <Ionicons name="checkmark-circle" size={64} color={Colors.primary} />
-          </View>
+        <View style={styles.centerContent}>
+          <Ionicons name="checkmark-circle" size={64} color={Colors.primary} />
           <Text style={styles.successTitle}>Konto skapat!</Text>
           <Text style={styles.successText}>
             Kontrollera din e-post för att verifiera kontot innan du loggar in.
           </Text>
-          <TouchableOpacity testID="back-to-login-btn" style={styles.primaryButton} onPress={() => router.back()}>
+          <TouchableOpacity testID="back-to-login-btn" style={styles.primaryButton} onPress={goBack}>
             <Text style={styles.primaryButtonText}>Tillbaka till inloggning</Text>
           </TouchableOpacity>
         </View>
@@ -63,21 +69,25 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity testID="back-btn" style={styles.backButton} onPress={() => router.replace('/')}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
-
-        <Text style={styles.title}>Skapa konto</Text>
-        <Text style={styles.subtitle}>Kom igång med ditt kassasystem</Text>
-
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={16} color={Colors.destructive} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-
         <View style={styles.card}>
+          {/* Header with back button */}
+          <View style={styles.cardHeader}>
+            <TouchableOpacity testID="back-btn" onPress={goBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={22} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            <View style={styles.cardHeaderText}>
+              <Text style={styles.title}>Skapa konto</Text>
+              <Text style={styles.subtitle}>Kom igång med ditt kassasystem</Text>
+            </View>
+          </View>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color={Colors.destructive} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
           {[
             { key: 'organization_name', label: 'Organisationsnamn *', placeholder: 'Namn på din butik/förening', icon: 'business-outline' as const },
             { key: 'name', label: 'Ditt namn', placeholder: 'Ditt för- och efternamn', icon: 'person-outline' as const },
@@ -124,17 +134,26 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  scrollContent: { flexGrow: 1, padding: 24 },
-  backButton: { marginBottom: 16, width: 40 },
-  title: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -0.5 },
-  subtitle: { fontSize: 16, color: Colors.textSecondary, marginBottom: 24 },
-  card: { backgroundColor: Colors.surface, borderRadius: 16, padding: 24, borderWidth: 1, borderColor: Colors.border },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  card: {
+    backgroundColor: Colors.surface, borderRadius: 16, padding: 24,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 },
+  backButton: {
+    width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.surfaceHighlight,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  cardHeaderText: { flex: 1 },
+  title: { fontSize: 22, fontWeight: '700', color: Colors.textPrimary },
+  subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 2 },
   errorBox: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239,68,68,0.1)',
     padding: 12, borderRadius: 8, marginBottom: 16, gap: 8,
   },
   errorText: { color: Colors.destructive, fontSize: 14, flex: 1 },
-  inputGroup: { marginBottom: 16 },
+  inputGroup: { marginBottom: 14 },
   label: { fontSize: 14, fontWeight: '500', color: Colors.textSecondary, marginBottom: 6 },
   inputWrapper: {
     flexDirection: 'row', alignItems: 'center',
@@ -149,10 +168,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   primaryButtonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
-  successCard: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32,
-  },
-  successIcon: { marginBottom: 24 },
-  successTitle: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
+  successTitle: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginTop: 16 },
   successText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', marginBottom: 32, lineHeight: 24 },
 });
