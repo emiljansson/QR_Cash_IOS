@@ -38,6 +38,7 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
 
 // =================== LOGIN ===================
 function AdminLogin({ onLogin }: { onLogin: () => void }) {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -85,6 +86,10 @@ function AdminLogin({ onLogin }: { onLogin: () => void }) {
           </View>
           <TouchableOpacity testID="admin-login-btn" style={[s.loginBtn, loading && { opacity: 0.5 }]} onPress={handleLogin} disabled={loading}>
             {loading ? <ActivityIndicator color={C.white} /> : <Text style={s.loginBtnText}>Logga in</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity testID="admin-back-btn" style={s.loginBackBtn} onPress={() => router.canGoBack() ? router.back() : router.push('/')}>
+            <Ionicons name="arrow-back" size={16} color={C.textSec} />
+            <Text style={s.loginBackText}>Tillbaka till förstasidan</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -560,6 +565,11 @@ const s = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginTop: 4,
   },
   loginBtnText: { color: C.white, fontSize: 16, fontWeight: '600' },
+  loginBackBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, marginTop: 16, padding: 8,
+  },
+  loginBackText: { color: C.textSec, fontSize: 14 },
 
   // Header
   header: {
