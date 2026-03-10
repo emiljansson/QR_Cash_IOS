@@ -8,6 +8,7 @@ import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import QRCode from 'react-native-qrcode-svg';
+import { useRouter } from 'expo-router';
 
 interface Product {
   id: string;
@@ -28,6 +29,7 @@ interface CartItem {
 
 export default function POSScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,9 +191,15 @@ export default function POSScreen() {
           <Text style={styles.headerTitle}>{settings.store_name || 'Kassa'}</Text>
           <Text style={styles.headerSubtitle}>{products.length} produkter</Text>
         </View>
-        <TouchableOpacity testID="refresh-products-btn" onPress={loadProducts} style={styles.refreshBtn}>
-          <Ionicons name="refresh" size={20} color={Colors.textSecondary} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity testID="pair-display-btn" onPress={() => router.push('/pair-display')} style={styles.displayBtn}>
+            <Ionicons name="tv-outline" size={18} color={Colors.primary} />
+            <Text style={styles.displayBtnText}>Skärm</Text>
+          </TouchableOpacity>
+          <TouchableOpacity testID="refresh-products-btn" onPress={loadProducts} style={styles.refreshBtn}>
+            <Ionicons name="refresh" size={20} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Product Grid */}
@@ -345,6 +353,13 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
   headerSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  displayBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)',
+  },
+  displayBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '500' },
   refreshBtn: { padding: 8 },
   productGrid: { padding: 8 },
   productRow: { gap: 8, paddingHorizontal: 8 },

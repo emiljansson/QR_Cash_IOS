@@ -10,6 +10,8 @@ export default function RootLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="register" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="display" />
+        <Stack.Screen name="pair-display" options={{ presentation: 'modal' }} />
       </Stack>
     </AuthProvider>
   );
