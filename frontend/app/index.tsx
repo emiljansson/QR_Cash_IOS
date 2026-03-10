@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
-  useWindowDimensions, SafeAreaView,
+  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 export default function LoginScreen() {
   const { user, loading, login } = useAuth();
   const router = useRouter();
-  const { height } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -159,23 +158,6 @@ export default function LoginScreen() {
             <Text style={styles.registerButtonText}>Skapa nytt konto</Text>
           </TouchableOpacity>
         </View>
-
-        {height > 750 && (
-          <View style={styles.features}>
-            <View style={styles.featureItem}>
-              <Ionicons name="qr-code-outline" size={20} color={Colors.primary} />
-              <Text style={styles.featureText}>Swish QR-koder</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="flash-outline" size={20} color={Colors.primary} />
-              <Text style={styles.featureText}>Blixtsnabbt</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="people-outline" size={20} color={Colors.primary} />
-              <Text style={styles.featureText}>För föreningar</Text>
-            </View>
-          </View>
-        )}
       </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -234,7 +216,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   registerButtonText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '500' },
-  features: { flexDirection: 'row', justifyContent: 'center', marginTop: 32, gap: 24 },
-  featureItem: { alignItems: 'center', gap: 4 },
-  featureText: { color: Colors.textSecondary, fontSize: 11 },
 });
