@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   loadingContainer: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 16 },
-  superadminIcon: { position: 'absolute', top: 0, right: 0, padding: 8, zIndex: 10 },
+  superadminIcon: { alignSelf: 'flex-end', padding: 8, marginBottom: -8 },
   heroSection: { alignItems: 'center', marginBottom: 16 },
   heroSectionSmall: { marginBottom: 10 },
   title: { fontSize: 26, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -0.5, marginTop: 8 },
