@@ -56,6 +56,15 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* Superadmin icon top-right */}
+        <TouchableOpacity
+          testID="superadmin-link"
+          style={styles.superadminIcon}
+          onPress={() => router.push('/superadmin')}
+        >
+          <Ionicons name="shield-checkmark-outline" size={16} color={Colors.textMuted} />
+        </TouchableOpacity>
+
         <View style={styles.heroSection}>
           <View style={styles.iconContainer}>
             <Ionicons name="qr-code" size={48} color={Colors.primary} />
@@ -170,15 +179,6 @@ export default function LoginScreen() {
             </View>
           </View>
         )}
-
-        <TouchableOpacity
-          testID="superadmin-link"
-          style={styles.superadminLink}
-          onPress={() => router.push('/superadmin')}
-        >
-          <Ionicons name="shield-checkmark-outline" size={14} color={Colors.textMuted} />
-          <Text style={styles.superadminLinkText}>Superadmin</Text>
-        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -238,9 +238,7 @@ const styles = StyleSheet.create({
   features: { flexDirection: 'row', justifyContent: 'center', marginTop: 32, gap: 24 },
   featureItem: { alignItems: 'center', gap: 4 },
   featureText: { color: Colors.textSecondary, fontSize: 11 },
-  superadminLink: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 4, marginTop: 16, padding: 8,
+  superadminIcon: {
+    position: 'absolute', top: 0, right: 0, padding: 8, zIndex: 10,
   },
-  superadminLinkText: { color: Colors.textMuted, fontSize: 11 },
 });
