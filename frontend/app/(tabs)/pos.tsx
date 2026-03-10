@@ -163,7 +163,7 @@ export default function POSScreen() {
       <Image
         source={{ uri: item.image_url || 'https://via.placeholder.com/200/27272a/ffffff?text=Produkt' }}
         style={styles.productImage}
-        resizeMode="cover"
+        resizeMode={"cover" as any}
       />
       <View style={styles.productInfo}>
         <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
