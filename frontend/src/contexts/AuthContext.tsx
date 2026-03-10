@@ -10,6 +10,8 @@ interface User {
   phone: string;
   email_verified: boolean;
   subscription_active: boolean;
+  subscription_start?: string;
+  subscription_end?: string;
   picture?: string;
 }
 

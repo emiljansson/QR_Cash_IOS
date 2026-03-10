@@ -12,6 +12,7 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="display" />
         <Stack.Screen name="pair-display" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="parked-carts" options={{ presentation: 'modal' }} />
       </Stack>
     </AuthProvider>
   );

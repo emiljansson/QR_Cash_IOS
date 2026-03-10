@@ -8,7 +8,7 @@ import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import QRCode from 'react-native-qrcode-svg';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 interface Product {
   id: string;
@@ -30,6 +30,7 @@ interface CartItem {
 export default function POSScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ restoreCart?: string; restoreTotal?: string; restoreCartId?: string }>();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +61,20 @@ export default function POSScreen() {
     loadProducts();
     loadSettings();
   }, []);
+
+  // Handle restoring parked cart
+  useEffect(() => {
+    if (params.restoreCart) {
+      try {
+        const items = JSON.parse(params.restoreCart);
+        setCart(items);
+        // Delete the parked cart after restore
+        if (params.restoreCartId) {
+          api.deleteParkedCart(params.restoreCartId).catch(() => {});
+        }
+      } catch {}
+    }
+  }, [params.restoreCart]);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -192,6 +207,9 @@ export default function POSScreen() {
           <Text style={styles.headerSubtitle}>{products.length} produkter</Text>
         </View>
         <View style={styles.headerActions}>
+          <TouchableOpacity testID="view-parked-carts-btn" onPress={() => router.push('/parked-carts')} style={styles.parkedBtn}>
+            <Ionicons name="bookmark-outline" size={18} color={Colors.warning} />
+          </TouchableOpacity>
           <TouchableOpacity testID="pair-display-btn" onPress={() => router.push('/pair-display')} style={styles.displayBtn}>
             <Ionicons name="tv-outline" size={18} color={Colors.primary} />
             <Text style={styles.displayBtnText}>Skärm</Text>
@@ -225,9 +243,22 @@ export default function POSScreen() {
         <View style={styles.cartSection}>
           <View style={styles.cartHeader}>
             <Text style={styles.cartTitle}>Varukorg ({cart.reduce((s, i) => s + i.quantity, 0)})</Text>
-            <TouchableOpacity testID="clear-cart-btn" onPress={() => setCart([])}>
-              <Text style={styles.clearCartText}>Rensa</Text>
-            </TouchableOpacity>
+            <View style={styles.cartHeaderActions}>
+              <TouchableOpacity
+                testID="park-cart-btn"
+                onPress={() => router.push({
+                  pathname: '/parked-carts',
+                  params: { cartItems: JSON.stringify(cart), cartTotal: String(cartTotal) },
+                })}
+                style={styles.parkBtn}
+              >
+                <Ionicons name="bookmark-outline" size={16} color={Colors.warning} />
+                <Text style={styles.parkBtnText}>Parkera</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID="clear-cart-btn" onPress={() => setCart([])}>
+                <Text style={styles.clearCartText}>Rensa</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView style={styles.cartItems} nestedScrollEnabled>
@@ -354,6 +385,10 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
   headerSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  parkedBtn: {
+    padding: 8, backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 8,
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)',
+  },
   displayBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 12, paddingVertical: 8,
@@ -380,6 +415,12 @@ const styles = StyleSheet.create({
   },
   cartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   cartTitle: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
+  cartHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  parkBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(245,158,11,0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
+  },
+  parkBtnText: { color: Colors.warning, fontSize: 13, fontWeight: '500' },
   clearCartText: { fontSize: 14, color: Colors.destructive },
   cartItems: { maxHeight: 120 },
   cartItem: {

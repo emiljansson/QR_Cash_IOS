@@ -178,6 +178,14 @@ class ApiClient {
   async sendParkedCartToDisplay(id: string) {
     return this.request(`/parked-carts/${id}/send-to-display`, { method: 'POST' });
   }
+
+  // Receipts
+  async sendReceipt(orderId: string, email: string) {
+    return this.request('/receipts/send', {
+      method: 'POST',
+      body: JSON.stringify({ order_id: orderId, recipient_email: email }),
+    });
+  }
 }
 
 export const api = new ApiClient();
