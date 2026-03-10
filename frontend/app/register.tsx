@@ -63,7 +63,7 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity testID="back-btn" style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity testID="back-btn" style={styles.backButton} onPress={() => router.replace('/')}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
 

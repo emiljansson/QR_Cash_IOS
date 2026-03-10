@@ -361,6 +361,10 @@ async def login(data: UserLogin, response: Response):
     if not await verify_password_async(data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Fel e-post eller lösenord")
     
+    # Block disabled guest account
+    if data.email == "Guest1" and not user.get("subscription_active", False):
+        raise HTTPException(status_code=403, detail="Gästkontot är inaktiverat")
+    
     # Check email verification
     if not user.get("email_verified"):
         raise HTTPException(status_code=403, detail="E-postadressen är inte verifierad. Kontrollera din inkorg.")

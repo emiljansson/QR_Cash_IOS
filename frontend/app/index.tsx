@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -11,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 export default function LoginScreen() {
   const { user, loading, login } = useAuth();
   const router = useRouter();
+  const { height } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -59,12 +61,7 @@ export default function LoginScreen() {
             <Ionicons name="qr-code" size={48} color={Colors.primary} />
           </View>
           <Text style={styles.title}>QR-Kassan</Text>
-          <Text style={styles.subtitle}>Kassasystem med Swish-betalning</Text>
-          <View style={styles.badgeRow}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>100% Gratis</Text>
-            </View>
-          </View>
+          <Text style={styles.subtitle}>System för Swish-betalning</Text>
         </View>
 
         <View style={styles.card}>
@@ -157,20 +154,22 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.features}>
-          <View style={styles.featureItem}>
-            <Ionicons name="qr-code-outline" size={20} color={Colors.primary} />
-            <Text style={styles.featureText}>Swish QR-koder</Text>
+        {height > 750 && (
+          <View style={styles.features}>
+            <View style={styles.featureItem}>
+              <Ionicons name="qr-code-outline" size={20} color={Colors.primary} />
+              <Text style={styles.featureText}>Swish QR-koder</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="flash-outline" size={20} color={Colors.primary} />
+              <Text style={styles.featureText}>Blixtsnabbt</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="people-outline" size={20} color={Colors.primary} />
+              <Text style={styles.featureText}>För föreningar</Text>
+            </View>
           </View>
-          <View style={styles.featureItem}>
-            <Ionicons name="flash-outline" size={20} color={Colors.primary} />
-            <Text style={styles.featureText}>Blixtsnabbt</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Ionicons name="people-outline" size={20} color={Colors.primary} />
-            <Text style={styles.featureText}>För föreningar</Text>
-          </View>
-        </View>
+        )}
 
         <TouchableOpacity
           testID="superadmin-link"
@@ -197,11 +196,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 32, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -1 },
   subtitle: { fontSize: 16, color: Colors.textSecondary, marginTop: 4 },
-  badgeRow: { marginTop: 12 },
-  badge: {
-    backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12,
-  },
-  badgeText: { color: Colors.white, fontSize: 12, fontWeight: '600' },
   card: {
     backgroundColor: Colors.surface, borderRadius: 16, padding: 24,
     borderWidth: 1, borderColor: Colors.border,
