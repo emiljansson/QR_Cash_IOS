@@ -20,7 +20,7 @@ Swish POS (Point of Sale) system converted from React web to Expo/React Native w
 8. **Parked Carts** - Save/restore/delete carts, send to display
 9. **Email Receipts** - Send order receipts via email (requires Resend API key)
 10. **Subscription Management** - View subscription status, start/end dates
-11. **Superadmin** - User management, system settings (backend routes available)
+11. **Superadmin Panel** - Web-focused: login, user management, subscription updates, system stats, economic overview, system settings, Guest1 toggle
 
 ## Test Credentials
 - **User**: test@test.se / test123
@@ -56,6 +56,7 @@ Kaffe (25 kr), Latte (35 kr), Kanelbulle (30 kr), Smörgås (55 kr), Vatten (15 
 - `app/display.tsx` - Customer display (standalone, no auth)
 - `app/pair-display.tsx` - Pair display management (auth required)
 - `app/parked-carts.tsx` - Parked carts management
+- `app/superadmin.tsx` - Superadmin panel (web-focused)
 - `src/contexts/AuthContext.tsx` - Auth state management
 - `src/utils/api.ts` - API client
 - `src/utils/colors.ts` - Color theme
