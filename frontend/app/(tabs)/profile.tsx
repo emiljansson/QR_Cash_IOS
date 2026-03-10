@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert,
+  Platform, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/utils/colors';
@@ -10,19 +11,27 @@ import { useRouter } from 'expo-router';
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleLogout = () => {
-    Alert.alert('Logga ut', 'Vill du logga ut?', [
-      { text: 'Avbryt', style: 'cancel' },
-      {
-        text: 'Logga ut',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/');
+    if (Platform.OS === 'web') {
+      setShowLogoutModal(true);
+    } else {
+      Alert.alert('Logga ut', 'Vill du logga ut?', [
+        { text: 'Avbryt', style: 'cancel' },
+        {
+          text: 'Logga ut',
+          style: 'destructive',
+          onPress: confirmLogout,
         },
-      },
-    ]);
+      ]);
+    }
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutModal(false);
+    await logout();
+    router.replace('/');
   };
 
   const subActive = user?.subscription_active;
@@ -118,6 +127,35 @@ export default function ProfileScreen() {
         </TouchableOpacity>
 
         <Text style={styles.version}>QR-Kassan v2.0.0</Text>
+
+        {/* Logout Confirmation Modal for Web */}
+        <Modal
+          visible={showLogoutModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowLogoutModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Logga ut</Text>
+              <Text style={styles.modalText}>Vill du logga ut?</Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShowLogoutModal(false)}
+                >
+                  <Text style={styles.modalCancelText}>Avbryt</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalLogoutBtn}
+                  onPress={confirmLogout}
+                >
+                  <Text style={styles.modalLogoutText}>Logga ut</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -196,4 +234,27 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: Colors.destructive, fontSize: 16, fontWeight: '600' },
   version: { textAlign: 'center', color: Colors.textMuted, fontSize: 12, marginTop: 24 },
+  
+  // Modal styles
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: Colors.surface, borderRadius: 16, padding: 24,
+    width: '85%', maxWidth: 320, borderWidth: 1, borderColor: Colors.border,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8 },
+  modalText: { fontSize: 16, color: Colors.textSecondary, marginBottom: 24 },
+  modalButtons: { flexDirection: 'row', gap: 12 },
+  modalCancelBtn: {
+    flex: 1, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.surfaceHighlight, borderWidth: 1, borderColor: Colors.border,
+  },
+  modalCancelText: { color: Colors.textPrimary, fontSize: 15, fontWeight: '600' },
+  modalLogoutBtn: {
+    flex: 1, height: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.destructive,
+  },
+  modalLogoutText: { color: Colors.white, fontSize: 15, fontWeight: '600' },
 });
