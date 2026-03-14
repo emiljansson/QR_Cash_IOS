@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     marginTop: 12, gap: 6, padding: 8,
   },
   guestButtonText: { color: Colors.textSecondary, fontSize: 14 },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 16 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
   dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
   dividerText: { color: Colors.textMuted, fontSize: 12, marginHorizontal: 12 },
   registerButton: {
