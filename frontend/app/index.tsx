@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
-  SafeAreaView,
+  SafeAreaView, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -63,7 +63,10 @@ export default function LoginScreen() {
             onPress={() => router.push('/superadmin')}
             activeOpacity={0.7}
           >
-            <Ionicons name="qr-code" size={48} color={Colors.primary} />
+            <Image 
+              source={require('../assets/images/icon.png')} 
+              style={styles.logoImage}
+            />
           </TouchableOpacity>
           <Text style={styles.title}>QR-Kassan</Text>
           <Text style={styles.subtitle}>System för Swish-betalning</Text>
@@ -183,7 +186,10 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 80, height: 80, borderRadius: 20,
     backgroundColor: Colors.surface, justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12, borderWidth: 1, borderColor: Colors.border,
+    marginBottom: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden',
+  },
+  logoImage: {
+    width: 80, height: 80, borderRadius: 20,
   },
   title: { fontSize: 32, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -1 },
   subtitle: { fontSize: 16, color: Colors.textSecondary, marginTop: 4 },
