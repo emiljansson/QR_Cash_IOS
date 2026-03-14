@@ -30,8 +30,17 @@ export default function ProfileScreen() {
 
   const confirmLogout = async () => {
     setShowLogoutModal(false);
-    await logout();
-    router.replace('/');
+    try {
+      await logout();
+    } catch (e) {
+      // Ignore logout errors
+    }
+    // Force redirect to login page
+    if (Platform.OS === 'web') {
+      window.location.href = '/';
+    } else {
+      router.replace('/');
+    }
   };
 
   const subActive = user?.subscription_active;

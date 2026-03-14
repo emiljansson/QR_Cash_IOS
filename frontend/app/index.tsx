@@ -133,9 +133,19 @@ export default function LoginScreen() {
           <TouchableOpacity
             testID="guest-login-btn"
             style={styles.guestButton}
-            onPress={() => {
+            onPress={async () => {
               setEmail('Guest1');
               setPassword('Guest1');
+              setSubmitting(true);
+              setError('');
+              try {
+                await login('Guest1', 'Guest1');
+                router.replace('/(tabs)/pos');
+              } catch (e: any) {
+                setError(e.message || 'Kunde inte logga in med gästkonto');
+              } finally {
+                setSubmitting(false);
+              }
             }}
             activeOpacity={0.7}
           >
