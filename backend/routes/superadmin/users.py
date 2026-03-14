@@ -563,3 +563,60 @@ async def toggle_guest1(request: Request):
     
     logger.info(f"Guest1 account {'enabled' if new_status else 'disabled'}")
     return {"exists": True, "enabled": new_status, "user_id": user.get("user_id")}
+
+
+
+@router.post("/migrate-images-to-cloudinary")
+async def migrate_images_to_cloudinary(request: Request):
+    """Migrate all product images from local URLs to Cloudinary URLs"""
+    await require_admin(request)
+    db = get_db()
+    
+    # Mapping from old local URLs to new Cloudinary URLs
+    url_mapping = {
+        "/api/uploads/shared_img_4a0b56a02c86.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512632/qrkassan/shared/shared_img_4a0b56a02c86.jpg",
+        "/api/uploads/shared_img_747b80038b90.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512633/qrkassan/shared/shared_img_747b80038b90.jpg",
+        "/api/uploads/shared_img_dd05a578b64d.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512633/qrkassan/shared/shared_img_dd05a578b64d.jpg",
+        "/api/uploads/shared_img_e2ed86ed74fe.png": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512634/qrkassan/shared/shared_img_e2ed86ed74fe.png",
+        "/api/uploads/shared_img_9ff33333eea4.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512634/qrkassan/shared/shared_img_9ff33333eea4.jpg",
+        "/api/uploads/shared_img_b2196fef6a5f.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512635/qrkassan/shared/shared_img_b2196fef6a5f.jpg",
+        "/api/uploads/shared_img_9497595d5fae.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512635/qrkassan/shared/shared_img_9497595d5fae.jpg",
+        "/api/uploads/shared_img_11d342344c52.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512636/qrkassan/shared/shared_img_11d342344c52.jpg",
+        "/api/uploads/shared_img_9715c137fc1c.jpeg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512636/qrkassan/shared/shared_img_9715c137fc1c.jpg",
+        "/api/uploads/shared_img_cddc1307acda.png": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512637/qrkassan/shared/shared_img_cddc1307acda.png",
+        "/api/uploads/shared_img_c227d4643714.png": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512637/qrkassan/shared/shared_img_c227d4643714.png",
+        "/api/uploads/shared_img_08af626f3ae4.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512638/qrkassan/shared/shared_img_08af626f3ae4.jpg",
+        "/api/uploads/shared_img_8cb4ccaef51e.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512638/qrkassan/shared/shared_img_8cb4ccaef51e.jpg",
+        "/api/uploads/shared_img_14136db1cfbe.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512639/qrkassan/shared/shared_img_14136db1cfbe.jpg",
+        "/api/uploads/shared_img_db4c3333b02e.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512639/qrkassan/shared/shared_img_db4c3333b02e.jpg",
+        "/api/uploads/shared_img_2f1f864256a0.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512640/qrkassan/shared/shared_img_2f1f864256a0.jpg",
+        "/api/uploads/shared_img_680232a6ab16.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512640/qrkassan/shared/shared_img_680232a6ab16.jpg",
+        "/api/uploads/shared_img_b1b18f17dbb9.jpg": "https://res.cloudinary.com/dmfzabr3e/image/upload/v1773512641/qrkassan/shared/shared_img_b1b18f17dbb9.jpg",
+    }
+    
+    updated_products = 0
+    updated_shared = 0
+    
+    for old_url, new_url in url_mapping.items():
+        # Update products
+        result = await db.products.update_many(
+            {"image_url": old_url},
+            {"$set": {"image_url": new_url}}
+        )
+        updated_products += result.modified_count
+        
+        # Update shared_images collection
+        result = await db.shared_images.update_many(
+            {"url": old_url},
+            {"$set": {"url": new_url}}
+        )
+        updated_shared += result.modified_count
+    
+    logger.info(f"Migrated {updated_products} products and {updated_shared} shared images to Cloudinary")
+    
+    return {
+        "success": True,
+        "updated_products": updated_products,
+        "updated_shared_images": updated_shared,
+        "message": f"Migrerade {updated_products} produkter och {updated_shared} delade bilder till Cloudinary"
+    }
