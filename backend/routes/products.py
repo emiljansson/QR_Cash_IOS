@@ -141,27 +141,54 @@ async def delete_product(request: Request, product_id: str):
 
 @router.post("/{product_id}/upload-image")
 async def upload_product_image(request: Request, product_id: str, file: UploadFile = File(...)):
-    """Upload product image"""
+    """Upload product image to Cloudinary"""
+    import cloudinary
+    import cloudinary.uploader
+    import os
+    
     user = await require_user(request)
     db = get_db()
     product = await db.products.find_one({"id": product_id, "user_id": user["user_id"]}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
-    # Save file
-    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-    filename = f"{product_id}.{file_ext}"
-    filepath = UPLOADS_DIR / filename
+    # Configure Cloudinary
+    cloudinary.config(
+        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+        api_key=os.getenv("CLOUDINARY_API_KEY"),
+        api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+        secure=True
+    )
     
-    async with aiofiles.open(filepath, 'wb') as out_file:
-        content = await file.read()
-        await out_file.write(content)
+    # Read file content
+    content = await file.read()
+    
+    # Upload to Cloudinary
+    try:
+        result = cloudinary.uploader.upload(
+            content,
+            folder=f"qrkassan/products/{user['user_id']}",
+            public_id=product_id,
+            overwrite=True,
+            resource_type="image"
+        )
+        image_url = result["secure_url"]
+    except Exception as e:
+        # Fallback to local storage if Cloudinary fails
+        file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+        filename = f"{product_id}.{file_ext}"
+        filepath = UPLOADS_DIR / filename
+        
+        async with aiofiles.open(filepath, 'wb') as out_file:
+            await out_file.write(content)
+        
+        image_url = f"/api/uploads/{filename}"
     
     # Update product with image URL
-    image_url = f"/api/uploads/{filename}"
     await db.products.update_one(
         {"id": product_id, "user_id": user["user_id"]},
         {"$set": {"image_url": image_url}}
     )
     
     return {"success": True, "image_url": image_url}
+
