@@ -8,13 +8,13 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-// Production backend URL - uses local for web preview, production for native
+// Production backend URL - hardcoded for reliability
 const getBackendUrl = () => {
   if (Platform.OS !== 'web') {
     return 'https://qrcashios-production.up.railway.app';
   }
-  // For web preview, use the environment variable which includes the proxy
-  return process.env.EXPO_PUBLIC_BACKEND_URL || '';
+  // For web, always use production backend
+  return 'https://qrcashios-production.up.railway.app';
 };
 const BACKEND = getBackendUrl();
 const C = {
