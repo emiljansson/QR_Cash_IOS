@@ -366,13 +366,6 @@ function UsersTab() {
                 <Text style={[s.actionChipText, { color: C.green }]}>Verifiera</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity testID={`pin-btn-${user.user_id}`} style={s.actionChip} onPress={() => handleResetPin(user.user_id)}>
-              <Ionicons name="key-outline" size={14} color={C.yellow} />
-              <Text style={[s.actionChipText, { color: C.yellow }]}>PIN</Text>
-            </TouchableOpacity>
-            <TouchableOpacity testID={`del-btn-${user.user_id}`} style={[s.actionChip, { backgroundColor: 'rgba(239,68,68,0.1)' }]} onPress={() => handleDeleteUser(user)}>
-              <Ionicons name="trash-outline" size={14} color={C.red} />
-            </TouchableOpacity>
           </View>
         </View>
       ))}
