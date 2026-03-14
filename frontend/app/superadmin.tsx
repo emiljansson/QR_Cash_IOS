@@ -412,15 +412,20 @@ function UsersTab() {
       {/* Edit User Modal */}
       <Modal visible={!!editModal} transparent animationType="fade">
         <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }} keyboardShouldPersistTaps="handled">
-            <View style={[s.modal, !isWide && { width: '92%' }, { maxHeight: '95%' }]}>
-              <View style={s.modalHead}>
-                <Text style={s.modalTitle}>Redigera kund</Text>
-                <TouchableOpacity testID="close-edit-modal" onPress={() => setEditModal(null)}>
-                  <Ionicons name="close" size={24} color={C.text} />
-                </TouchableOpacity>
-              </View>
+          <View style={[s.modal, !isWide && { width: '92%' }, { maxHeight: '90%' }]}>
+            <View style={s.modalHead}>
+              <Text style={s.modalTitle}>Redigera kund</Text>
+              <TouchableOpacity testID="close-edit-modal" onPress={() => setEditModal(null)}>
+                <Ionicons name="close" size={24} color={C.text} />
+              </TouchableOpacity>
+            </View>
 
+            <ScrollView 
+              style={{ flex: 1 }} 
+              contentContainerStyle={{ paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+            >
               {/* Quick action buttons at top */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginBottom: 16 }}>
                 <TouchableOpacity style={[s.actionChip, { backgroundColor: 'rgba(59,130,246,0.15)' }]} onPress={handleRegenerateCode}>
@@ -563,27 +568,27 @@ function UsersTab() {
                   </Text>
                 </TouchableOpacity>
               </View>
+            </ScrollView>
 
-              <View style={s.modalBtns}>
-                <TouchableOpacity style={s.cancelBtn} onPress={() => setEditModal(null)}>
-                  <Text style={s.cancelText}>Avbryt</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  testID="save-edit-btn"
-                  style={[s.primaryBtn, saving && { opacity: 0.5 }]}
-                  onPress={handleSaveUser}
-                  disabled={saving}
-                >
-                  {saving ? <ActivityIndicator color={C.white} /> : (
-                    <>
-                      <Ionicons name="save-outline" size={16} color={C.white} />
-                      <Text style={s.primaryBtnText}>Spara</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => setEditModal(null)}>
+                <Text style={s.cancelText}>Avbryt</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                testID="save-edit-btn"
+                style={[s.primaryBtn, saving && { opacity: 0.5 }]}
+                onPress={handleSaveUser}
+                disabled={saving}
+              >
+                {saving ? <ActivityIndicator color={C.white} /> : (
+                  <>
+                    <Ionicons name="save-outline" size={16} color={C.white} />
+                    <Text style={s.primaryBtnText}>Spara</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </ScrollView>
