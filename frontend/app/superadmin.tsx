@@ -412,7 +412,7 @@ function UsersTab() {
       {/* Edit User Modal */}
       <Modal visible={!!editModal} transparent animationType="fade">
         <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={[s.modal, !isWide && { width: '92%' }, { maxHeight: '90%' }]}>
+          <View style={[s.modal, !isWide && { width: '92%' }, { maxHeight: '85%', minHeight: 400 }]}>
             <View style={s.modalHead}>
               <Text style={s.modalTitle}>Redigera kund</Text>
               <TouchableOpacity testID="close-edit-modal" onPress={() => setEditModal(null)}>
@@ -421,10 +421,11 @@ function UsersTab() {
             </View>
 
             <ScrollView 
-              style={{ flex: 1 }} 
+              style={{ flexGrow: 1, flexShrink: 1 }} 
               contentContainerStyle={{ paddingBottom: 20 }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
             >
               {/* Quick action buttons at top */}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginBottom: 16 }}>
