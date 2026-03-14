@@ -146,20 +146,6 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          <TouchableOpacity
-            testID="login-submit-btn"
-            style={[styles.loginButton, submitting && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={submitting}
-            activeOpacity={0.8}
-          >
-            {submitting ? (
-              <ActivityIndicator color={Colors.white} />
-            ) : (
-              <Text style={styles.loginButtonText}>Logga in</Text>
-            )}
-          </TouchableOpacity>
-
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>eller logga in med kod</Text>
@@ -181,6 +167,20 @@ export default function LoginScreen() {
               />
             </View>
           </View>
+
+          <TouchableOpacity
+            testID="login-submit-btn"
+            style={[styles.loginButton, submitting && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={submitting}
+            activeOpacity={0.8}
+          >
+            {submitting ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.loginButtonText}>Logga in</Text>
+            )}
+          </TouchableOpacity>
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
