@@ -8,8 +8,6 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-import { Platform } from 'react-native';
-
 // Production backend URL - hardcoded for native builds
 const getBackendUrl = () => {
   if (Platform.OS !== 'web') {
