@@ -334,7 +334,7 @@ function UsersTab() {
         <View key={user.user_id} testID={`user-row-${user.user_id}`} style={s.userCard}>
           <View style={s.userHeader}>
             <TouchableOpacity style={{ flex: 1 }} onPress={() => openEditModal(user)}>
-              <Text style={[s.userName, { color: C.blue, textDecorationLine: 'underline' }]}>{user.organization_name || user.email}</Text>
+              <Text style={[s.userName, { color: C.blue }]}>{user.organization_name || user.email}</Text>
               <Text style={s.userEmail}>{user.email}</Text>
             </TouchableOpacity>
             <View style={[s.subBadge, user.subscription_active ? s.subOn : s.subOff]}>
