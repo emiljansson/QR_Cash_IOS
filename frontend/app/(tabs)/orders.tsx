@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background, borderRadius: 10,
     borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12,
   },
-  modalInput: { flex: 1, height: 48, color: Colors.textPrimary, fontSize: 16 },
+  modalInput: { flex: 1, height: 48, color: Colors.textPrimary, fontSize: 16, letterSpacing: 0 },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
   modalCancelBtn: { flex: 1, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
   modalCancelText: { color: Colors.textSecondary, fontSize: 15 },

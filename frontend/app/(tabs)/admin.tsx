@@ -468,6 +468,6 @@ const styles = StyleSheet.create({
   modalInput: {
     height: 48, backgroundColor: Colors.background, borderRadius: 10,
     borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12,
-    color: Colors.textPrimary, fontSize: 16,
+    color: Colors.textPrimary, fontSize: 16, letterSpacing: 0,
   },
 });

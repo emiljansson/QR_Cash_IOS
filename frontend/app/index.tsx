@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12,
   },
   inputIcon: { marginRight: 8 },
-  input: { flex: 1, height: 48, color: Colors.textPrimary, fontSize: 16 },
+  input: { flex: 1, height: 48, color: Colors.textPrimary, fontSize: 16, letterSpacing: 0 },
   eyeIcon: { padding: 4 },
   loginButton: {
     backgroundColor: Colors.primary, height: 52, borderRadius: 12,

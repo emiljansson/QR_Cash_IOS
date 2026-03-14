@@ -559,7 +559,7 @@ const s = StyleSheet.create({
     backgroundColor: C.bg, borderRadius: 12, borderWidth: 1, borderColor: C.border,
     paddingHorizontal: 14, marginBottom: 12,
   },
-  loginInputField: { flex: 1, color: C.text, fontSize: 16, height: '100%' },
+  loginInputField: { flex: 1, color: C.text, fontSize: 16, height: '100%', letterSpacing: 0 },
   loginBtn: {
     width: '100%', height: 52, backgroundColor: C.blue, borderRadius: 12,
     justifyContent: 'center', alignItems: 'center', marginTop: 4,
@@ -668,10 +668,10 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface,
     borderRadius: 12, borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, height: 52,
   },
-  fieldInput2: { flex: 1, color: C.text, fontSize: 15, height: '100%' },
+  fieldInput2: { flex: 1, color: C.text, fontSize: 15, height: '100%', letterSpacing: 0 },
   fieldInput: {
     height: 52, backgroundColor: C.surface, borderRadius: 12,
-    borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, color: C.text, fontSize: 15, marginTop: 6,
+    borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, color: C.text, fontSize: 15, marginTop: 6, letterSpacing: 0,
   },
 
   // Modal

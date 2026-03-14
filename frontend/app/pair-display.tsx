@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   nameInput: {
     height: 44, backgroundColor: Colors.surface, borderRadius: 10,
     borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12,
-    color: Colors.textPrimary, fontSize: 15,
+    color: Colors.textPrimary, fontSize: 15, letterSpacing: 0,
   },
   displaysSection: { flex: 1, paddingHorizontal: 16 },
   emptyState: { alignItems: 'center', paddingVertical: 32 },
