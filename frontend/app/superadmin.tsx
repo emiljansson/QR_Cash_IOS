@@ -8,7 +8,16 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL;
+import { Platform } from 'react-native';
+
+// Production backend URL - hardcoded for native builds
+const getBackendUrl = () => {
+  if (Platform.OS !== 'web') {
+    return 'https://qrcashios-production.up.railway.app';
+  }
+  return process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+};
+const BACKEND = getBackendUrl();
 const C = {
   bg: '#09090b', surface: '#18181b', surfaceHi: '#27272a', border: '#3f3f46',
   text: '#f4f4f5', textSec: '#a1a1aa', textMut: '#71717a',
