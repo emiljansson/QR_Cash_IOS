@@ -1,17 +1,16 @@
 const express = require('express');
 const path = require('path');
 const { execSync } = require('child_process');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Build the web app if dist doesn't exist or in production
 const distPath = path.join(__dirname, 'dist');
 
 console.log('Starting QR-Kassan web server...');
 
 // Check if we need to build
-const fs = require('fs');
 if (!fs.existsSync(distPath) || process.env.FORCE_BUILD === 'true') {
   console.log('Building web app...');
   try {
@@ -31,7 +30,7 @@ if (!fs.existsSync(distPath) || process.env.FORCE_BUILD === 'true') {
 app.use(express.static(distPath));
 
 // Handle client-side routing - serve index.html for all routes
-app.get('*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
