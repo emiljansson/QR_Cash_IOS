@@ -1,4 +1,17 @@
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+// Production backend URL - hardcoded for native builds
+// In Expo Go, process.env may not work correctly, so we use hardcoded URL as primary
+import { Platform } from 'react-native';
+
+const getBackendUrl = () => {
+  // For native (iOS/Android), always use production URL
+  if (Platform.OS !== 'web') {
+    return 'https://qrcashios-production.up.railway.app';
+  }
+  // For web, use env variable with fallback to production
+  return process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+};
+
+const BACKEND_URL = getBackendUrl();
 
 class ApiClient {
   private token: string | null = null;
