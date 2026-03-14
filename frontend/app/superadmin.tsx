@@ -8,12 +8,13 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-// Production backend URL - hardcoded for native builds
+// Production backend URL - uses local for web preview, production for native
 const getBackendUrl = () => {
   if (Platform.OS !== 'web') {
     return 'https://qrcashios-production.up.railway.app';
   }
-  return process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+  // For web preview, use the environment variable which includes the proxy
+  return process.env.EXPO_PUBLIC_BACKEND_URL || '';
 };
 const BACKEND = getBackendUrl();
 const C = {
@@ -115,6 +116,13 @@ function UsersTab() {
   const [subEnd, setSubEnd] = useState('');
   const [saving, setSaving] = useState(false);
   const [guest1Status, setGuest1Status] = useState<any>(null);
+  
+  // Edit user modal state
+  const [editModal, setEditModal] = useState<any>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [sendWelcomeEmail, setSendWelcomeEmail] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [newPin, setNewPin] = useState('');
 
   const loadUsers = useCallback(async () => {
     try {
@@ -183,6 +191,118 @@ function UsersTab() {
     } catch (e: any) { Alert.alert('Fel', e.message); }
   };
 
+  // Open edit modal for user
+  const openEditModal = (user: any) => {
+    setEditForm({
+      organization_name: user.organization_name || '',
+      name: user.name || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      login_code: user.login_code || '',
+      subscription_active: user.subscription_active || false,
+      subscription_end: user.subscription_end ? user.subscription_end.split('T')[0] : '',
+    });
+    setSendWelcomeEmail(false);
+    setNewPassword('');
+    setNewPin('');
+    setEditModal(user);
+  };
+
+  // Save user edits
+  const handleSaveUser = async () => {
+    if (!editModal) return;
+    setSaving(true);
+    try {
+      await adminFetch(`/users/${editModal.user_id}/full`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          organization_name: editForm.organization_name,
+          name: editForm.name,
+          email: editForm.email,
+          phone: editForm.phone,
+          subscription_active: editForm.subscription_active,
+          subscription_end: editForm.subscription_end ? new Date(editForm.subscription_end).toISOString() : null,
+          send_welcome_email: sendWelcomeEmail,
+        }),
+      });
+      Alert.alert('Sparat', sendWelcomeEmail ? 'Kund uppdaterad och välkomstmail skickat!' : 'Kund uppdaterad!');
+      setEditModal(null);
+      loadUsers();
+    } catch (e: any) { Alert.alert('Fel', e.message); }
+    finally { setSaving(false); }
+  };
+
+  // Regenerate login code
+  const handleRegenerateCode = async () => {
+    if (!editModal) return;
+    Alert.alert('Byt inloggningskod', 'Skapa en ny inloggningskod? Den gamla slutar fungera.', [
+      { text: 'Avbryt' },
+      {
+        text: 'Byt kod', onPress: async () => {
+          try {
+            const data = await adminFetch(`/users/${editModal.user_id}/regenerate-login-code`, { method: 'POST' });
+            setEditForm((p: any) => ({ ...p, login_code: data.login_code }));
+            Alert.alert('Klart', `Ny kod: ${data.login_code}`);
+          } catch (e: any) { Alert.alert('Fel', e.message); }
+        }
+      }
+    ]);
+  };
+
+  // Change password
+  const handleChangePassword = async () => {
+    if (!editModal || !newPassword) {
+      Alert.alert('Fel', 'Ange ett nytt lösenord');
+      return;
+    }
+    if (newPassword.length < 4) {
+      Alert.alert('Fel', 'Lösenordet måste vara minst 4 tecken');
+      return;
+    }
+    try {
+      await adminFetch(`/users/${editModal.user_id}/reset-password-admin`, {
+        method: 'POST',
+        body: JSON.stringify({ password: newPassword }),
+      });
+      Alert.alert('Klart', 'Lösenord ändrat!');
+      setNewPassword('');
+    } catch (e: any) { Alert.alert('Fel', e.message); }
+  };
+
+  // Change PIN
+  const handleChangePin = async () => {
+    if (!editModal) return;
+    Alert.alert('Återställ PIN', 'Återställ PIN-koden till 1234?', [
+      { text: 'Avbryt' },
+      {
+        text: 'Återställ', onPress: async () => {
+          try {
+            await adminFetch(`/users/${editModal.user_id}/reset-pin`, { method: 'POST' });
+            Alert.alert('Klart', 'PIN återställd till 1234');
+          } catch (e: any) { Alert.alert('Fel', e.message); }
+        }
+      }
+    ]);
+  };
+
+  // Delete account
+  const handleDeleteFromModal = () => {
+    if (!editModal) return;
+    Alert.alert('Radera kund', `Radera ${editModal.organization_name} och ALL data? Detta kan inte ångras.`, [
+      { text: 'Avbryt' },
+      {
+        text: 'Radera', style: 'destructive', onPress: async () => {
+          try {
+            await adminFetch(`/users/${editModal.user_id}`, { method: 'DELETE' });
+            setEditModal(null);
+            loadUsers();
+            Alert.alert('Klart', 'Kund raderad');
+          } catch (e: any) { Alert.alert('Fel', e.message); }
+        }
+      }
+    ]);
+  };
+
   if (loading) return <ActivityIndicator size="large" color={C.blue} style={{ marginTop: 40 }} />;
 
   return (
@@ -213,10 +333,10 @@ function UsersTab() {
       {users.map(user => (
         <View key={user.user_id} testID={`user-row-${user.user_id}`} style={s.userCard}>
           <View style={s.userHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.userName}>{user.organization_name || user.email}</Text>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => openEditModal(user)}>
+              <Text style={[s.userName, { color: C.blue, textDecorationLine: 'underline' }]}>{user.organization_name || user.email}</Text>
               <Text style={s.userEmail}>{user.email}</Text>
-            </View>
+            </TouchableOpacity>
             <View style={[s.subBadge, user.subscription_active ? s.subOn : s.subOff]}>
               <View style={[s.subDot, { backgroundColor: user.subscription_active ? C.green : C.red }]} />
               <Text style={[s.subBadgeText, { color: user.subscription_active ? C.green : C.red }]}>
@@ -293,6 +413,175 @@ function UsersTab() {
               </TouchableOpacity>
             </View>
           </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit User Modal */}
+      <Modal visible={!!editModal} transparent animationType="fade">
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center' }} keyboardShouldPersistTaps="handled">
+            <View style={[s.modal, !isWide && { width: '92%' }, { maxHeight: '95%' }]}>
+              <View style={s.modalHead}>
+                <Text style={s.modalTitle}>Redigera kund</Text>
+                <TouchableOpacity testID="close-edit-modal" onPress={() => setEditModal(null)}>
+                  <Ionicons name="close" size={24} color={C.text} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Quick action buttons at top */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginBottom: 16 }}>
+                <TouchableOpacity style={[s.actionChip, { backgroundColor: 'rgba(59,130,246,0.15)' }]} onPress={handleRegenerateCode}>
+                  <Ionicons name="refresh-outline" size={14} color={C.blue} />
+                  <Text style={[s.actionChipText, { color: C.blue }]}>Byt kod</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.actionChip, { backgroundColor: 'rgba(245,158,11,0.15)' }]} onPress={handleChangePin}>
+                  <Ionicons name="keypad-outline" size={14} color={C.yellow} />
+                  <Text style={[s.actionChipText, { color: C.yellow }]}>Återställ PIN</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.actionChip, { backgroundColor: 'rgba(239,68,68,0.15)' }]} onPress={handleDeleteFromModal}>
+                  <Ionicons name="trash-outline" size={14} color={C.red} />
+                  <Text style={[s.actionChipText, { color: C.red }]}>Radera</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* New password row */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={s.fieldLabel}>Nytt lösenord</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    style={[s.fieldInput, { flex: 1, marginTop: 0 }]}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    placeholder="Ange nytt lösenord"
+                    placeholderTextColor={C.textMut}
+                    secureTextEntry
+                  />
+                  <TouchableOpacity
+                    style={[s.primaryBtn, { flex: 0, paddingHorizontal: 16, height: 48 }]}
+                    onPress={handleChangePassword}
+                  >
+                    <Text style={s.primaryBtnText}>Byt</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Login code display */}
+              {editForm.login_code && (
+                <View style={{ marginBottom: 16, backgroundColor: C.surfaceHi, borderRadius: 10, padding: 12 }}>
+                  <Text style={{ fontSize: 12, color: C.textMut, marginBottom: 4 }}>Inloggningskod</Text>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: C.text, letterSpacing: 2, fontFamily: 'monospace' }}>
+                    {editForm.login_code}
+                  </Text>
+                </View>
+              )}
+
+              {/* Edit fields */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={s.fieldLabel}>Organisationsnamn *</Text>
+                <TextInput
+                  style={s.fieldInput}
+                  value={editForm.organization_name}
+                  onChangeText={(v) => setEditForm((p: any) => ({ ...p, organization_name: v }))}
+                  placeholder="Företagsnamn"
+                  placeholderTextColor={C.textMut}
+                />
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={s.fieldLabel}>Kontaktnamn</Text>
+                <TextInput
+                  style={s.fieldInput}
+                  value={editForm.name}
+                  onChangeText={(v) => setEditForm((p: any) => ({ ...p, name: v }))}
+                  placeholder="Förnamn Efternamn"
+                  placeholderTextColor={C.textMut}
+                />
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={s.fieldLabel}>E-post *</Text>
+                <TextInput
+                  style={s.fieldInput}
+                  value={editForm.email}
+                  onChangeText={(v) => setEditForm((p: any) => ({ ...p, email: v }))}
+                  placeholder="email@example.com"
+                  placeholderTextColor={C.textMut}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={s.fieldLabel}>Telefon</Text>
+                <TextInput
+                  style={s.fieldInput}
+                  value={editForm.phone}
+                  onChangeText={(v) => setEditForm((p: any) => ({ ...p, phone: v }))}
+                  placeholder="070-1234567"
+                  placeholderTextColor={C.textMut}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={s.fieldLabel}>Abonnemang slutdatum (ÅÅÅÅ-MM-DD)</Text>
+                <TextInput
+                  style={s.fieldInput}
+                  value={editForm.subscription_end}
+                  onChangeText={(v) => setEditForm((p: any) => ({ ...p, subscription_end: v }))}
+                  placeholder="2026-12-31"
+                  placeholderTextColor={C.textMut}
+                />
+              </View>
+
+              <View style={s.switchRow}>
+                <Text style={s.switchLabel}>Abonnemang aktivt</Text>
+                <TouchableOpacity
+                  style={[s.toggleBtn, editForm.subscription_active ? s.toggleOn : s.toggleOff]}
+                  onPress={() => setEditForm((p: any) => ({ ...p, subscription_active: !p.subscription_active }))}
+                >
+                  <Text style={[s.toggleText, { color: editForm.subscription_active ? C.green : C.red }]}>
+                    {editForm.subscription_active ? 'AKTIV' : 'INAKTIV'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Send welcome email toggle */}
+              <View style={[s.switchRow, { borderTopWidth: 1, borderTopColor: C.border, marginTop: 12, paddingTop: 16 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.switchLabel}>Skicka välkomstmail</Text>
+                  <Text style={{ fontSize: 12, color: C.textMut }}>Skickar mail med alla inställningar</Text>
+                </View>
+                <TouchableOpacity
+                  style={[s.toggleBtn, sendWelcomeEmail ? s.toggleOn : s.toggleOff]}
+                  onPress={() => setSendWelcomeEmail(!sendWelcomeEmail)}
+                >
+                  <Text style={[s.toggleText, { color: sendWelcomeEmail ? C.green : C.textMut }]}>
+                    {sendWelcomeEmail ? 'JA' : 'NEJ'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={s.modalBtns}>
+                <TouchableOpacity style={s.cancelBtn} onPress={() => setEditModal(null)}>
+                  <Text style={s.cancelText}>Avbryt</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  testID="save-edit-btn"
+                  style={[s.primaryBtn, saving && { opacity: 0.5 }]}
+                  onPress={handleSaveUser}
+                  disabled={saving}
+                >
+                  {saving ? <ActivityIndicator color={C.white} /> : (
+                    <>
+                      <Ionicons name="save-outline" size={16} color={C.white} />
+                      <Text style={s.primaryBtnText}>Spara</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </ScrollView>

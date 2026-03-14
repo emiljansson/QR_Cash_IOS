@@ -239,6 +239,134 @@ async def update_user(request: Request, user_id: str, data: UserUpdate):
     return {"success": True, "message": "Användare uppdaterad"}
 
 
+@router.put("/users/{user_id}/full")
+async def update_user_full(request: Request, user_id: str):
+    """Update all user fields and optionally send welcome email (superadmin only)"""
+    await require_admin(request)
+    db = get_db()
+    
+    body = await request.json()
+    send_welcome = body.pop("send_welcome_email", False)
+    
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Användare hittades inte")
+    
+    update_data = {}
+    
+    # Basic fields
+    if "organization_name" in body and body["organization_name"]:
+        update_data["organization_name"] = body["organization_name"]
+    if "name" in body:
+        update_data["name"] = body["name"]
+    if "phone" in body:
+        update_data["phone"] = body["phone"]
+    if "email" in body and body["email"]:
+        # Check email is not taken
+        existing = await db.users.find_one({"email": body["email"], "user_id": {"$ne": user_id}})
+        if existing:
+            raise HTTPException(status_code=400, detail="E-postadressen används redan av ett annat konto")
+        update_data["email"] = body["email"]
+    
+    # Subscription fields
+    if "subscription_active" in body:
+        update_data["subscription_active"] = body["subscription_active"]
+    if "subscription_end" in body:
+        update_data["subscription_end"] = body["subscription_end"]
+    
+    if update_data:
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": update_data}
+        )
+        logger.info(f"User {user_id} updated with fields: {list(update_data.keys())}")
+    
+    # Send welcome email if requested
+    if send_welcome:
+        from routes.auth import send_welcome_email
+        email = update_data.get("email", user.get("email"))
+        org_name = update_data.get("organization_name", user.get("organization_name", ""))
+        login_code = user.get("login_code")
+        await send_welcome_email(email, org_name, login_code)
+        logger.info(f"Welcome email sent to {email}")
+    
+    # Return updated user
+    updated_user = await db.users.find_one(
+        {"user_id": user_id},
+        {"_id": 0, "password_hash": 0, "verification_token": 0}
+    )
+    
+    return {
+        "success": True,
+        "message": "Användare uppdaterad" + (" och välkomstmail skickat" if send_welcome else ""),
+        "user": updated_user
+    }
+
+
+@router.post("/users/{user_id}/regenerate-login-code")
+async def regenerate_login_code(request: Request, user_id: str):
+    """Generate a new login code for user"""
+    await require_admin(request)
+    db = get_db()
+    
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Användare hittades inte")
+    
+    # Generate new unique login code
+    import random
+    import string
+    chars = string.ascii_uppercase + string.digits
+    chars = chars.replace('O', '').replace('0', '').replace('I', '').replace('1', '').replace('L', '')
+    
+    new_code = ''.join(random.choices(chars, k=8))
+    # Ensure uniqueness
+    while await db.users.find_one({"login_code": new_code, "user_id": {"$ne": user_id}}):
+        new_code = ''.join(random.choices(chars, k=8))
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"login_code": new_code}}
+    )
+    
+    logger.info(f"Login code regenerated for user {user_id}")
+    
+    return {
+        "success": True,
+        "message": "Ny inloggningskod skapad",
+        "login_code": new_code
+    }
+
+
+@router.post("/users/{user_id}/reset-password-admin")
+async def reset_password_admin(request: Request, user_id: str):
+    """Set a new password for user directly (superadmin only)"""
+    await require_admin(request)
+    db = get_db()
+    
+    body = await request.json()
+    new_password = body.get("password")
+    
+    if not new_password or len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Lösenordet måste vara minst 4 tecken")
+    
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Användare hittades inte")
+    
+    # Hash and save password
+    password_hash = hash_password(new_password)
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"password_hash": password_hash}}
+    )
+    
+    logger.info(f"Password reset by admin for user {user_id}")
+    
+    return {"success": True, "message": "Lösenord ändrat"}
+
+
 @router.delete("/users/{user_id}")
 async def delete_user(request: Request, user_id: str):
     """Delete user and all their data"""
