@@ -841,8 +841,8 @@ async def login_with_code(request: Request, response: Response):
     session_token = f"token_{uuid.uuid4().hex}"
     session_expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DURATION_DAYS)
     
-    await db.sessions.insert_one({
-        "token": session_token,
+    await db.user_sessions.insert_one({
+        "session_token": session_token,
         "user_id": user["user_id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "expires_at": session_expires.isoformat()
