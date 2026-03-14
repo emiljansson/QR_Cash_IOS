@@ -17,6 +17,9 @@ class User(BaseModel):
     email_verified: bool = False
     verification_token: Optional[str] = None
     verification_expires: Optional[datetime] = None
+    # Role - admin (org owner) or user (sub-user)
+    role: str = "admin"  # "admin" for org owners, "user" for sub-users
+    parent_user_id: Optional[str] = None  # For sub-users, links to parent admin
     # Subscription
     subscription_active: bool = False
     subscription_start: Optional[datetime] = None

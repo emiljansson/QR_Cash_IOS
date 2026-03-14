@@ -35,6 +35,7 @@ from routes import (
     public_router
 )
 from routes.cloudinary_routes import router as cloudinary_router
+from routes.org_users import router as org_users_router
 
 # Create the main app
 app = FastAPI(title="POS System API", version="2.0.0")
@@ -54,6 +55,7 @@ api_router.include_router(superadmin_router)
 api_router.include_router(shared_images_router)
 api_router.include_router(public_router)
 api_router.include_router(cloudinary_router)
+api_router.include_router(org_users_router)
 
 
 # Static file serving for uploads

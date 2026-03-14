@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, TextInput,
   ActivityIndicator, Alert, Modal, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/utils/colors';
@@ -16,8 +17,22 @@ interface Product {
   active?: boolean;
 }
 
+interface SubUser {
+  user_id: string;
+  email: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  login_code?: string;
+  last_login?: string;
+  created_at?: string;
+}
+
 export default function AdminScreen() {
-  const [tab, setTab] = useState<'products' | 'stats' | 'settings'>('products');
+  const { width } = useWindowDimensions();
+  const isWide = width > 600;
+  
+  const [tab, setTab] = useState<'products' | 'users' | 'stats' | 'settings'>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -30,6 +45,13 @@ export default function AdminScreen() {
   const [pinVerified, setPinVerified] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
+  
+  // Sub-users state
+  const [subUsers, setSubUsers] = useState<SubUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [userForm, setUserForm] = useState({ first_name: '', last_name: '', email: '' });
+  const [savingUser, setSavingUser] = useState(false);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -58,11 +80,24 @@ export default function AdminScreen() {
     } catch {}
   }, []);
 
+  const loadSubUsers = useCallback(async () => {
+    setLoadingUsers(true);
+    try {
+      const data = await api.fetch('/org/users');
+      setSubUsers(data.users || []);
+    } catch (e) {
+      console.error('Failed to load sub-users:', e);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (pinVerified) {
       loadProducts();
       loadStats();
       loadSettings();
+      loadSubUsers();
     }
   }, [pinVerified]);
 
@@ -74,6 +109,103 @@ export default function AdminScreen() {
     } catch (e: any) {
       setPinError('Fel PIN-kod');
     }
+  };
+
+  // Sub-user handlers
+  const handleCreateUser = async () => {
+    if (!userForm.first_name || !userForm.last_name || !userForm.email) {
+      Alert.alert('Fel', 'Fyll i alla fält');
+      return;
+    }
+    setSavingUser(true);
+    try {
+      await api.fetch('/org/users', {
+        method: 'POST',
+        body: JSON.stringify(userForm),
+      });
+      Alert.alert('Klart', 'Användare skapad och välkomstmail skickat!');
+      setShowAddUser(false);
+      setUserForm({ first_name: '', last_name: '', email: '' });
+      loadSubUsers();
+    } catch (e: any) {
+      Alert.alert('Fel', e.message || 'Kunde inte skapa användare');
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleDeleteUser = (user: SubUser) => {
+    Alert.alert(
+      'Ta bort användare',
+      `Vill du ta bort ${user.name || user.email}?`,
+      [
+        { text: 'Avbryt' },
+        {
+          text: 'Ta bort',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.fetch(`/org/users/${user.user_id}`, { method: 'DELETE' });
+              loadSubUsers();
+            } catch (e: any) {
+              Alert.alert('Fel', e.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleResetPassword = async (user: SubUser) => {
+    Alert.alert(
+      'Återställ lösenord',
+      `Återställ lösenord för ${user.name || user.email}?`,
+      [
+        { text: 'Avbryt' },
+        {
+          text: 'Återställ',
+          onPress: async () => {
+            try {
+              const result = await api.fetch(`/org/users/${user.user_id}/reset-password`, { method: 'POST' });
+              Alert.alert('Klart', `Nytt lösenord: ${result.temp_password}\n\nSpara detta lösenord!`);
+            } catch (e: any) {
+              Alert.alert('Fel', e.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleResendInvite = async (user: SubUser) => {
+    try {
+      await api.fetch(`/org/users/${user.user_id}/resend-invite`, { method: 'POST' });
+      Alert.alert('Klart', 'Välkomstmail skickat!');
+    } catch (e: any) {
+      Alert.alert('Fel', e.message);
+    }
+  };
+
+  const handleRegenerateCode = async (user: SubUser) => {
+    Alert.alert(
+      'Ny inloggningskod',
+      'Skapa en ny inloggningskod? Den gamla slutar fungera.',
+      [
+        { text: 'Avbryt' },
+        {
+          text: 'Skapa ny',
+          onPress: async () => {
+            try {
+              const result = await api.fetch(`/org/users/${user.user_id}/regenerate-code`, { method: 'POST' });
+              Alert.alert('Klart', `Ny kod: ${result.login_code}`);
+              loadSubUsers();
+            } catch (e: any) {
+              Alert.alert('Fel', e.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSaveProduct = async () => {
@@ -166,21 +298,28 @@ export default function AdminScreen() {
     <SafeAreaView style={styles.container}>
       {/* Tabs */}
       <View style={styles.tabBar}>
-        {(['products', 'stats', 'settings'] as const).map(t => (
+        {([
+          { key: 'products', icon: 'cube-outline', label: 'Produkter' },
+          { key: 'users', icon: 'people-outline', label: 'Användare' },
+          { key: 'stats', icon: 'bar-chart-outline', label: 'Statistik' },
+          { key: 'settings', icon: 'cog-outline', label: 'Inställningar' },
+        ] as const).map(t => (
           <TouchableOpacity
-            key={t}
-            testID={`admin-tab-${t}`}
-            style={[styles.tabItem, tab === t && styles.tabItemActive]}
-            onPress={() => setTab(t)}
+            key={t.key}
+            testID={`admin-tab-${t.key}`}
+            style={[styles.tabItem, tab === t.key && styles.tabItemActive]}
+            onPress={() => setTab(t.key as any)}
           >
             <Ionicons
-              name={t === 'products' ? 'cube-outline' : t === 'stats' ? 'bar-chart-outline' : 'cog-outline'}
-              size={18}
-              color={tab === t ? Colors.primary : Colors.textMuted}
+              name={t.icon as any}
+              size={isWide ? 18 : 22}
+              color={tab === t.key ? Colors.primary : Colors.textMuted}
             />
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === 'products' ? 'Produkter' : t === 'stats' ? 'Statistik' : 'Inställningar'}
-            </Text>
+            {isWide && (
+              <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>
+                {t.label}
+              </Text>
+            )}
           </TouchableOpacity>
         ))}
       </View>
@@ -247,6 +386,84 @@ export default function AdminScreen() {
               ListEmptyComponent={
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyText}>Inga produkter ännu</Text>
+                </View>
+              }
+            />
+          )}
+        </View>
+      )}
+
+      {/* Users Tab */}
+      {tab === 'users' && (
+        <View style={styles.tabContent}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Användare ({subUsers.length})</Text>
+            <TouchableOpacity
+              testID="add-user-btn"
+              style={styles.addButton}
+              onPress={() => {
+                setUserForm({ first_name: '', last_name: '', email: '' });
+                setShowAddUser(true);
+              }}
+            >
+              <Ionicons name="add" size={20} color={Colors.white} />
+              {isWide && <Text style={styles.addButtonText}>Lägg till</Text>}
+            </TouchableOpacity>
+          </View>
+
+          {loadingUsers ? (
+            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+          ) : (
+            <FlatList
+              data={subUsers}
+              keyExtractor={item => item.user_id}
+              renderItem={({ item }) => (
+                <View style={styles.userRow}>
+                  <View style={styles.userRowInfo}>
+                    <Text style={styles.userRowName}>{item.name || `${item.first_name} ${item.last_name}`}</Text>
+                    <Text style={styles.userRowEmail}>{item.email}</Text>
+                    <View style={styles.userRowMeta}>
+                      <Text style={styles.userRowCode}>Kod: {item.login_code || '-'}</Text>
+                      <Text style={styles.userRowLogin}>
+                        {item.last_login 
+                          ? `Senast: ${new Date(item.last_login).toLocaleDateString('sv-SE')}`
+                          : 'Aldrig inloggad'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.userRowActions}>
+                    <TouchableOpacity
+                      style={styles.userActionBtn}
+                      onPress={() => handleResendInvite(item)}
+                    >
+                      <Ionicons name="mail-outline" size={18} color={Colors.info} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.userActionBtn}
+                      onPress={() => handleRegenerateCode(item)}
+                    >
+                      <Ionicons name="key-outline" size={18} color={Colors.warning} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.userActionBtn}
+                      onPress={() => handleResetPassword(item)}
+                    >
+                      <Ionicons name="lock-closed-outline" size={18} color={Colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.userActionBtn}
+                      onPress={() => handleDeleteUser(item)}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={Colors.destructive} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <Ionicons name="people-outline" size={48} color={Colors.textMuted} />
+                  <Text style={styles.emptyText}>Inga användare ännu</Text>
+                  <Text style={styles.emptySubtext}>Lägg till användare för att dela kassan</Text>
                 </View>
               }
             />
@@ -371,6 +588,75 @@ export default function AdminScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Add User Modal */}
+      <Modal visible={showAddUser} animationType="slide" transparent>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ny användare</Text>
+              <TouchableOpacity testID="close-user-modal-btn" onPress={() => setShowAddUser(false)}>
+                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>Förnamn *</Text>
+              <TextInput
+                testID="user-form-first-name"
+                style={styles.modalInput}
+                value={userForm.first_name}
+                onChangeText={(v) => setUserForm(prev => ({ ...prev, first_name: v }))}
+                placeholder="Förnamn"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>Efternamn *</Text>
+              <TextInput
+                testID="user-form-last-name"
+                style={styles.modalInput}
+                value={userForm.last_name}
+                onChangeText={(v) => setUserForm(prev => ({ ...prev, last_name: v }))}
+                placeholder="Efternamn"
+                placeholderTextColor={Colors.textMuted}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.modalField}>
+              <Text style={styles.modalLabel}>E-postadress *</Text>
+              <TextInput
+                testID="user-form-email"
+                style={styles.modalInput}
+                value={userForm.email}
+                onChangeText={(v) => setUserForm(prev => ({ ...prev, email: v }))}
+                placeholder="namn@exempel.se"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <Text style={styles.modalHint}>
+              En inloggningskod genereras automatiskt och skickas via e-post.
+            </Text>
+
+            <TouchableOpacity
+              testID="create-user-btn"
+              style={[styles.saveButton, savingUser && { opacity: 0.6 }]}
+              onPress={handleCreateUser}
+              disabled={savingUser}
+            >
+              {savingUser ? <ActivityIndicator color={Colors.white} /> : (
+                <Text style={styles.saveButtonText}>Skapa användare</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -470,4 +756,24 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12,
     color: Colors.textPrimary, fontSize: 16, letterSpacing: 0,
   },
+  modalHint: {
+    fontSize: 13, color: Colors.textMuted, marginBottom: 16, textAlign: 'center',
+  },
+  // User list styles
+  userRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 14, paddingHorizontal: 16, backgroundColor: Colors.surface,
+    borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.border,
+  },
+  userRowInfo: { flex: 1 },
+  userRowName: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
+  userRowEmail: { fontSize: 14, color: Colors.textSecondary, marginTop: 2 },
+  userRowMeta: { flexDirection: 'row', gap: 16, marginTop: 6 },
+  userRowCode: { fontSize: 12, color: Colors.info, fontWeight: '500' },
+  userRowLogin: { fontSize: 12, color: Colors.textMuted },
+  userRowActions: { flexDirection: 'row', gap: 8 },
+  userActionBtn: { 
+    padding: 8, backgroundColor: Colors.surfaceHighlight, borderRadius: 8,
+  },
+  emptySubtext: { fontSize: 14, color: Colors.textMuted, marginTop: 8 },
 });

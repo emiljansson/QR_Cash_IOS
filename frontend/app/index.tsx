@@ -40,7 +40,10 @@ export default function LoginScreen() {
       setError('');
       setSubmitting(true);
       try {
-        const response = await fetch('https://qrcashios-production.up.railway.app/api/auth/login-code', {
+        const backendUrl = Platform.OS === 'web' 
+          ? (process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app')
+          : 'https://qrcashios-production.up.railway.app';
+        const response = await fetch(`${backendUrl}/api/auth/login-code`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code: loginCode.trim() }),

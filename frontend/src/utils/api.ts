@@ -48,6 +48,11 @@ class ApiClient {
     return response.json();
   }
 
+  // Generic fetch method for custom endpoints
+  async fetch(endpoint: string, options: RequestInit = {}) {
+    return this.request(endpoint, options);
+  }
+
   // Auth
   async login(email: string, password: string) {
     return this.request('/auth/login', {
