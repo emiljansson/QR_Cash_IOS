@@ -163,7 +163,7 @@ function UsersTab() {
   };
 
   const handleDeleteUser = (user: any) => {
-    Alert.alert('Radera användare', `Radera ${user.organization_name} och all data?`, [
+    Alert.alert('Radera kund', `Radera ${user.organization_name} och all data?`, [
       { text: 'Avbryt' },
       {
         text: 'Radera', style: 'destructive', onPress: async () => {
@@ -209,7 +209,7 @@ function UsersTab() {
         </TouchableOpacity>
       </View>
 
-      <Text style={s.sectionTitle}>Användare ({users.length})</Text>
+      <Text style={s.sectionTitle}>Kunder ({users.length})</Text>
       {users.map(user => (
         <View key={user.user_id} testID={`user-row-${user.user_id}`} style={s.userCard}>
           <View style={s.userHeader}>
@@ -319,7 +319,7 @@ function StatsTab() {
   if (loading) return <ActivityIndicator size="large" color={C.blue} style={{ marginTop: 40 }} />;
 
   const statItems = [
-    { label: 'Användare', value: stats?.total_users || 0, icon: 'people' as const, color: C.blue },
+    { label: 'Kunder', value: stats?.total_users || 0, icon: 'people' as const, color: C.blue },
     { label: 'Verifierade', value: stats?.verified_users || 0, icon: 'checkmark-circle' as const, color: C.green },
     { label: 'Aktiva abb.', value: stats?.active_subscriptions || 0, icon: 'diamond' as const, color: C.yellow },
     { label: 'Ordrar', value: stats?.total_orders || 0, icon: 'receipt' as const, color: C.blue },
@@ -496,7 +496,7 @@ export default function SuperAdminScreen() {
   if (!loggedIn) return <AdminLogin onLogin={() => setLoggedIn(true)} />;
 
   const tabs = [
-    { key: 'users' as const, label: 'Användare', icon: 'people-outline' as const },
+    { key: 'users' as const, label: 'Kunder', icon: 'people-outline' as const },
     { key: 'stats' as const, label: 'Statistik', icon: 'bar-chart-outline' as const },
     { key: 'settings' as const, label: 'Inställningar', icon: 'cog-outline' as const },
   ];
