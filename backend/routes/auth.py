@@ -203,8 +203,8 @@ async def send_admin_notification_email(user_email: str, organization_name: str,
         return False
 
 
-async def send_welcome_email(email: str, organization_name: str):
-    """Send welcome email with instructions and PIN code after verification"""
+async def send_welcome_email(email: str, organization_name: str, login_code: str = None):
+    """Send welcome email with instructions, PIN code and login code after verification"""
     import os
     db = get_db()
     
@@ -224,11 +224,27 @@ async def send_welcome_email(email: str, organization_name: str):
         logger.warning("Sender email not configured, skipping welcome email")
         return False
     
+    # Get login code from database if not provided
+    if not login_code:
+        user = await db.users.find_one({"email": email}, {"login_code": 1})
+        login_code = user.get("login_code") if user else None
+    
+    login_code_section = ""
+    if login_code:
+        login_code_section = f"""
+                    <div style="background: #f0fdf4; border: 1px solid #22c55e; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                        <h3 style="color: #166534; margin-top: 0;">🔑 Din Inloggningskod</h3>
+                        <p style="color: #166534; margin-bottom: 10px;">Använd denna kod för snabb inloggning utan e-post/lösenord:</p>
+                        <p style="font-size: 28px; font-weight: bold; color: #1a1a1a; text-align: center; letter-spacing: 4px; margin: 15px 0; font-family: monospace;">{login_code}</p>
+                        <p style="color: #166534; font-size: 14px;">Ange koden i fältet "Inloggningskod" på inloggningssidan.</p>
+                    </div>
+        """
+    
     try:
         import resend
         resend.api_key = resend_api_key
         
-        frontend_url = os.environ.get("FRONTEND_URL", "https://pos-platform-13.preview.emergentagent.com")
+        frontend_url = os.environ.get("FRONTEND_URL", "https://qrkassa.frontproduction.se")
         
         params = {
             "from": sender_email,
@@ -241,11 +257,13 @@ async def send_welcome_email(email: str, organization_name: str):
                     
                     <p style="font-size: 16px; color: #333;">Din e-post är nu verifierad och ditt konto är redo att användas!</p>
                     
+                    {login_code_section}
+                    
                     <h2 style="color: #1a1a1a; margin-top: 30px; font-size: 18px;">🚀 Så här kommer du igång:</h2>
                     
                     <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
                         <h3 style="color: #1a1a1a; margin-top: 0;">1. Logga in på kassasystemet</h3>
-                        <p style="color: #666;">Gå till <a href="{frontend_url}/login" style="color: #2563eb;">{frontend_url}</a> och logga in med dina uppgifter.</p>
+                        <p style="color: #666;">Gå till <a href="{frontend_url}" style="color: #2563eb;">{frontend_url}</a> och logga in med din inloggningskod eller e-post/lösenord.</p>
                     </div>
                     
                     <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -280,7 +298,7 @@ async def send_welcome_email(email: str, organization_name: str):
                     </ul>
                     
                     <div style="text-align: center; margin-top: 30px;">
-                        <a href="{frontend_url}/login" style="display: inline-block; background: #1a1a1a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                        <a href="{frontend_url}" style="display: inline-block; background: #1a1a1a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold;">
                             Logga in nu
                         </a>
                     </div>
@@ -315,6 +333,12 @@ async def register(data: UserCreate):
     verification_token = f"verify_{uuid.uuid4().hex}"
     verification_expires = datetime.now(timezone.utc) + timedelta(hours=24)
     
+    # Generate unique login code
+    login_code = generate_login_code()
+    # Ensure it's unique
+    while await db.users.find_one({"login_code": login_code}):
+        login_code = generate_login_code()
+    
     # Create user
     user = User(
         email=data.email,
@@ -329,6 +353,7 @@ async def register(data: UserCreate):
     
     user_doc = user.model_dump()
     user_doc["created_at"] = user_doc["created_at"].isoformat()
+    user_doc["login_code"] = login_code  # Add login code
     if user_doc.get("verification_expires"):
         user_doc["verification_expires"] = user_doc["verification_expires"].isoformat()
     
@@ -775,3 +800,77 @@ async def reset_password(request: Request):
     
     logger.info(f"Password reset successful for {user['email']}")
     return {"success": True, "message": "Lösenordet har ändrats! Du kan nu logga in."}
+
+
+
+def generate_login_code():
+    """Generate a unique 8-character login code"""
+    import random
+    import string
+    chars = string.ascii_uppercase + string.digits
+    # Exclude confusing characters
+    chars = chars.replace('O', '').replace('0', '').replace('I', '').replace('1', '').replace('L', '')
+    return ''.join(random.choices(chars, k=8))
+
+
+@router.post("/login-code")
+async def login_with_code(request: Request, response: Response):
+    """Login using a unique login code instead of email/password"""
+    db = get_db()
+    
+    try:
+        data = await request.json()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid request body")
+    
+    code = data.get("code", "").strip().upper()
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="Kod krävs")
+    
+    # Find user by login_code
+    user = await db.users.find_one({"login_code": code}, {"_id": 0})
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Ogiltig kod")
+    
+    if not user.get("email_verified", False):
+        raise HTTPException(status_code=401, detail="Kontot är inte verifierat")
+    
+    # Create session
+    session_token = f"token_{uuid.uuid4().hex}"
+    session_expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DURATION_DAYS)
+    
+    await db.sessions.insert_one({
+        "token": session_token,
+        "user_id": user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": session_expires.isoformat()
+    })
+    
+    # Update last login
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"last_login": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Set cookie for web
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * SESSION_DURATION_DAYS
+    )
+    
+    logger.info(f"Login with code successful for {user['email']}")
+    
+    # Return same format as normal login
+    safe_user = {k: v for k, v in user.items() if k not in ['password_hash', 'password_reset_token', 'password_reset_expires', 'login_code']}
+    
+    return {
+        "success": True,
+        "user": safe_user,
+        "session_token": session_token
+    }

@@ -14,6 +14,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loginCode, setLoginCode] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -33,19 +34,45 @@ export default function LoginScreen() {
   }
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Fyll i alla fält');
-      return;
-    }
-    setError('');
-    setSubmitting(true);
-    try {
-      await login(email.trim(), password);
-      router.replace('/(tabs)/pos');
-    } catch (e: any) {
-      setError(e.message || 'Inloggningen misslyckades');
-    } finally {
-      setSubmitting(false);
+    // Check if using code or email+password
+    if (loginCode.trim()) {
+      // Login with code
+      setError('');
+      setSubmitting(true);
+      try {
+        const response = await fetch('https://qrcashios-production.up.railway.app/api/auth/login-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: loginCode.trim() }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || 'Ogiltig kod');
+        }
+        // Use the session token to login
+        await login(data.user.email, null, data.session_token);
+        router.replace('/(tabs)/pos');
+      } catch (e: any) {
+        setError(e.message || 'Inloggningen misslyckades');
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      // Login with email + password
+      if (!email.trim() || !password.trim()) {
+        setError('Fyll i e-post och lösenord, eller använd inloggningskod');
+        return;
+      }
+      setError('');
+      setSubmitting(true);
+      try {
+        await login(email.trim(), password);
+        router.replace('/(tabs)/pos');
+      } catch (e: any) {
+        setError(e.message || 'Inloggningen misslyckades');
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -133,32 +160,31 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            testID="guest-login-btn"
-            style={styles.guestButton}
-            onPress={async () => {
-              setEmail('Guest1');
-              setPassword('Guest1');
-              setSubmitting(true);
-              setError('');
-              try {
-                await login('Guest1', 'Guest1');
-                router.replace('/(tabs)/pos');
-              } catch (e: any) {
-                setError(e.message || 'Kunde inte logga in med gästkonto');
-              } finally {
-                setSubmitting(false);
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="person-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.guestButtonText}>Testa med gästkonto</Text>
-          </TouchableOpacity>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>eller logga in med kod</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="key-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+              <TextInput
+                testID="login-code-input"
+                style={styles.input}
+                placeholder="Ange din inloggningskod"
+                placeholderTextColor={Colors.textMuted}
+                value={loginCode}
+                onChangeText={setLoginCode}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+            </View>
+          </View>
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>eller</Text>
+            <Text style={styles.dividerText}>ny användare?</Text>
             <View style={styles.dividerLine} />
           </View>
 

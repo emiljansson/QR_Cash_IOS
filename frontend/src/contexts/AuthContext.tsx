@@ -18,7 +18,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string | null, token?: string) => Promise<void>;
   register: (data: { email: string; password: string; organization_name: string; phone: string; name?: string }) => Promise<string>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -57,8 +57,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadSession();
   }, [loadSession]);
 
-  const login = async (email: string, password: string) => {
-    const result = await api.login(email, password);
+  const login = async (email: string, password: string | null, token?: string) => {
+    // If token is provided, use it directly (for code login)
+    if (token) {
+      await AsyncStorage.setItem('session_token', token);
+      api.setToken(token);
+      const userData = await api.getMe();
+      setUser(userData);
+      return;
+    }
+    // Normal email/password login
+    const result = await api.login(email, password || '');
     if (result.session_token) {
       await AsyncStorage.setItem('session_token', result.session_token);
       api.setToken(result.session_token);
