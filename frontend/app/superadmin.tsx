@@ -442,12 +442,13 @@ function UsersTab() {
                 <Text style={s.fieldLabel}>Nytt lösenord</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TextInput
-                    style={[s.fieldInput, { flex: 1, marginTop: 0 }]}
+                    style={[s.fieldInput, { flex: 1, marginTop: 0, letterSpacing: 0 }]}
                     value={newPassword}
                     onChangeText={setNewPassword}
                     placeholder="Ange nytt lösenord"
                     placeholderTextColor={C.textMut}
                     secureTextEntry
+                    editable={true}
                   />
                   <TouchableOpacity
                     style={[s.primaryBtn, { flex: 0, paddingHorizontal: 16, height: 48 }]}
@@ -472,58 +473,66 @@ function UsersTab() {
               <View style={{ marginBottom: 12 }}>
                 <Text style={s.fieldLabel}>Organisationsnamn *</Text>
                 <TextInput
-                  style={s.fieldInput}
+                  style={[s.fieldInput, { letterSpacing: 0 }]}
                   value={editForm.organization_name}
                   onChangeText={(v) => setEditForm((p: any) => ({ ...p, organization_name: v }))}
                   placeholder="Företagsnamn"
                   placeholderTextColor={C.textMut}
+                  editable={true}
+                  autoCorrect={false}
                 />
               </View>
 
               <View style={{ marginBottom: 12 }}>
                 <Text style={s.fieldLabel}>Kontaktnamn</Text>
                 <TextInput
-                  style={s.fieldInput}
+                  style={[s.fieldInput, { letterSpacing: 0 }]}
                   value={editForm.name}
                   onChangeText={(v) => setEditForm((p: any) => ({ ...p, name: v }))}
                   placeholder="Förnamn Efternamn"
                   placeholderTextColor={C.textMut}
+                  editable={true}
+                  autoCorrect={false}
                 />
               </View>
 
               <View style={{ marginBottom: 12 }}>
                 <Text style={s.fieldLabel}>E-post *</Text>
                 <TextInput
-                  style={s.fieldInput}
+                  style={[s.fieldInput, { letterSpacing: 0 }]}
                   value={editForm.email}
                   onChangeText={(v) => setEditForm((p: any) => ({ ...p, email: v }))}
                   placeholder="email@example.com"
                   placeholderTextColor={C.textMut}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  editable={true}
+                  autoCorrect={false}
                 />
               </View>
 
               <View style={{ marginBottom: 12 }}>
                 <Text style={s.fieldLabel}>Telefon</Text>
                 <TextInput
-                  style={s.fieldInput}
+                  style={[s.fieldInput, { letterSpacing: 0 }]}
                   value={editForm.phone}
                   onChangeText={(v) => setEditForm((p: any) => ({ ...p, phone: v }))}
                   placeholder="070-1234567"
                   placeholderTextColor={C.textMut}
                   keyboardType="phone-pad"
+                  editable={true}
                 />
               </View>
 
               <View style={{ marginBottom: 12 }}>
                 <Text style={s.fieldLabel}>Abonnemang slutdatum (ÅÅÅÅ-MM-DD)</Text>
                 <TextInput
-                  style={s.fieldInput}
+                  style={[s.fieldInput, { letterSpacing: 0 }]}
                   value={editForm.subscription_end}
                   onChangeText={(v) => setEditForm((p: any) => ({ ...p, subscription_end: v }))}
                   placeholder="2026-12-31"
                   placeholderTextColor={C.textMut}
+                  editable={true}
                 />
               </View>
 
