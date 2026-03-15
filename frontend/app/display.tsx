@@ -93,6 +93,9 @@ export default function CustomerDisplayScreen() {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownStartedRef = useRef(false); // Track if countdown has started
   
+  // Store paid amount separately so it doesn't get reset by polling
+  const [paidAmount, setPaidAmount] = useState(0);
+  
   // Cache last data hash to avoid unnecessary re-renders
   const lastDataHashRef = useRef<string>('');
 
@@ -289,6 +292,8 @@ export default function CustomerDisplayScreen() {
         if (data.status === 'paid' && state !== 'paired_paid') {
           setState('paired_paid');
           setPaidAnimation(true);
+          // Save the paid amount so it doesn't get reset
+          setPaidAmount(data.total || 0);
           
           // Only start countdown once
           if (!countdownStartedRef.current) {
@@ -302,11 +307,10 @@ export default function CustomerDisplayScreen() {
                 if (prev <= 1) {
                   if (countdownRef.current) clearInterval(countdownRef.current);
                   countdownRef.current = null;
-                  // Reset state after countdown
+                  // Reset state after countdown - but DON'T close modal
                   countdownStartedRef.current = false;
                   setState('paired_idle');
-                  setShowEmailModal(false);
-                  setEmailSent(false);
+                  // Don't reset email modal here - let user finish
                   setPaidAnimation(false);
                   return 0;
                 }
@@ -464,7 +468,7 @@ export default function CustomerDisplayScreen() {
           </View>
           
           <Text style={styles.thankYouTitle}>Tack för ditt köp!</Text>
-          <Text style={styles.thankYouAmount}>{total.toFixed(0)} kr</Text>
+          <Text style={styles.thankYouAmount}>{paidAmount.toFixed(0)} kr</Text>
           <Text style={styles.thankYouSubtitle}>Betalningen är genomförd</Text>
 
           {/* Email receipt button - only show if modal not open and email not sent */}
@@ -492,7 +496,7 @@ export default function CustomerDisplayScreen() {
           </Text>
         </View>
 
-        {/* Email Modal - Stays open independently */}
+        {/* Email Modal */}
         <Modal
           visible={showEmailModal}
           transparent={true}
@@ -542,7 +546,11 @@ export default function CustomerDisplayScreen() {
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => setShowEmailModal(false)}>
+              <TouchableOpacity onPress={() => {
+                setShowEmailModal(false);
+                setEmail('');
+                setEmailSent(false);
+              }}>
                 <Text style={styles.emailModalCancelText}>Nej tack</Text>
               </TouchableOpacity>
             </View>
@@ -552,8 +560,97 @@ export default function CustomerDisplayScreen() {
     );
   }
 
+  // Email Modal - Rendered outside isPaid so it stays open when timer ends
+  const emailModal = (
+    <Modal
+      visible={showEmailModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowEmailModal(false)}
+    >
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.emailModalOverlay}
+      >
+        <View style={styles.emailModalContent}>
+          <TouchableOpacity 
+            style={styles.emailModalClose}
+            onPress={() => {
+              setShowEmailModal(false);
+              setEmail('');
+              setEmailSent(false);
+            }}
+          >
+            <Ionicons name="close" size={24} color={C.textMut} />
+          </TouchableOpacity>
+
+          {emailSent ? (
+            <>
+              <Ionicons name="checkmark-circle" size={64} color={C.green} />
+              <Text style={styles.emailModalTitle}>Kvitto skickat!</Text>
+              <Text style={styles.emailModalSubtitle}>Skickat till {email}</Text>
+              <TouchableOpacity 
+                style={styles.emailModalSendBtn}
+                onPress={() => {
+                  setShowEmailModal(false);
+                  setEmail('');
+                  setEmailSent(false);
+                }}
+              >
+                <Text style={styles.emailModalSendBtnText}>Stäng</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Ionicons name="mail-outline" size={48} color={C.green} />
+              <Text style={styles.emailModalTitle}>Få ditt kvitto</Text>
+              <Text style={styles.emailModalSubtitle}>Ange din e-postadress</Text>
+              
+              <TextInput
+                style={styles.emailModalInput}
+                placeholder="din@email.se"
+                placeholderTextColor={C.textMut}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus={true}
+              />
+              
+              <TouchableOpacity 
+                style={[styles.emailModalSendBtn, (!email.includes('@') || sendingEmail) && styles.emailModalSendBtnDisabled]}
+                onPress={handleSendReceipt}
+                disabled={sendingEmail || !email.includes('@')}
+              >
+                {sendingEmail ? (
+                  <ActivityIndicator size="small" color={C.white} />
+                ) : (
+                  <>
+                    <Ionicons name="send" size={20} color={C.white} />
+                    <Text style={styles.emailModalSendBtnText}>Skicka kvitto</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => {
+                setShowEmailModal(false);
+                setEmail('');
+              }}>
+                <Text style={styles.emailModalCancelText}>Nej tack</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* Email Modal - Always rendered */}
+      {emailModal}
+
       {/* Header */}
       <View style={styles.displayHeader}>
         <View style={styles.storeInfo}>
