@@ -147,9 +147,11 @@ export default function LoginScreen() {
                 <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.textMuted} />
               </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => router.push('/reset-password')} style={styles.forgotPassword}>
-              <Text style={styles.forgotPasswordText}>Glömt lösenord?</Text>
-            </TouchableOpacity>
+            {error ? (
+              <TouchableOpacity onPress={() => router.push('/reset-password')} style={styles.forgotPassword}>
+                <Text style={styles.forgotPasswordText}>Glömt lösenord?</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           <View style={styles.divider}>
