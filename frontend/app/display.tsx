@@ -436,7 +436,7 @@ export default function CustomerDisplayScreen() {
   const isPaid = state === 'paired_paid';
   const isWaiting = state === 'paired_waiting';
 
-  // Handle email submission
+  // Handle email submission with different behaviors based on timing
   const handleSendReceipt = async () => {
     if (!email || !email.includes('@')) return;
     setSendingEmail(true);
@@ -449,6 +449,31 @@ export default function CustomerDisplayScreen() {
       const data = await res.json();
       if (data.success) {
         setEmailSent(true);
+        
+        if (isPaid) {
+          // Within 20 seconds - show sent briefly, close modal, reset display
+          setTimeout(() => {
+            setShowEmailModal(false);
+            setEmail('');
+            setEmailSent(false);
+            // Force reset to idle state
+            if (countdownRef.current) {
+              clearInterval(countdownRef.current);
+              countdownRef.current = null;
+            }
+            countdownStartedRef.current = false;
+            setState('paired_idle');
+            setPaidAnimation(false);
+            setPaidAmount(0);
+          }, 2000); // Show "sent" for 2 seconds then reset
+        } else {
+          // After 20 seconds (background already reset) - show sent for 5 seconds then close
+          setTimeout(() => {
+            setShowEmailModal(false);
+            setEmail('');
+            setEmailSent(false);
+          }, 5000);
+        }
       }
     } catch (e) {
       // Silent fail
@@ -515,44 +540,55 @@ export default function CustomerDisplayScreen() {
                 <Ionicons name="close" size={24} color={C.textMut} />
               </TouchableOpacity>
 
-              <Ionicons name="mail-outline" size={48} color={C.green} />
-              <Text style={styles.emailModalTitle}>Få ditt kvitto</Text>
-              <Text style={styles.emailModalSubtitle}>Ange din e-postadress</Text>
-              
-              <TextInput
-                style={styles.emailModalInput}
-                placeholder="din@email.se"
-                placeholderTextColor={C.textMut}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoFocus={true}
-              />
-              
-              <TouchableOpacity 
-                style={[styles.emailModalSendBtn, (!email.includes('@') || sendingEmail) && styles.emailModalSendBtnDisabled]}
-                onPress={handleSendReceipt}
-                disabled={sendingEmail || !email.includes('@')}
-              >
-                {sendingEmail ? (
-                  <ActivityIndicator size="small" color={C.white} />
-                ) : (
-                  <>
-                    <Ionicons name="send" size={20} color={C.white} />
-                    <Text style={styles.emailModalSendBtnText}>Skicka kvitto</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {emailSent ? (
+                <>
+                  <Ionicons name="checkmark-circle" size={64} color={C.green} />
+                  <Text style={styles.emailModalTitle}>Kvitto skickat!</Text>
+                  <Text style={styles.emailModalSubtitle}>Skickat till {email}</Text>
+                  <Text style={styles.emailModalHint}>Stänger automatiskt...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="mail-outline" size={48} color={C.green} />
+                  <Text style={styles.emailModalTitle}>Få ditt kvitto</Text>
+                  <Text style={styles.emailModalSubtitle}>Ange din e-postadress</Text>
+                  
+                  <TextInput
+                    style={styles.emailModalInput}
+                    placeholder="din@email.se"
+                    placeholderTextColor={C.textMut}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus={true}
+                  />
+                  
+                  <TouchableOpacity 
+                    style={[styles.emailModalSendBtn, (!email.includes('@') || sendingEmail) && styles.emailModalSendBtnDisabled]}
+                    onPress={handleSendReceipt}
+                    disabled={sendingEmail || !email.includes('@')}
+                  >
+                    {sendingEmail ? (
+                      <ActivityIndicator size="small" color={C.white} />
+                    ) : (
+                      <>
+                        <Ionicons name="send" size={20} color={C.white} />
+                        <Text style={styles.emailModalSendBtnText}>Skicka kvitto</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => {
-                setShowEmailModal(false);
-                setEmail('');
-                setEmailSent(false);
-              }}>
-                <Text style={styles.emailModalCancelText}>Nej tack</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity onPress={() => {
+                    setShowEmailModal(false);
+                    setEmail('');
+                    setEmailSent(false);
+                  }}>
+                    <Text style={styles.emailModalCancelText}>Nej tack</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </KeyboardAvoidingView>
         </Modal>
@@ -1020,6 +1056,7 @@ const styles = StyleSheet.create({
   emailModalSendBtnDisabled: { opacity: 0.5 },
   emailModalSendBtnText: { fontSize: 18, fontWeight: '600', color: C.white },
   emailModalCancelText: { fontSize: 16, color: C.textMut, marginTop: 20 },
+  emailModalHint: { fontSize: 14, color: C.textMut, marginTop: 16 },
 
   // Email sent confirmation
   emailSentContainer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
