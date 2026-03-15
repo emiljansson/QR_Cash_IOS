@@ -2,12 +2,18 @@
 /**
  * Version Synchronization Script for QR-Kassan and QR-Display
  * 
- * This script ensures both apps have synchronized version numbers
- * in both package.json and app.json files.
+ * This script ensures each app has synchronized version numbers
+ * between its package.json and app.json files.
+ * 
+ * NOTE: Frontend (Kassa) and Display-app have SEPARATE version tracks:
+ *   - Frontend/Kassa: 2.x.x
+ *   - Display-app: 1.x.x
  * 
  * Usage:
- *   node scripts/sync-versions.js           # Sync versions
- *   node scripts/sync-versions.js --bump    # Increment patch version and sync
+ *   node scripts/sync-versions.js                    # Sync versions within each app
+ *   node scripts/sync-versions.js --bump             # Increment patch version for frontend only
+ *   node scripts/sync-versions.js --bump-display     # Increment patch version for display-app only
+ *   node scripts/sync-versions.js --bump-all         # Increment patch version for both apps
  */
 
 const fs = require('fs');
@@ -59,97 +65,81 @@ function bumpPatch(version) {
   return formatVersion(v);
 }
 
-function compareVersions(v1, v2) {
-  const p1 = parseVersion(v1);
-  const p2 = parseVersion(v2);
+function syncApp(name, packagePath, appPath, shouldBump) {
+  const pkg = readJson(packagePath);
+  const app = readJson(appPath);
   
-  if (p1.major !== p2.major) return p1.major > p2.major ? 1 : -1;
-  if (p1.minor !== p2.minor) return p1.minor > p2.minor ? 1 : -1;
-  if (p1.patch !== p2.patch) return p1.patch > p2.patch ? 1 : -1;
-  return 0;
-}
-
-function main() {
-  const shouldBump = process.argv.includes('--bump');
-  
-  console.log('📦 Version Sync Script');
-  console.log('======================\n');
-  
-  // Read all files
-  const frontendPkg = readJson(FILES.frontendPackage);
-  const frontendApp = readJson(FILES.frontendApp);
-  const displayPkg = readJson(FILES.displayPackage);
-  const displayApp = readJson(FILES.displayApp);
-  
-  if (!frontendPkg || !displayPkg) {
-    console.error('Could not read required package.json files');
-    process.exit(1);
+  if (!pkg) {
+    console.error(`Could not read ${packagePath}`);
+    return false;
   }
   
-  // Collect all versions
-  const versions = [
-    { name: 'frontend/package.json', version: frontendPkg.version },
-    { name: 'frontend/app.json', version: frontendApp?.expo?.version || '0.0.0' },
-    { name: 'display-app/package.json', version: displayPkg.version },
-    { name: 'display-app/app.json', version: displayApp?.expo?.version || '0.0.0' },
-  ];
+  let targetVersion = pkg.version;
+  const appVersion = app?.expo?.version || '0.0.0';
   
-  console.log('Current versions:');
-  versions.forEach(v => console.log(`  ${v.name}: ${v.version}`));
+  // Use the higher version as base
+  const pkgParsed = parseVersion(targetVersion);
+  const appParsed = parseVersion(appVersion);
   
-  // Find highest version
-  let targetVersion = versions.reduce((highest, current) => {
-    return compareVersions(current.version, highest) > 0 ? current.version : highest;
-  }, '0.0.0');
+  if (appParsed.major > pkgParsed.major || 
+      (appParsed.major === pkgParsed.major && appParsed.minor > pkgParsed.minor) ||
+      (appParsed.major === pkgParsed.major && appParsed.minor === pkgParsed.minor && appParsed.patch > pkgParsed.patch)) {
+    targetVersion = appVersion;
+  }
   
   // Bump if requested
   if (shouldBump) {
     targetVersion = bumpPatch(targetVersion);
-    console.log(`\n🔼 Bumping to: ${targetVersion}`);
   }
   
-  // Check if sync is needed
-  const needsSync = versions.some(v => v.version !== targetVersion);
+  console.log(`\n📦 ${name}`);
+  console.log(`   package.json: ${pkg.version}`);
+  console.log(`   app.json:     ${appVersion}`);
   
-  if (!needsSync && !shouldBump) {
-    console.log('\n✅ All versions are already synchronized!');
-    return;
+  if (pkg.version === targetVersion && appVersion === targetVersion && !shouldBump) {
+    console.log(`   ✅ Already in sync at ${targetVersion}`);
+    return true;
   }
   
-  // Update all files
-  console.log(`\nSyncing all to version: ${targetVersion}\n`);
+  // Update files
+  pkg.version = targetVersion;
+  writeJson(packagePath, pkg);
   
-  const updated = [];
-  
-  // Update package.json files
-  frontendPkg.version = targetVersion;
-  if (writeJson(FILES.frontendPackage, frontendPkg)) {
-    updated.push('frontend/package.json');
+  if (app?.expo) {
+    app.expo.version = targetVersion;
+    writeJson(appPath, app);
   }
   
-  displayPkg.version = targetVersion;
-  if (writeJson(FILES.displayPackage, displayPkg)) {
-    updated.push('display-app/package.json');
-  }
+  console.log(`   ✅ Synced to ${targetVersion}`);
+  return true;
+}
+
+function main() {
+  const args = process.argv.slice(2);
+  const bumpFrontend = args.includes('--bump') || args.includes('--bump-all');
+  const bumpDisplay = args.includes('--bump-display') || args.includes('--bump-all');
   
-  // Update app.json files
-  if (frontendApp?.expo) {
-    frontendApp.expo.version = targetVersion;
-    if (writeJson(FILES.frontendApp, frontendApp)) {
-      updated.push('frontend/app.json');
-    }
-  }
+  console.log('📦 Version Sync Script');
+  console.log('======================');
+  console.log('Note: Frontend (2.x.x) and Display-app (1.x.x) have separate version tracks');
   
-  if (displayApp?.expo) {
-    displayApp.expo.version = targetVersion;
-    if (writeJson(FILES.displayApp, displayApp)) {
-      updated.push('display-app/app.json');
-    }
-  }
+  // Sync frontend (Kassa)
+  syncApp(
+    'Frontend (QR-Kassan)',
+    FILES.frontendPackage,
+    FILES.frontendApp,
+    bumpFrontend
+  );
   
-  console.log('✅ Updated files:');
-  updated.forEach(f => console.log(`  - ${f}`));
-  console.log(`\nAll apps now at version ${targetVersion}`);
+  // Sync display-app
+  syncApp(
+    'Display-app (QR-Display)',
+    FILES.displayPackage,
+    FILES.displayApp,
+    bumpDisplay
+  );
+  
+  console.log('\n✅ Done!');
 }
 
 main();
