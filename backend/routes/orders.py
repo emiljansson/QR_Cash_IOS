@@ -64,6 +64,7 @@ async def create_order(request: Request, data: OrderCreate):
     
     doc = order.model_dump()
     doc['user_id'] = user["user_id"]  # Multi-tenancy
+    doc['created_by_user_id'] = user["user_id"]  # Track which user created the order
     doc['created_at'] = doc['created_at'].isoformat()
     await db.orders.insert_one(doc)
     

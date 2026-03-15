@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from pathlib import Path
+from datetime import datetime, timezone
 import aiofiles
 import uuid
 
@@ -204,6 +205,163 @@ async def get_tenant_stats(request: Request):
         "paid_orders": paid_orders,
         "total_products": total_products,
         "total_revenue": total_revenue
+    }
+
+
+@router.get("/stats/users")
+async def get_user_sales_stats(
+    request: Request, 
+    period: str = "day",
+    start_date: str = None,
+    end_date: str = None
+):
+    """Get sales statistics per user (sub-accounts) for a given period
+    
+    Args:
+        period: day, week, month, year, custom
+        start_date: Start date (YYYY-MM-DD) for custom period or specific day/week/month/year
+        end_date: End date (YYYY-MM-DD) for custom period
+    """
+    from datetime import timedelta
+    
+    user = await require_user(request)
+    db = get_db()
+    
+    # Get date range
+    now = datetime.now(timezone.utc)
+    
+    # Parse dates
+    if start_date:
+        try:
+            parsed_start = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            parsed_start = now
+    else:
+        parsed_start = now
+    
+    if end_date:
+        try:
+            parsed_end = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            parsed_end = None
+    else:
+        parsed_end = None
+    
+    parsed_start = parsed_start.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Calculate date range based on period
+    if period == "day":
+        date_start = parsed_start
+        date_end = date_start + timedelta(days=1)
+        period_label = parsed_start.strftime("%Y-%m-%d")
+    elif period == "week":
+        date_start = parsed_start - timedelta(days=parsed_start.weekday())
+        date_end = date_start + timedelta(days=7)
+        week_num = date_start.isocalendar()[1]
+        period_label = f"Vecka {week_num}, {date_start.year}"
+    elif period == "month":
+        date_start = parsed_start.replace(day=1)
+        if date_start.month == 12:
+            date_end = date_start.replace(year=date_start.year + 1, month=1, day=1)
+        else:
+            date_end = date_start.replace(month=date_start.month + 1, day=1)
+        months_sv = ["", "Jan", "Feb", "Mar", "Apr", "Maj", "Jun", 
+                     "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"]
+        period_label = f"{months_sv[date_start.month]} {date_start.year}"
+    elif period == "year":
+        date_start = parsed_start.replace(month=1, day=1)
+        date_end = date_start.replace(year=date_start.year + 1)
+        period_label = str(date_start.year)
+    elif period == "custom" and parsed_end:
+        date_start = parsed_start
+        date_end = parsed_end.replace(hour=23, minute=59, second=59, microsecond=999999, tzinfo=timezone.utc)
+        period_label = f"{date_start.strftime('%Y-%m-%d')} - {parsed_end.strftime('%Y-%m-%d')}"
+    else:
+        date_start = parsed_start
+        date_end = date_start + timedelta(days=1)
+        period_label = parsed_start.strftime("%Y-%m-%d")
+    
+    # Get all users in this organization (admin + sub-users)
+    user_ids = [user["user_id"]]
+    
+    # Get sub-users if current user is admin
+    if user.get("role") == "admin":
+        sub_users = await db.users.find(
+            {"parent_user_id": user["user_id"]},
+            {"_id": 0, "user_id": 1, "name": 1, "email": 1}
+        ).to_list(100)
+        user_ids.extend([u["user_id"] for u in sub_users])
+    else:
+        # Sub-user can only see their own stats
+        sub_users = []
+    
+    # Build user info map
+    user_info = {user["user_id"]: {"name": user.get("name", "Admin"), "email": user.get("email", "")}}
+    for u in sub_users:
+        user_info[u["user_id"]] = {"name": u.get("name", u.get("email", "")), "email": u.get("email", "")}
+    
+    # Query for stats per user (using created_by_user_id if available, fallback to user_id)
+    pipeline = [
+        {
+            "$match": {
+                "status": "paid",
+                "$or": [
+                    {"created_by_user_id": {"$in": user_ids}},
+                    {"user_id": {"$in": user_ids}}
+                ],
+                "$expr": {
+                    "$and": [
+                        {"$gte": [{"$dateFromString": {"dateString": "$created_at"}}, date_start]},
+                        {"$lt": [{"$dateFromString": {"dateString": "$created_at"}}, date_end]}
+                    ]
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": {"$ifNull": ["$created_by_user_id", "$user_id"]},
+                "totalSales": {"$sum": "$total"},
+                "orderCount": {"$sum": 1}
+            }
+        },
+        {"$sort": {"totalSales": -1}}
+    ]
+    
+    results = await db.orders.aggregate(pipeline).to_list(100)
+    
+    # Build response
+    user_stats = []
+    total_sales = 0
+    total_orders = 0
+    
+    for r in results:
+        uid = r["_id"]
+        info = user_info.get(uid, {"name": "Okänd", "email": ""})
+        sales = r["totalSales"]
+        orders = r["orderCount"]
+        avg = sales / orders if orders > 0 else 0
+        
+        user_stats.append({
+            "user_id": uid,
+            "name": info["name"],
+            "email": info["email"],
+            "total_sales": sales,
+            "order_count": orders,
+            "average_order": avg
+        })
+        
+        total_sales += sales
+        total_orders += orders
+    
+    return {
+        "period": period,
+        "period_label": period_label,
+        "start_date": date_start.strftime("%Y-%m-%d"),
+        "end_date": date_end.strftime("%Y-%m-%d"),
+        "total_sales": total_sales,
+        "total_orders": total_orders,
+        "average_order": total_sales / total_orders if total_orders > 0 else 0,
+        "users": user_stats
     }
 
 

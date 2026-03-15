@@ -32,6 +32,378 @@ interface SubUser {
   created_at?: string;
 }
 
+interface UserStat {
+  user_id: string;
+  name: string;
+  email: string;
+  total_sales: number;
+  order_count: number;
+  average_order: number;
+}
+
+interface UserSalesStatsProps {
+  isWide: boolean;
+  showAlert: (title: string, message: string) => void;
+}
+
+// Separate component for User Sales Statistics
+function UserSalesStats({ isWide, showAlert }: UserSalesStatsProps) {
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year' | 'custom'>('day');
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [stats, setStats] = useState<{
+    period_label: string;
+    total_sales: number;
+    total_orders: number;
+    average_order: number;
+    users: UserStat[];
+  } | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const loadStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.getUserSalesStats(
+        period,
+        startDate,
+        period === 'custom' ? endDate : undefined
+      );
+      setStats(data);
+    } catch (e: any) {
+      showAlert('Fel', e.message || 'Kunde inte hämta statistik');
+    } finally {
+      setLoading(false);
+    }
+  }, [period, startDate, endDate, showAlert]);
+
+  useEffect(() => {
+    loadStats();
+  }, [period, startDate, endDate]);
+
+  const navigateDate = (direction: number) => {
+    const date = new Date(startDate);
+    if (period === 'day') {
+      date.setDate(date.getDate() + direction);
+    } else if (period === 'week') {
+      date.setDate(date.getDate() + (7 * direction));
+    } else if (period === 'month') {
+      date.setMonth(date.getMonth() + direction);
+    } else if (period === 'year') {
+      date.setFullYear(date.getFullYear() + direction);
+    }
+    setStartDate(date.toISOString().split('T')[0]);
+  };
+
+  const periodButtons = [
+    { key: 'day', label: 'Dag' },
+    { key: 'week', label: 'Vecka' },
+    { key: 'month', label: 'Månad' },
+    { key: 'year', label: 'År' },
+    { key: 'custom', label: 'Period' },
+  ] as const;
+
+  return (
+    <View>
+      {/* Period selector */}
+      <View style={userStatsStyles.periodSelector}>
+        {periodButtons.map(p => (
+          <TouchableOpacity
+            key={p.key}
+            style={[userStatsStyles.periodBtn, period === p.key && userStatsStyles.periodBtnActive]}
+            onPress={() => setPeriod(p.key)}
+          >
+            <Text style={[userStatsStyles.periodBtnText, period === p.key && userStatsStyles.periodBtnTextActive]}>
+              {p.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Date navigation */}
+      {period !== 'custom' ? (
+        <View style={userStatsStyles.dateNav}>
+          <TouchableOpacity style={userStatsStyles.dateNavBtn} onPress={() => navigateDate(-1)}>
+            <Ionicons name="chevron-back" size={20} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={userStatsStyles.dateNavLabel}>{stats?.period_label || '...'}</Text>
+          <TouchableOpacity style={userStatsStyles.dateNavBtn} onPress={() => navigateDate(1)}>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <TouchableOpacity style={userStatsStyles.refreshBtn} onPress={loadStats}>
+            <Ionicons name="refresh" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={userStatsStyles.customDateContainer}>
+          <View style={userStatsStyles.dateInputRow}>
+            <View style={userStatsStyles.dateInputWrapper}>
+              <Text style={userStatsStyles.dateInputLabel}>Från</Text>
+              <TextInput
+                style={userStatsStyles.dateInput}
+                value={startDate}
+                onChangeText={setStartDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
+            <View style={userStatsStyles.dateInputWrapper}>
+              <Text style={userStatsStyles.dateInputLabel}>Till</Text>
+              <TextInput
+                style={userStatsStyles.dateInput}
+                value={endDate}
+                onChangeText={setEndDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
+          </View>
+          <TouchableOpacity style={userStatsStyles.applyDateBtn} onPress={loadStats}>
+            <Text style={userStatsStyles.applyDateBtnText}>Visa</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Summary cards */}
+      <View style={userStatsStyles.summaryRow}>
+        <View style={userStatsStyles.summaryCard}>
+          <Ionicons name="cash-outline" size={20} color={Colors.primary} />
+          <Text style={userStatsStyles.summaryValue}>{(stats?.total_sales || 0).toFixed(0)} kr</Text>
+          <Text style={userStatsStyles.summaryLabel}>Total</Text>
+        </View>
+        <View style={userStatsStyles.summaryCard}>
+          <Ionicons name="receipt-outline" size={20} color={Colors.info} />
+          <Text style={userStatsStyles.summaryValue}>{stats?.total_orders || 0}</Text>
+          <Text style={userStatsStyles.summaryLabel}>Ordrar</Text>
+        </View>
+        <View style={userStatsStyles.summaryCard}>
+          <Ionicons name="analytics-outline" size={20} color={Colors.warning} />
+          <Text style={userStatsStyles.summaryValue}>{(stats?.average_order || 0).toFixed(0)} kr</Text>
+          <Text style={userStatsStyles.summaryLabel}>Snitt</Text>
+        </View>
+      </View>
+
+      {/* User sales list */}
+      <Text style={userStatsStyles.sectionTitle}>Försäljning per användare</Text>
+      
+      {loading ? (
+        <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
+      ) : stats?.users && stats.users.length > 0 ? (
+        <View style={userStatsStyles.userList}>
+          {stats.users.map((user, idx) => (
+            <View key={user.user_id} style={userStatsStyles.userRow}>
+              <View style={userStatsStyles.userRank}>
+                <Text style={userStatsStyles.userRankText}>{idx + 1}</Text>
+              </View>
+              <View style={userStatsStyles.userInfo}>
+                <Text style={userStatsStyles.userName}>{user.name}</Text>
+                <Text style={userStatsStyles.userEmail}>{user.email}</Text>
+              </View>
+              <View style={userStatsStyles.userStats}>
+                <Text style={userStatsStyles.userSales}>{user.total_sales.toFixed(0)} kr</Text>
+                <Text style={userStatsStyles.userOrders}>{user.order_count} ordrar</Text>
+                <Text style={userStatsStyles.userAvg}>~{user.average_order.toFixed(0)} kr/order</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={userStatsStyles.emptyState}>
+          <Ionicons name="bar-chart-outline" size={48} color={Colors.textMuted} />
+          <Text style={userStatsStyles.emptyText}>Ingen försäljning under perioden</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+const userStatsStyles = StyleSheet.create({
+  periodSelector: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+  },
+  periodBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  periodBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  periodBtnText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.textMuted,
+  },
+  periodBtnTextActive: {
+    color: Colors.white,
+  },
+  dateNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  dateNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateNavLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    minWidth: 150,
+    textAlign: 'center',
+  },
+  refreshBtn: {
+    padding: 8,
+  },
+  customDateContainer: {
+    marginBottom: 16,
+  },
+  dateInputRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  dateInputWrapper: {
+    flex: 1,
+  },
+  dateInputLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginBottom: 4,
+  },
+  dateInput: {
+    height: 44,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    color: Colors.textPrimary,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  applyDateBtn: {
+    backgroundColor: Colors.primary,
+    height: 44,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  applyDateBtnText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginTop: 6,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+  },
+  userList: {
+    gap: 10,
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  userRank: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  userRankText: {
+    color: Colors.white,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  userEmail: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  userStats: {
+    alignItems: 'flex-end',
+  },
+  userSales: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  userOrders: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  userAvg: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    color: Colors.textMuted,
+    fontSize: 15,
+    marginTop: 12,
+  },
+});
+
 export default function AdminScreen() {
   const { width } = useWindowDimensions();
   const isWide = width > 600;
@@ -43,7 +415,6 @@ export default function AdminScreen() {
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [productForm, setProductForm] = useState({ name: '', price: '', image_url: '', category: '' });
   const [saving, setSaving] = useState(false);
-  const [stats, setStats] = useState<any>(null);
   const [settings, setSettings] = useState<any>({});
   const [settingsForm, setSettingsForm] = useState<any>({});
   const [pinVerified, setPinVerified] = useState(false);
@@ -111,13 +482,6 @@ export default function AdminScreen() {
     }
   }, [loadProducts]);
 
-  const loadStats = useCallback(async () => {
-    try {
-      const [s, daily] = await Promise.all([api.getAdminStats(), api.getDailyStats()]);
-      setStats({ ...s, daily });
-    } catch {}
-  }, []);
-
   const loadSettings = useCallback(async () => {
     try {
       const data = await api.getSettings();
@@ -150,7 +514,6 @@ export default function AdminScreen() {
   useEffect(() => {
     if (pinVerified) {
       loadProducts();
-      loadStats();
       loadSettings();
       loadSubUsers();
     }
@@ -791,33 +1154,10 @@ export default function AdminScreen() {
       {/* Stats Tab */}
       {tab === 'stats' && (
         <ScrollView style={styles.tabContent} contentContainerStyle={styles.statsContent}>
-          <TouchableOpacity testID="refresh-stats-btn" style={styles.refreshStatsBtn} onPress={loadStats}>
-            <Ionicons name="refresh" size={16} color={Colors.textSecondary} />
-            <Text style={styles.refreshStatsText}>Uppdatera</Text>
-          </TouchableOpacity>
-
-          <View style={styles.statsGrid}>
-            {[
-              { label: 'Totala ordrar', value: stats?.total_orders || 0, icon: 'receipt-outline' as const },
-              { label: 'Betalda', value: stats?.paid_orders || 0, icon: 'checkmark-circle-outline' as const },
-              { label: 'Produkter', value: stats?.total_products || 0, icon: 'cube-outline' as const },
-              { label: 'Omsättning', value: `${(stats?.total_revenue || 0).toFixed(0)} kr`, icon: 'cash-outline' as const },
-            ].map(s => (
-              <View key={s.label} style={styles.statCard}>
-                <Ionicons name={s.icon} size={24} color={Colors.primary} />
-                <Text style={styles.statValue}>{s.value}</Text>
-                <Text style={styles.statLabel}>{s.label}</Text>
-              </View>
-            ))}
-          </View>
-
-          {stats?.daily && (
-            <View style={styles.dailyStatsCard}>
-              <Text style={styles.dailyTitle}>Idag</Text>
-              <Text style={styles.dailyAmount}>{(stats.daily.totalSales || 0).toFixed(0)} kr</Text>
-              <Text style={styles.dailyOrders}>{stats.daily.orderCount || 0} ordrar</Text>
-            </View>
-          )}
+          <UserSalesStats 
+            isWide={isWide}
+            showAlert={showAlert}
+          />
         </ScrollView>
       )}
 

@@ -170,6 +170,13 @@ class ApiClient {
     return this.request('/admin/stats');
   }
 
+  async getUserSalesStats(period = 'day', startDate?: string, endDate?: string) {
+    const params = new URLSearchParams({ period });
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    return this.request(`/admin/stats/users?${params.toString()}`);
+  }
+
   async clearOrders() {
     return this.request('/admin/clear-orders', { method: 'DELETE' });
   }
