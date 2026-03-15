@@ -213,9 +213,14 @@ export default function POSScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>{settings.store_name || 'Kassa'}</Text>
-          <Text style={styles.headerSubtitle}>{products.length} produkter</Text>
+        <View style={styles.headerLeft}>
+          {settings.logo_url ? (
+            <Image source={{ uri: settings.logo_url }} style={styles.storeLogo} resizeMode="contain" />
+          ) : null}
+          <View>
+            <Text style={styles.headerTitle}>{settings.store_name || 'Kassa'}</Text>
+            <Text style={styles.headerSubtitle}>{products.length} produkter</Text>
+          </View>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity testID="view-parked-carts-btn" onPress={() => router.push('/parked-carts')} style={styles.parkedBtn}>
@@ -398,6 +403,8 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
   headerSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  storeLogo: { width: 40, height: 40, borderRadius: 8 },
   parkedBtn: {
     padding: 8, backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 8,
     borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)', position: 'relative',

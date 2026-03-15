@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, SafeAreaView,
-  Dimensions, ScrollView, TouchableOpacity, Platform, useWindowDimensions,
+  Dimensions, ScrollView, TouchableOpacity, Platform, useWindowDimensions, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
@@ -210,6 +210,7 @@ export default function CustomerDisplayScreen() {
   const items = displayData?.items || [];
   const total = displayData?.total || 0;
   const qrData = displayData?.qr_data;
+  const logoUrl = displayData?.logo_url;
   const isPaid = state === 'paired_paid';
   const isWaiting = state === 'paired_waiting';
 
@@ -218,7 +219,11 @@ export default function CustomerDisplayScreen() {
       {/* Header */}
       <View style={styles.displayHeader}>
         <View style={styles.storeInfo}>
-          <Ionicons name="storefront" size={24} color={C.green} />
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={styles.storeLogoDisplay} resizeMode="contain" />
+          ) : (
+            <Ionicons name="storefront" size={24} color={C.green} />
+          )}
           <Text style={styles.storeNameText}>{storeName || 'Butik'}</Text>
         </View>
         <View style={styles.connectedBadge}>
@@ -402,6 +407,7 @@ const styles = StyleSheet.create({
   },
   connectedDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.green },
   connectedText: { fontSize: 12, color: C.green, fontWeight: '500' },
+  storeLogoDisplay: { width: 32, height: 32, borderRadius: 6 },
 
   // Idle
   idleContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
