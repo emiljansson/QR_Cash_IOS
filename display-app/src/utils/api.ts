@@ -1,7 +1,16 @@
-import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-// Use environment variable or fallback
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+// Production backend URL - same logic as main app
+const getBackendUrl = () => {
+  // For native (iOS/Android), always use production URL
+  if (Platform.OS !== 'web') {
+    return 'https://qrcashios-production.up.railway.app';
+  }
+  // For web, use env variable with fallback to production
+  return process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+};
+
+const API_BASE = getBackendUrl();
 
 export const api = {
   baseUrl: API_BASE,
