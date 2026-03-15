@@ -1,0 +1,10 @@
+{
+  "$schema": "https://railway.com/railpack.schema.json",
+  "build": {
+    "installCommand": "yarn install",
+    "buildCommand": "yarn build"
+  },
+  "deploy": {
+    "startCommand": "yarn start"
+  }
+}
