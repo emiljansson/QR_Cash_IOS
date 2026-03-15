@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "main": "expo-router/entry",
-  "version": "1.0.79",
+  "version": "1.0.80",
   "scripts": {
     "start": "node server.js",
     "build": "expo export --platform web",
