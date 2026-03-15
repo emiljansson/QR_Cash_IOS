@@ -107,6 +107,13 @@ class ApiClient {
     return this.request(`/products/${id}`, { method: 'DELETE' });
   }
 
+  async reorderProducts(productIds: string[]) {
+    return this.request('/products/reorder', {
+      method: 'POST',
+      body: JSON.stringify({ product_ids: productIds }),
+    });
+  }
+
   // Orders
   async createOrder(data: { items: any[]; total: number; swish_phone: string; customer_email?: string }) {
     return this.request('/orders', {

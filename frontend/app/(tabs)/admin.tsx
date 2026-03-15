@@ -6,6 +6,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 
@@ -16,6 +18,7 @@ interface Product {
   image_url?: string;
   category?: string;
   active?: boolean;
+  sort_order?: number;
 }
 
 interface SubUser {
@@ -90,9 +93,23 @@ export default function AdminScreen() {
   const loadProducts = useCallback(async () => {
     try {
       const data = await api.getProducts();
+      // Sort by sort_order
+      data.sort((a: Product, b: Product) => (a.sort_order || 0) - (b.sort_order || 0));
       setProducts(data);
     } catch {} finally { setLoading(false); }
   }, []);
+
+  const handleReorderProducts = useCallback(async (data: Product[]) => {
+    setProducts(data);
+    // Save new order to backend
+    try {
+      const productIds = data.map(p => p.id);
+      await api.reorderProducts(productIds);
+    } catch (e) {
+      showAlert('Fel', 'Kunde inte spara ordningen');
+      loadProducts(); // Reload original order on error
+    }
+  }, [loadProducts]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -628,50 +645,63 @@ export default function AdminScreen() {
           {loading ? (
             <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
           ) : (
-            <FlatList
-              data={products}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <View style={styles.productRow}>
-                  <View style={styles.productRowInfo}>
-                    <Text style={styles.productRowName}>{item.name}</Text>
-                    <Text style={styles.productRowPrice}>{item.price.toFixed(0)} kr</Text>
-                    {item.category ? <Text style={styles.productRowCategory}>{item.category}</Text> : null}
-                  </View>
-                  <View style={styles.productRowActions}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <DraggableFlatList
+                data={products}
+                keyExtractor={item => item.id}
+                onDragEnd={({ data }) => handleReorderProducts(data)}
+                renderItem={({ item, drag, isActive }: RenderItemParams<Product>) => (
+                  <ScaleDecorator>
                     <TouchableOpacity
-                      testID={`edit-product-${item.id}`}
-                      style={styles.actionBtn}
-                      onPress={() => {
-                        setEditProduct(item);
-                        setProductForm({
-                          name: item.name,
-                          price: String(item.price),
-                          image_url: item.image_url || '',
-                          category: item.category || '',
-                        });
-                        setProductImage(item.image_url || null);
-                        setShowAddProduct(true);
-                      }}
+                      onLongPress={drag}
+                      disabled={isActive}
+                      style={[styles.productRow, isActive && styles.productRowDragging]}
                     >
-                      <Ionicons name="create-outline" size={18} color={Colors.info} />
+                      <View style={styles.dragHandle}>
+                        <Ionicons name="menu" size={20} color={Colors.textMuted} />
+                      </View>
+                      <View style={styles.productRowInfo}>
+                        <Text style={styles.productRowName}>{item.name}</Text>
+                        <Text style={styles.productRowPrice}>{item.price.toFixed(0)} kr</Text>
+                        {item.category ? <Text style={styles.productRowCategory}>{item.category}</Text> : null}
+                      </View>
+                      <View style={styles.productRowActions}>
+                        <TouchableOpacity
+                          testID={`edit-product-${item.id}`}
+                          style={styles.actionBtn}
+                          onPress={() => {
+                            setEditProduct(item);
+                            setProductForm({
+                              name: item.name,
+                              price: String(item.price),
+                              image_url: item.image_url || '',
+                              category: item.category || '',
+                            });
+                            setProductImage(item.image_url || null);
+                            setShowAddProduct(true);
+                          }}
+                        >
+                          <Ionicons name="create-outline" size={18} color={Colors.info} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          testID={`delete-product-${item.id}`}
+                          style={styles.actionBtn}
+                          onPress={() => handleDeleteProduct(item)}
+                        >
+                          <Ionicons name="trash-outline" size={18} color={Colors.destructive} />
+                        </TouchableOpacity>
+                      </View>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      testID={`delete-product-${item.id}`}
-                      style={styles.actionBtn}
-                      onPress={() => handleDeleteProduct(item)}
-                    >
-                      <Ionicons name="trash-outline" size={18} color={Colors.destructive} />
-                    </TouchableOpacity>
+                  </ScaleDecorator>
+                )}
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyText}>Inga produkter ännu</Text>
                   </View>
-                </View>
-              )}
-              ListEmptyComponent={
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyText}>Inga produkter ännu</Text>
-                </View>
-              }
-            />
+                }
+              />
+              <Text style={styles.dragHint}>Håll inne och dra för att ändra ordning</Text>
+            </GestureHandlerRootView>
           )}
         </View>
       )}
@@ -1109,6 +1139,26 @@ const styles = StyleSheet.create({
   productRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  productRowDragging: {
+    backgroundColor: Colors.surface,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  dragHandle: {
+    paddingRight: 12,
+    paddingVertical: 8,
+  },
+  dragHint: {
+    textAlign: 'center',
+    color: Colors.textMuted,
+    fontSize: 12,
+    paddingVertical: 12,
+    backgroundColor: Colors.surfaceHighlight,
   },
   productRowInfo: { flex: 1 },
   productRowName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
