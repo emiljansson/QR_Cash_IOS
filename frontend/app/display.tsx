@@ -6,7 +6,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+// Use relative URL for API calls (works with proxy)
+const BACKEND_URL = '';
 
 const C = {
   bg: '#09090b',
