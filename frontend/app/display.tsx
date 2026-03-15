@@ -424,12 +424,15 @@ export default function CustomerDisplayScreen() {
     if (!email || !email.includes('@')) return;
     setSendingEmail(true);
     try {
-      await fetch(`${BACKEND_URL}/api/orders/send-receipt`, {
+      const res = await fetch(`${BACKEND_URL}/api/customer-display/send-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, user_id: userId, total, items })
+        body: JSON.stringify({ email, user_id: userId })
       });
-      setEmailSent(true);
+      const data = await res.json();
+      if (data.success) {
+        setEmailSent(true);
+      }
     } catch (e) {
       // Silent fail
     } finally {

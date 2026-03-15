@@ -428,3 +428,104 @@ async def reset_customer_display(request: Request):
         upsert=True
     )
     return {"success": True, "message": "Display reset"}
+
+
+@router.post("/send-receipt")
+async def send_display_receipt(request: Request):
+    """Send receipt from display screen (public - no auth required)"""
+    db = get_db()
+    data = await request.json()
+    
+    email = data.get("email")
+    user_id = data.get("user_id")
+    
+    if not email or not user_id:
+        return {"success": False, "message": "Email och user_id krävs"}
+    
+    # Get latest paid order for this user
+    order = await db.orders.find_one(
+        {"user_id": user_id, "status": "paid"},
+        {"_id": 0},
+        sort=[("created_at", -1)]
+    )
+    
+    if not order:
+        return {"success": False, "message": "Ingen betald order hittades"}
+    
+    # Get tenant settings
+    settings = await db.settings.find_one({"user_id": user_id}, {"_id": 0}) or {}
+    
+    # Get global email config
+    system_settings = await db.system_settings.find_one({"id": "system_settings"}, {"_id": 0}) or {}
+    
+    resend_api_key = system_settings.get("resend_api_key") or os.environ.get("RESEND_API_KEY")
+    sender_email = system_settings.get("sender_email") or os.environ.get("SENDER_EMAIL")
+    
+    if not resend_api_key or not sender_email:
+        return {"success": False, "message": "E-posttjänsten är inte konfigurerad"}
+    
+    # Generate receipt HTML
+    store_name = settings.get("store_name", "Min Butik")
+    items_html = ""
+    for item in order.get('items', []):
+        items_html += f"""
+        <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee;">{item['name']}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">{item['quantity']}</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">{item['price']:.2f} kr</td>
+        </tr>
+        """
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><title>Kvitto - {store_name}</title></head>
+    <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #1a1a1a; margin-bottom: 5px;">{store_name}</h1>
+            <p style="color: #666; margin: 0;">Kvitto</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+                <tr style="background: #22c55e; color: white;">
+                    <th style="padding: 12px; text-align: left;">Produkt</th>
+                    <th style="padding: 12px; text-align: center;">Antal</th>
+                    <th style="padding: 12px; text-align: right;">Pris</th>
+                </tr>
+            </thead>
+            <tbody>{items_html}</tbody>
+        </table>
+        <div style="background: #22c55e; color: white; padding: 15px; border-radius: 8px; text-align: right;">
+            <p style="font-size: 24px; margin: 0; font-weight: bold;">Totalt: {order.get('total', 0):.2f} kr</p>
+        </div>
+        <div style="text-align: center; margin-top: 30px; color: #999; font-size: 12px;">
+            <p>Tack för ditt köp!</p>
+            <p>{store_name}</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    try:
+        import resend
+        resend.api_key = resend_api_key
+        
+        params = {
+            "from": sender_email,
+            "to": [email],
+            "subject": f"Kvitto från {store_name}",
+            "html": html_content
+        }
+        
+        import asyncio
+        await asyncio.to_thread(resend.Emails.send, params)
+        
+        # Update order with customer email
+        await db.orders.update_one(
+            {"id": order["id"]},
+            {"$set": {"customer_email": email}}
+        )
+        
+        return {"success": True, "message": f"Kvitto skickat till {email}"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
