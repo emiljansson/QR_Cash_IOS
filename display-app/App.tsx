@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
   TextInput, Modal, ScrollView, Dimensions, StatusBar, Image,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,14 +19,16 @@ interface DisplayData {
   items?: { name: string; price: number; quantity: number }[];
   total?: number;
   qr_code_url?: string;
+  qr_data?: string;
   message?: string;
   store_name?: string;
   order_id?: string;
 }
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 export default function App() {
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  
   // Pairing state - Display generates code, POS enters it
   const [isPaired, setIsPaired] = useState(false);
   const [generatedCode, setGeneratedCode] = useState('');
@@ -61,9 +63,9 @@ export default function App() {
     return () => deactivateKeepAwake();
   }, []);
 
-  // Lock to portrait orientation
+  // Allow all orientations for responsive layout
   useEffect(() => {
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    ScreenOrientation.unlockAsync();
   }, []);
 
   // Load saved pairing on mount
@@ -195,8 +197,6 @@ export default function App() {
   useEffect(() => {
     if (!isPaired || !userId) return;
 
-    let validationInterval: NodeJS.Timeout | null = null;
-
     const fetchDisplayData = async () => {
       try {
         const data = await api.get(`/api/customer-display?user_id=${userId}`);
@@ -227,7 +227,7 @@ export default function App() {
       }
     };
 
-    // Background validation of pairing status - runs every 5 seconds
+    // Background validation of pairing status - runs every 10 seconds
     const validatePairing = async () => {
       if (!displayId) return;
       try {
@@ -241,14 +241,15 @@ export default function App() {
     };
 
     fetchDisplayData();
-    const dataInterval = setInterval(fetchDisplayData, 2000);
+    // Poll for display data every 3 seconds (less aggressive)
+    const dataInterval = setInterval(fetchDisplayData, 3000);
     
-    // Start background validation
-    validationInterval = setInterval(validatePairing, 5000);
+    // Validate pairing every 10 seconds (not too often)
+    const validationInterval = setInterval(validatePairing, 10000);
 
     return () => {
       clearInterval(dataInterval);
-      if (validationInterval) clearInterval(validationInterval);
+      clearInterval(validationInterval);
     };
   }, [isPaired, userId, displayId]);
 
@@ -350,11 +351,15 @@ export default function App() {
     );
   }
 
-  // Display screen - Portrait: QR top 50%, Cart bottom 50%
+  // Display screen - Responsive layout for portrait/landscape
   const status = displayData?.status || 'idle';
-  const showQR = status === 'payment_pending' && displayData?.qr_code_url;
+  const hasCart = displayData?.items && displayData.items.length > 0;
+  const showQR = (status === 'payment_pending' || status === 'showing_cart') && (displayData?.qr_code_url || displayData?.qr_data);
   const showThankYou = status === 'payment_complete';
+  const total = displayData?.total || 0;
 
+  // Portrait: 50% top (QR/Logo), 50% bottom (Cart)
+  // Landscape: Left side (Cart), Right side (QR/Logo)
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -367,11 +372,46 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Main Content - Split 50/50 */}
-      <View style={styles.splitContainer}>
+      {/* Main Content - Responsive layout */}
+      <View style={[styles.mainContent, isLandscape && styles.mainContentLandscape]}>
         
-        {/* Top 50% - QR Code or Status */}
-        <View style={styles.topHalf}>
+        {/* Cart Section (Left in landscape, Bottom in portrait) */}
+        <View style={[
+          styles.cartSection, 
+          isLandscape ? styles.cartSectionLandscape : styles.cartSectionPortrait
+        ]}>
+          {hasCart ? (
+            <>
+              <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
+                <Text style={styles.cartTitle}>Din order</Text>
+                {displayData?.items?.map((item, idx) => (
+                  <View key={idx} style={styles.cartItem}>
+                    <View style={styles.itemLeft}>
+                      <Text style={styles.itemQty}>{item.quantity}x</Text>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                    </View>
+                    <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
+                  </View>
+                ))}
+              </ScrollView>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Totalt att betala</Text>
+                <Text style={styles.totalValue}>{total} kr</Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.emptyCart}>
+              <Ionicons name="basket-outline" size={40} color={Colors.textMuted} />
+              <Text style={styles.emptyCartText}>Varukorgen är tom</Text>
+            </View>
+          )}
+        </View>
+
+        {/* QR/Status Section (Right in landscape, Top in portrait) */}
+        <View style={[
+          styles.qrSection, 
+          isLandscape ? styles.qrSectionLandscape : styles.qrSectionPortrait
+        ]}>
           {showThankYou ? (
             <View style={styles.thankYouContainer}>
               <View style={styles.checkCircle}>
@@ -382,7 +422,7 @@ export default function App() {
               <Text style={styles.countdownText}>Återställs om {thankYouCountdown}s</Text>
             </View>
           ) : showQR ? (
-            <View style={styles.qrSection}>
+            <View style={styles.qrContainer}>
               <Text style={styles.qrTitle}>Betala med Swish</Text>
               <View style={styles.qrBox}>
                 {displayData?.qr_code_url ? (
@@ -395,44 +435,18 @@ export default function App() {
                   <Ionicons name="qr-code" size={150} color={Colors.primary} />
                 )}
               </View>
-              <Text style={styles.qrAmount}>{displayData?.total} kr</Text>
+              <Text style={styles.qrAmount}>{total} kr</Text>
               <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
             </View>
           ) : (
-            <View style={styles.idleTop}>
+            <View style={styles.idleContainer}>
               {logoUrl ? (
                 <Image source={{ uri: logoUrl }} style={styles.centerLogo} resizeMode="contain" />
               ) : (
-                <Ionicons name="cart-outline" size={60} color={Colors.textMuted} />
+                <Ionicons name="storefront" size={80} color={Colors.primary} />
               )}
-              <Text style={styles.idleText}>Väntar på order...</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Bottom 50% - Cart */}
-        <View style={styles.bottomHalf}>
-          {displayData?.items && displayData.items.length > 0 ? (
-            <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
-              <Text style={styles.cartTitle}>Din order</Text>
-              {displayData.items.map((item, idx) => (
-                <View key={idx} style={styles.cartItem}>
-                  <View style={styles.itemLeft}>
-                    <Text style={styles.itemQty}>{item.quantity}x</Text>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                  </View>
-                  <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
-                </View>
-              ))}
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Totalt att betala</Text>
-                <Text style={styles.totalValue}>{displayData.total} kr</Text>
-              </View>
-            </ScrollView>
-          ) : (
-            <View style={styles.emptyCart}>
-              <Ionicons name="basket-outline" size={40} color={Colors.textMuted} />
-              <Text style={styles.emptyCartText}>Varukorgen är tom</Text>
+              <Text style={styles.idleTitle}>{storeName || 'Välkommen!'}</Text>
+              <Text style={styles.idleSubtitle}>Skanna QR-koden för att betala med Swish</Text>
             </View>
           )}
         </View>
@@ -594,67 +608,96 @@ const styles = StyleSheet.create({
     padding: 8,
   },
 
-  // Split container
-  splitContainer: {
+  // Main content - responsive layout
+  mainContent: {
     flex: 1,
+    flexDirection: 'column-reverse', // Portrait: Cart at bottom, QR at top
   },
-  topHalf: {
-    height: SCREEN_HEIGHT * 0.45,
+  mainContentLandscape: {
+    flexDirection: 'row', // Landscape: Cart left, QR right
+  },
+
+  // Cart section
+  cartSection: {
+    backgroundColor: Colors.surface,
+    padding: 16,
+  },
+  cartSectionPortrait: {
+    flex: 1,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  cartSectionLandscape: {
+    flex: 1,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255,255,255,0.1)',
+  },
+
+  // QR/Status section
+  qrSection: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    padding: 20,
   },
-  bottomHalf: {
-    flex: 1,
-    padding: 16,
+  qrSectionPortrait: {
+    // Top half in portrait
+  },
+  qrSectionLandscape: {
+    // Right side in landscape, with padding
+    paddingHorizontal: 40,
   },
 
   // Idle state
-  idleTop: {
+  idleContainer: {
     alignItems: 'center',
   },
-  idleText: {
-    fontSize: 18,
-    color: Colors.textMuted,
+  idleTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: Colors.textPrimary,
     marginTop: 16,
   },
+  idleSubtitle: {
+    fontSize: 16,
+    color: Colors.textMuted,
+    marginTop: 8,
+    textAlign: 'center',
+  },
   centerLogo: {
-    width: 120,
-    height: 120,
-    borderRadius: 16,
-    marginBottom: 8,
+    width: 150,
+    height: 150,
+    borderRadius: 20,
   },
 
-  // QR section
-  qrSection: {
+  // QR container
+  qrContainer: {
     alignItems: 'center',
-    padding: 16,
   },
   qrTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 16,
   },
   qrBox: {
     backgroundColor: Colors.white,
-    padding: 16,
-    borderRadius: 16,
+    padding: 20,
+    borderRadius: 20,
     marginBottom: 16,
   },
   qrImage: {
-    width: 180,
-    height: 180,
+    width: 200,
+    height: 200,
   },
   qrAmount: {
-    fontSize: 36,
+    fontSize: 42,
     fontWeight: '700',
     color: Colors.primary,
     marginBottom: 8,
   },
   qrHint: {
-    fontSize: 14,
+    fontSize: 15,
     color: Colors.textMuted,
   },
 

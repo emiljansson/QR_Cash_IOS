@@ -179,9 +179,9 @@ export default function CustomerDisplayScreen() {
       }
     };
 
-    // Check immediately and then every 5 seconds
+    // Check immediately and then every 10 seconds (less aggressive)
     validatePairing();
-    pairingValidationRef.current = setInterval(validatePairing, 5000);
+    pairingValidationRef.current = setInterval(validatePairing, 10000);
     
     return () => {
       if (pairingValidationRef.current) {
@@ -274,7 +274,7 @@ export default function CustomerDisplayScreen() {
     };
 
     fetchDisplay();
-    dataPollRef.current = setInterval(fetchDisplay, 2000);
+    dataPollRef.current = setInterval(fetchDisplay, 3000); // Poll every 3 seconds
     return () => { if (dataPollRef.current) clearInterval(dataPollRef.current); };
   }, [userId, state]);
 
