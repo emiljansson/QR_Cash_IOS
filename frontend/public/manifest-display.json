@@ -1,0 +1,23 @@
+{
+  "name": "QR-Display",
+  "short_name": "Display",
+  "description": "Kundskärm för QR-Kassan",
+  "start_url": "/display",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#09090b",
+  "theme_color": "#22c55e",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    }
+  ]
+}
