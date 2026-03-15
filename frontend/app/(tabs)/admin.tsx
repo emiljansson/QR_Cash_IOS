@@ -58,6 +58,28 @@ export default function AdminScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [productImage, setProductImage] = useState<string | null>(null);
 
+  // Web-compatible alert helpers
+  const showAlert = (title: string, message: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}\n\n${message}`);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        onConfirm();
+      }
+    } else {
+      Alert.alert(title, message, [
+        { text: 'Avbryt', style: 'cancel' },
+        { text: 'OK', onPress: onConfirm },
+      ]);
+    }
+  };
+
   const loadProducts = useCallback(async () => {
     try {
       const data = await api.getProducts();
@@ -119,7 +141,7 @@ export default function AdminScreen() {
   // Sub-user handlers
   const handleCreateUser = async () => {
     if (!userForm.first_name || !userForm.last_name || !userForm.email) {
-      Alert.alert('Fel', 'Fyll i alla fält');
+      showAlert('Fel', 'Fyll i alla fält');
       return;
     }
     setSavingUser(true);
@@ -128,88 +150,69 @@ export default function AdminScreen() {
         method: 'POST',
         body: JSON.stringify(userForm),
       });
-      Alert.alert('Klart', 'Användare skapad och välkomstmail skickat!');
+      showAlert('Klart', 'Användare skapad och välkomstmail skickat!');
       setShowAddUser(false);
       setUserForm({ first_name: '', last_name: '', email: '' });
       loadSubUsers();
     } catch (e: any) {
-      Alert.alert('Fel', e.message || 'Kunde inte skapa användare');
+      showAlert('Fel', e.message || 'Kunde inte skapa användare');
     } finally {
       setSavingUser(false);
     }
   };
 
   const handleDeleteUser = (user: SubUser) => {
-    Alert.alert(
+    confirmAction(
       'Ta bort användare',
       `Vill du ta bort ${user.name || user.email}?`,
-      [
-        { text: 'Avbryt' },
-        {
-          text: 'Ta bort',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.fetch(`/org/users/${user.user_id}`, { method: 'DELETE' });
-              loadSubUsers();
-            } catch (e: any) {
-              Alert.alert('Fel', e.message);
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          await api.fetch(`/org/users/${user.user_id}`, { method: 'DELETE' });
+          loadSubUsers();
+        } catch (e: any) {
+          showAlert('Fel', e.message);
+        }
+      }
     );
   };
 
-  const handleResetPassword = async (user: SubUser) => {
-    Alert.alert(
+  const handleResetPassword = (user: SubUser) => {
+    confirmAction(
       'Återställ lösenord',
       `Återställ lösenord för ${user.name || user.email}?`,
-      [
-        { text: 'Avbryt' },
-        {
-          text: 'Återställ',
-          onPress: async () => {
-            try {
-              const result = await api.fetch(`/org/users/${user.user_id}/reset-password`, { method: 'POST' });
-              Alert.alert('Klart', `Nytt lösenord: ${result.temp_password}\n\nSpara detta lösenord!`);
-            } catch (e: any) {
-              Alert.alert('Fel', e.message);
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          const result = await api.fetch(`/org/users/${user.user_id}/reset-password`, { method: 'POST' });
+          showAlert('Klart', `Nytt lösenord: ${result.temp_password}\n\nSpara detta lösenord!`);
+        } catch (e: any) {
+          showAlert('Fel', e.message);
+        }
+      }
     );
   };
 
   const handleResendInvite = async (user: SubUser) => {
     try {
       await api.fetch(`/org/users/${user.user_id}/resend-invite`, { method: 'POST' });
-      Alert.alert('Klart', 'Välkomstmail skickat!');
+      showAlert('Klart', 'Välkomstmail skickat!');
     } catch (e: any) {
-      Alert.alert('Fel', e.message);
+      showAlert('Fel', e.message);
     }
   };
 
-  const handleRegenerateCode = async (user: SubUser) => {
-    Alert.alert(
+  const handleRegenerateCode = (user: SubUser) => {
+    confirmAction(
       'Ny inloggningskod',
       'Skapa en ny inloggningskod? Den gamla slutar fungera.',
-      [
-        { text: 'Avbryt' },
-        {
-          text: 'Skapa ny',
-          onPress: async () => {
-            try {
-              const result = await api.fetch(`/org/users/${user.user_id}/regenerate-code`, { method: 'POST' });
-              Alert.alert('Klart', `Ny kod: ${result.login_code}`);
-              loadSubUsers();
-            } catch (e: any) {
-              Alert.alert('Fel', e.message);
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          const result = await api.fetch(`/org/users/${user.user_id}/regenerate-code`, { method: 'POST' });
+          showAlert('Klart', `Ny kod: ${result.login_code}`);
+          loadSubUsers();
+        } catch (e: any) {
+          showAlert('Fel', e.message);
+        }
+      }
     );
   };
 
