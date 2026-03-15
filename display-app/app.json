@@ -31,9 +31,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-keep-awake"
-    ],
     "extra": {
       "eas": {
         "projectId": "your-project-id"
