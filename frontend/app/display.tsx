@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, SafeAreaView,
-  Dimensions, ScrollView, TouchableOpacity,
+  Dimensions, ScrollView, TouchableOpacity, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 
-// Use relative URL for API calls (works with proxy)
-const BACKEND_URL = '';
+// Get backend URL - same logic as api.ts
+const getBackendUrl = () => {
+  if (Platform.OS !== 'web') {
+    return 'https://qrcashios-production.up.railway.app';
+  }
+  return process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+};
+const BACKEND_URL = getBackendUrl();
 
 const C = {
   bg: '#09090b',
