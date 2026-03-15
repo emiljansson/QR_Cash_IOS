@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, SafeAreaView,
   Dimensions, ScrollView, TouchableOpacity, Platform, useWindowDimensions, Image,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
@@ -82,6 +83,17 @@ export default function CustomerDisplayScreen() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dataPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [paidAnimation, setPaidAnimation] = useState(false);
+  
+  // Email receipt state
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [email, setEmail] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [thankYouCountdown, setThankYouCountdown] = useState(20);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // Cache last data hash to avoid unnecessary re-renders
+  const lastDataHashRef = useRef<string>('');
 
   // Check for saved pairing on startup
   const checkSavedPairing = useCallback(async () => {
@@ -238,7 +250,7 @@ export default function CustomerDisplayScreen() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [state, pairingCode, displayId, savePairing, generateCode]);
 
-  // Step 3: Poll display data once paired
+  // Step 3: Poll display data once paired (optimized)
   useEffect(() => {
     if (!userId || (state !== 'paired_idle' && state !== 'paired_waiting' && state !== 'paired_paid')) return;
 
@@ -248,34 +260,65 @@ export default function CustomerDisplayScreen() {
         const data = await res.json();
 
         if (data.status === 'unpaired') {
-          // Clear localStorage and go to unpaired state
           storage.clearPairing();
           setState('unpaired');
           return;
         }
 
-        setDisplayData(data);
-        if (data.store_name) {
-          setStoreName(data.store_name);
-          // Update stored store name
-          storage.set(STORAGE_KEYS.STORE_NAME, data.store_name);
+        // Create hash to check if data actually changed
+        const dataHash = JSON.stringify({
+          status: data.status,
+          items: data.items,
+          total: data.total,
+          qr_data: data.qr_data
+        });
+        
+        // Only update state if data changed
+        if (dataHash !== lastDataHashRef.current) {
+          lastDataHashRef.current = dataHash;
+          setDisplayData(data);
+          
+          if (data.store_name) {
+            setStoreName(data.store_name);
+            storage.set(STORAGE_KEYS.STORE_NAME, data.store_name);
+          }
         }
 
+        // Handle state transitions
         if (data.status === 'paid' && state !== 'paired_paid') {
           setState('paired_paid');
           setPaidAnimation(true);
-          setTimeout(() => setPaidAnimation(false), 3000);
-        } else if (data.status === 'waiting') {
+          setThankYouCountdown(20);
+          // Start countdown timer
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          countdownRef.current = setInterval(() => {
+            setThankYouCountdown(prev => {
+              if (prev <= 1) {
+                if (countdownRef.current) clearInterval(countdownRef.current);
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        } else if (data.status === 'waiting' && state !== 'paired_waiting') {
           setState('paired_waiting');
-        } else if (data.status === 'idle') {
+          setShowEmailModal(false);
+          setEmailSent(false);
+        } else if (data.status === 'idle' && state !== 'paired_idle') {
           setState('paired_idle');
+          setShowEmailModal(false);
+          setEmailSent(false);
+          setPaidAnimation(false);
         }
       } catch {}
     };
 
     fetchDisplay();
-    dataPollRef.current = setInterval(fetchDisplay, 3000); // Poll every 3 seconds
-    return () => { if (dataPollRef.current) clearInterval(dataPollRef.current); };
+    dataPollRef.current = setInterval(fetchDisplay, 2000);
+    return () => { 
+      if (dataPollRef.current) clearInterval(dataPollRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
   }, [userId, state]);
 
   // SCREEN: Loading saved pairing
@@ -376,6 +419,99 @@ export default function CustomerDisplayScreen() {
   const isPaid = state === 'paired_paid';
   const isWaiting = state === 'paired_waiting';
 
+  // Handle email submission
+  const handleSendReceipt = async () => {
+    if (!email || !email.includes('@')) return;
+    setSendingEmail(true);
+    try {
+      await fetch(`${BACKEND_URL}/api/orders/send-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, user_id: userId, total, items })
+      });
+      setEmailSent(true);
+    } catch (e) {
+      // Silent fail
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  // SCREEN: Payment complete - Thank you with email option
+  if (isPaid) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.thankYouScreen}>
+          {/* Checkmark animation */}
+          <View style={[styles.thankYouCheckCircle, paidAnimation && styles.thankYouCheckCircleAnimated]}>
+            <Ionicons name="checkmark" size={80} color={C.white} />
+          </View>
+          
+          <Text style={styles.thankYouTitle}>Tack för ditt köp!</Text>
+          <Text style={styles.thankYouAmount}>{total.toFixed(0)} kr</Text>
+          <Text style={styles.thankYouSubtitle}>Betalningen är genomförd</Text>
+
+          {/* Email receipt section */}
+          {!showEmailModal && !emailSent && (
+            <TouchableOpacity 
+              style={styles.emailReceiptBtn}
+              onPress={() => setShowEmailModal(true)}
+            >
+              <Ionicons name="mail-outline" size={24} color={C.green} />
+              <Text style={styles.emailReceiptBtnText}>Få kvitto via e-post</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Email input modal */}
+          {showEmailModal && !emailSent && (
+            <View style={styles.emailInputContainer}>
+              <Text style={styles.emailInputLabel}>Ange din e-postadress</Text>
+              <View style={styles.emailInputRow}>
+                <TextInput
+                  style={styles.emailInput}
+                  placeholder="din@email.se"
+                  placeholderTextColor={C.textMut}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <TouchableOpacity 
+                  style={[styles.emailSendBtn, sendingEmail && styles.emailSendBtnDisabled]}
+                  onPress={handleSendReceipt}
+                  disabled={sendingEmail || !email.includes('@')}
+                >
+                  {sendingEmail ? (
+                    <ActivityIndicator size="small" color={C.white} />
+                  ) : (
+                    <Ionicons name="send" size={20} color={C.white} />
+                  )}
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity onPress={() => setShowEmailModal(false)}>
+                <Text style={styles.emailCancelText}>Nej tack</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Email sent confirmation */}
+          {emailSent && (
+            <View style={styles.emailSentContainer}>
+              <Ionicons name="checkmark-circle" size={32} color={C.green} />
+              <Text style={styles.emailSentText}>Kvitto skickat till {email}</Text>
+            </View>
+          )}
+
+          {/* Countdown */}
+          <Text style={styles.thankYouCountdown}>
+            Återställs om {thankYouCountdown}s
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -389,18 +525,6 @@ export default function CustomerDisplayScreen() {
           <Text style={styles.connectedText}>Ansluten</Text>
         </View>
       </View>
-
-      {/* Paid animation */}
-      {isPaid && (
-        <View style={styles.paidOverlay}>
-          <View style={styles.paidCard}>
-            <Ionicons name="checkmark-circle" size={96} color={C.green} />
-            <Text style={styles.paidTitle}>Tack!</Text>
-            <Text style={styles.paidSubtitle}>Betalning mottagen</Text>
-            <Text style={styles.paidAmount}>{total.toFixed(0)} kr</Text>
-          </View>
-        </View>
-      )}
 
       {/* Idle state */}
       {state === 'paired_idle' && (
@@ -703,4 +827,49 @@ const styles = StyleSheet.create({
   itemQtyTextPortrait: { color: C.white, fontSize: 12, fontWeight: '700' },
   itemNamePortrait: { fontSize: 15, color: C.text, fontWeight: '500' },
   itemPricePortrait: { fontSize: 15, color: C.textSec, fontWeight: '600' },
+
+  // Thank You Screen
+  thankYouScreen: {
+    flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40,
+    backgroundColor: C.bg,
+  },
+  thankYouCheckCircle: {
+    width: 140, height: 140, borderRadius: 70, backgroundColor: C.green,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 24,
+  },
+  thankYouCheckCircleAnimated: {
+    transform: [{ scale: 1.1 }],
+  },
+  thankYouTitle: { fontSize: 42, fontWeight: '700', color: C.text, marginBottom: 8 },
+  thankYouAmount: { fontSize: 64, fontWeight: '700', color: C.green, marginBottom: 8 },
+  thankYouSubtitle: { fontSize: 20, color: C.textSec, marginBottom: 32 },
+  thankYouCountdown: { fontSize: 16, color: C.textMut, marginTop: 32 },
+
+  // Email receipt button
+  emailReceiptBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: C.surface, paddingHorizontal: 28, paddingVertical: 16,
+    borderRadius: 16, borderWidth: 2, borderColor: C.green,
+  },
+  emailReceiptBtnText: { fontSize: 18, fontWeight: '600', color: C.green },
+
+  // Email input container
+  emailInputContainer: { alignItems: 'center', marginTop: 8 },
+  emailInputLabel: { fontSize: 16, color: C.textSec, marginBottom: 12 },
+  emailInputRow: { flexDirection: 'row', gap: 12 },
+  emailInput: {
+    width: 280, height: 52, backgroundColor: C.surface, borderRadius: 12,
+    paddingHorizontal: 16, fontSize: 16, color: C.text,
+    borderWidth: 1, borderColor: C.border,
+  },
+  emailSendBtn: {
+    width: 52, height: 52, backgroundColor: C.green, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  emailSendBtnDisabled: { opacity: 0.5 },
+  emailCancelText: { fontSize: 14, color: C.textMut, marginTop: 16 },
+
+  // Email sent confirmation
+  emailSentContainer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
+  emailSentText: { fontSize: 16, color: C.green, fontWeight: '500' },
 });
