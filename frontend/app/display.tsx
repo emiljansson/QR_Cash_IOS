@@ -274,7 +274,7 @@ export default function CustomerDisplayScreen() {
           qr_data: data.qr_data
         });
         
-        // Only update state if data changed
+        // Only update display data if changed
         if (dataHash !== lastDataHashRef.current) {
           lastDataHashRef.current = dataHash;
           setDisplayData(data);
@@ -307,17 +307,27 @@ export default function CustomerDisplayScreen() {
               });
             }, 1000);
           }
+        } else if (state === 'paired_paid') {
+          // Stay on thank you screen until countdown reaches 0
+          // Ignore backend status changes while showing thank you
+          if (thankYouCountdown <= 0) {
+            setState('paired_idle');
+            setShowEmailModal(false);
+            setEmailSent(false);
+            setPaidAnimation(false);
+            countdownStartedRef.current = false;
+          }
         } else if (data.status === 'waiting' && state !== 'paired_waiting') {
           setState('paired_waiting');
           setShowEmailModal(false);
           setEmailSent(false);
-          countdownStartedRef.current = false; // Reset for next payment
+          countdownStartedRef.current = false;
         } else if (data.status === 'idle' && state !== 'paired_idle') {
           setState('paired_idle');
           setShowEmailModal(false);
           setEmailSent(false);
           setPaidAnimation(false);
-          countdownStartedRef.current = false; // Reset for next payment
+          countdownStartedRef.current = false;
         }
       } catch {}
     };
@@ -328,7 +338,7 @@ export default function CustomerDisplayScreen() {
       if (dataPollRef.current) clearInterval(dataPollRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
-  }, [userId, state]);
+  }, [userId, state, thankYouCountdown]);
 
   // SCREEN: Loading saved pairing
   if (state === 'loading') {
