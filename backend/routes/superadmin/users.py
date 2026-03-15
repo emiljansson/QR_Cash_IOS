@@ -362,19 +362,22 @@ async def regenerate_login_code(request: Request, user_id: str):
 
 @router.post("/users/{user_id}/reset-password-admin")
 async def reset_password_admin(request: Request, user_id: str):
-    """Set a new password for user directly (superadmin only)"""
+    """Generate a new password and email it to user (superadmin only)"""
+    import random
+    import string
+    import resend
+    import os
+    
     await require_admin(request)
     db = get_db()
-    
-    body = await request.json()
-    new_password = body.get("password")
-    
-    if not new_password or len(new_password) < 4:
-        raise HTTPException(status_code=400, detail="Lösenordet måste vara minst 4 tecken")
     
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="Användare hittades inte")
+    
+    # Generate new random password
+    chars = string.ascii_letters + string.digits
+    new_password = ''.join(random.choices(chars, k=10))
     
     # Hash and save password
     password_hash = hash_password(new_password)
@@ -384,9 +387,41 @@ async def reset_password_admin(request: Request, user_id: str):
         {"$set": {"password_hash": password_hash}}
     )
     
+    # Send email with new password
+    try:
+        system_settings = await db.system_settings.find_one({"id": "system_settings"}, {"_id": 0})
+        resend_api_key = (system_settings or {}).get("resend_api_key") or os.environ.get("RESEND_API_KEY")
+        sender_email = (system_settings or {}).get("sender_email") or os.environ.get("SENDER_EMAIL")
+        app_name = (system_settings or {}).get("app_name", "QR-Kassan")
+        
+        if resend_api_key and sender_email:
+            resend.api_key = resend_api_key
+            params = {
+                "from": sender_email,
+                "to": [user["email"]],
+                "subject": f"{app_name} - Nytt lösenord",
+                "html": f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #1a1a1a;">Ditt lösenord har återställts</h2>
+                    <p>Hej{' ' + user.get('name', '') if user.get('name') else ''},</p>
+                    <p>Ditt lösenord för {app_name} har återställts av en administratör.</p>
+                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <p style="margin: 0; color: #666;">Ditt nya lösenord:</p>
+                        <p style="font-size: 24px; font-weight: bold; color: #1a1a1a; margin: 10px 0; font-family: monospace;">{new_password}</p>
+                    </div>
+                    <p style="color: #666;">Vi rekommenderar att du ändrar lösenordet efter första inloggningen.</p>
+                    <p style="color: #999; font-size: 12px; margin-top: 30px;">Detta mail skickades automatiskt från {app_name}.</p>
+                </div>
+                """
+            }
+            resend.Emails.send(params)
+            logger.info(f"Password reset email sent to {user['email']}")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email: {e}")
+    
     logger.info(f"Password reset by admin for user {user_id}")
     
-    return {"success": True, "message": "Lösenord ändrat"}
+    return {"success": True, "message": f"Nytt lösenord skickat till {user['email']}"}
 
 
 @router.delete("/users/{user_id}")

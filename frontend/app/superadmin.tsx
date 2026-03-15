@@ -290,42 +290,25 @@ function UsersTab() {
     });
   };
 
-  // Change password
+  // Change password - generate and email
   const handleChangePassword = async () => {
-    if (!editModal || !newPassword) {
-      if (Platform.OS === 'web') {
-        window.alert('Ange ett nytt lösenord');
-      } else {
-        Alert.alert('Fel', 'Ange ett nytt lösenord');
+    if (!editModal) return;
+    confirmAction('Nytt lösenord', `Generera ett nytt lösenord och skicka till ${editModal.email}?`, async () => {
+      try {
+        const result = await adminFetch(`/users/${editModal.user_id}/reset-password-admin`, { method: 'POST' });
+        if (Platform.OS === 'web') {
+          window.alert(result.message || 'Nytt lösenord skickat!');
+        } else {
+          Alert.alert('Klart', result.message || 'Nytt lösenord skickat!');
+        }
+      } catch (e: any) { 
+        if (Platform.OS === 'web') {
+          window.alert(`Fel: ${e.message}`);
+        } else {
+          Alert.alert('Fel', e.message);
+        }
       }
-      return;
-    }
-    if (newPassword.length < 4) {
-      if (Platform.OS === 'web') {
-        window.alert('Lösenordet måste vara minst 4 tecken');
-      } else {
-        Alert.alert('Fel', 'Lösenordet måste vara minst 4 tecken');
-      }
-      return;
-    }
-    try {
-      await adminFetch(`/users/${editModal.user_id}/reset-password-admin`, {
-        method: 'POST',
-        body: JSON.stringify({ password: newPassword }),
-      });
-      if (Platform.OS === 'web') {
-        window.alert('Lösenord ändrat!');
-      } else {
-        Alert.alert('Klart', 'Lösenord ändrat!');
-      }
-      setNewPassword('');
-    } catch (e: any) { 
-      if (Platform.OS === 'web') {
-        window.alert(`Fel: ${e.message}`);
-      } else {
-        Alert.alert('Fel', e.message);
-      }
-    }
+    });
   };
 
   // Change PIN
