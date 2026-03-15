@@ -93,6 +93,9 @@ export default function CustomerDisplayScreen() {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownStartedRef = useRef(false); // Track if countdown has started
   
+  // Track if modal was opened during countdown (within 20s)
+  const openedDuringCountdownRef = useRef(false);
+  
   // Store paid amount separately so it doesn't get reset by polling
   const [paidAmount, setPaidAmount] = useState(0);
   
@@ -450,36 +453,43 @@ export default function CustomerDisplayScreen() {
       if (data.success) {
         setEmailSent(true);
         
-        if (isPaid) {
-          // Within 20 seconds - show sent briefly, close modal, reset display
-          setTimeout(() => {
-            setShowEmailModal(false);
-            setEmail('');
-            setEmailSent(false);
-            // Force reset to idle state
+        // Check if we opened the modal during the countdown (saved when modal was opened)
+        const wasOpenedDuringCountdown = openedDuringCountdownRef.current;
+        
+        // Always show "Skickat!" for 5 seconds, then handle based on scenario
+        setTimeout(() => {
+          setShowEmailModal(false);
+          setEmail('');
+          setEmailSent(false);
+          
+          if (wasOpenedDuringCountdown) {
+            // Scenario 1: Sent WITHIN 20s countdown - reset entire display
             if (countdownRef.current) {
               clearInterval(countdownRef.current);
               countdownRef.current = null;
             }
             countdownStartedRef.current = false;
+            openedDuringCountdownRef.current = false;
             setState('paired_idle');
             setPaidAnimation(false);
             setPaidAmount(0);
-          }, 2000); // Show "sent" for 2 seconds then reset
-        } else {
-          // After 20 seconds (background already reset) - show sent for 5 seconds then close
-          setTimeout(() => {
-            setShowEmailModal(false);
-            setEmail('');
-            setEmailSent(false);
-          }, 5000);
-        }
+          }
+          // Scenario 2: Sent AFTER countdown - just close modal (background already reset)
+          // No additional action needed - modal closes above
+        }, 5000);
       }
     } catch (e) {
       // Silent fail
     } finally {
       setSendingEmail(false);
     }
+  };
+
+  // Helper to open email modal and track timing
+  const openEmailModal = () => {
+    // Track whether we're opening during countdown (isPaid means we're still on thank you screen)
+    openedDuringCountdownRef.current = isPaid;
+    setShowEmailModal(true);
   };
 
   // SCREEN: Payment complete - Thank you with email option
@@ -500,7 +510,7 @@ export default function CustomerDisplayScreen() {
           {!showEmailModal && !emailSent && (
             <TouchableOpacity 
               style={styles.emailReceiptBtn}
-              onPress={() => setShowEmailModal(true)}
+              onPress={openEmailModal}
             >
               <Ionicons name="mail-outline" size={24} color={C.green} />
               <Text style={styles.emailReceiptBtnText}>Få kvitto via e-post</Text>
