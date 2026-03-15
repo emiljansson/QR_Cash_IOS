@@ -4,9 +4,12 @@ import {
   Platform, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import { Colors } from '../../src/utils/colors';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+
+const appVersion = Constants.expoConfig?.version || '2.0.0';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -135,7 +138,7 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Logga ut</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>QR-Kassan v2.0.0</Text>
+        <Text style={styles.version}>QR-Kassan v{appVersion}</Text>
 
         {/* Logout Confirmation Modal for Web */}
         <Modal
