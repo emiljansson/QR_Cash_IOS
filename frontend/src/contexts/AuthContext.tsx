@@ -13,6 +13,7 @@ interface User {
   subscription_start?: string;
   subscription_end?: string;
   picture?: string;
+  role?: string; // Add role field for sub-user functionality
 }
 
 interface AuthContextType {
