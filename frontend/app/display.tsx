@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, SafeAreaView,
-  Dimensions, ScrollView, TouchableOpacity, Platform,
+  Dimensions, ScrollView, TouchableOpacity, Platform, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
@@ -33,6 +33,9 @@ const C = {
 type DisplayState = 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired';
 
 export default function CustomerDisplayScreen() {
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  
   const [state, setState] = useState<DisplayState>('generating');
   const [pairingCode, setPairingCode] = useState('');
   const [displayId, setDisplayId] = useState('');
@@ -247,52 +250,97 @@ export default function CustomerDisplayScreen() {
         </View>
       )}
 
-      {/* Waiting for payment - Side by side layout */}
+      {/* Waiting for payment - Responsive layout */}
       {isWaiting && !isPaid && (
-        <View style={styles.waitingContainer}>
-          {/* LEFT SIDE: Cart items + Total at bottom */}
-          <View style={styles.leftSide}>
-            <Text style={styles.itemsTitle}>Din beställning</Text>
-            <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
-              {items.map((item: any, idx: number) => (
-                <View key={idx} style={styles.displayItem}>
-                  <View style={styles.itemLeft}>
-                    <View style={styles.itemQtyBadge}>
-                      <Text style={styles.itemQtyText}>{item.quantity}x</Text>
+        <View style={[styles.waitingContainer, !isLandscape && styles.waitingContainerPortrait]}>
+          {isLandscape ? (
+            // LANDSCAPE: Side by side - Cart left, QR right
+            <>
+              <View style={styles.leftSide}>
+                <Text style={styles.itemsTitle}>Din beställning</Text>
+                <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
+                  {items.map((item: any, idx: number) => (
+                    <View key={idx} style={styles.displayItem}>
+                      <View style={styles.itemLeft}>
+                        <View style={styles.itemQtyBadge}>
+                          <Text style={styles.itemQtyText}>{item.quantity}x</Text>
+                        </View>
+                        <Text style={styles.itemName}>{item.name}</Text>
+                      </View>
+                      <Text style={styles.itemPrice}>{(item.price * item.quantity).toFixed(0)} kr</Text>
                     </View>
-                    <Text style={styles.itemName}>{item.name}</Text>
-                  </View>
-                  <Text style={styles.itemPrice}>{(item.price * item.quantity).toFixed(0)} kr</Text>
-                </View>
-              ))}
-            </ScrollView>
-            
-            {/* Total fixed at bottom */}
-            <View style={styles.totalContainer}>
-              <Text style={styles.totalLabel}>Att betala</Text>
-              <Text style={styles.totalAmount}>{total.toFixed(0)} kr</Text>
-            </View>
-          </View>
-
-          {/* RIGHT SIDE: QR code maximized with padding */}
-          <View style={styles.rightSide}>
-            {qrData && (
-              <View style={styles.qrContainer}>
-                <View style={styles.qrBox}>
-                  <QRCode 
-                    value={qrData} 
-                    size={Math.min(Dimensions.get('window').height * 0.5, Dimensions.get('window').width * 0.4, 350)} 
-                    backgroundColor="white" 
-                    color="black" 
-                  />
-                </View>
-                <View style={styles.swishBranding}>
-                  <Ionicons name="phone-portrait-outline" size={20} color={C.swish} />
-                  <Text style={styles.swishText}>Skanna med Swish</Text>
+                  ))}
+                </ScrollView>
+                <View style={styles.totalContainer}>
+                  <Text style={styles.totalLabel}>Att betala</Text>
+                  <Text style={styles.totalAmount}>{total.toFixed(0)} kr</Text>
                 </View>
               </View>
-            )}
-          </View>
+              <View style={styles.rightSide}>
+                {qrData && (
+                  <View style={styles.qrContainer}>
+                    <View style={styles.qrBox}>
+                      <QRCode 
+                        value={qrData} 
+                        size={Math.min(height * 0.5, width * 0.4, 350)} 
+                        backgroundColor="white" 
+                        color="black" 
+                      />
+                    </View>
+                    <View style={styles.swishBranding}>
+                      <Ionicons name="phone-portrait-outline" size={20} color={C.swish} />
+                      <Text style={styles.swishText}>Skanna med Swish</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+            </>
+          ) : (
+            // PORTRAIT: QR top 50%, Cart bottom 50%
+            <>
+              {/* TOP: QR Code + Total */}
+              <View style={styles.topSection}>
+                {qrData && (
+                  <View style={styles.qrContainerPortrait}>
+                    <View style={styles.qrBoxPortrait}>
+                      <QRCode 
+                        value={qrData} 
+                        size={Math.min(width * 0.55, height * 0.3, 280)} 
+                        backgroundColor="white" 
+                        color="black" 
+                      />
+                    </View>
+                    <View style={styles.totalRowPortrait}>
+                      <Text style={styles.totalLabelPortrait}>Att betala</Text>
+                      <Text style={styles.totalAmountPortrait}>{total.toFixed(0)} kr</Text>
+                    </View>
+                    <View style={styles.swishBrandingPortrait}>
+                      <Ionicons name="phone-portrait-outline" size={16} color={C.swish} />
+                      <Text style={styles.swishTextPortrait}>Skanna med Swish</Text>
+                    </View>
+                  </View>
+                )}
+              </View>
+              
+              {/* BOTTOM: Cart items (scrollable) */}
+              <View style={styles.bottomSection}>
+                <Text style={styles.itemsTitlePortrait}>Din beställning</Text>
+                <ScrollView style={styles.itemsListPortrait} showsVerticalScrollIndicator={true}>
+                  {items.map((item: any, idx: number) => (
+                    <View key={idx} style={styles.displayItemPortrait}>
+                      <View style={styles.itemLeftPortrait}>
+                        <View style={styles.itemQtyBadgePortrait}>
+                          <Text style={styles.itemQtyTextPortrait}>{item.quantity}x</Text>
+                        </View>
+                        <Text style={styles.itemNamePortrait}>{item.name}</Text>
+                      </View>
+                      <Text style={styles.itemPricePortrait}>{(item.price * item.quantity).toFixed(0)} kr</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            </>
+          )}
         </View>
       )}
     </SafeAreaView>
@@ -433,4 +481,56 @@ const styles = StyleSheet.create({
   paidTitle: { fontSize: 48, fontWeight: '700', color: C.green, marginTop: 16 },
   paidSubtitle: { fontSize: 20, color: C.textSec, marginTop: 8 },
   paidAmount: { fontSize: 56, fontWeight: '700', color: C.text, marginTop: 16 },
+
+  // PORTRAIT STYLES
+  waitingContainerPortrait: { flexDirection: 'column' },
+  
+  // Top section - QR + Total (50%)
+  topSection: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  qrContainerPortrait: { alignItems: 'center' },
+  qrBoxPortrait: {
+    backgroundColor: C.white,
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  totalRowPortrait: {
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  totalLabelPortrait: { fontSize: 14, color: C.textSec, fontWeight: '500' },
+  totalAmountPortrait: { fontSize: 36, fontWeight: '700', color: C.green },
+  swishBrandingPortrait: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12,
+    backgroundColor: C.surface, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+  },
+  swishTextPortrait: { color: C.swish, fontSize: 13, fontWeight: '600' },
+  
+  // Bottom section - Cart (50%)
+  bottomSection: {
+    flex: 1,
+    padding: 16,
+  },
+  itemsTitlePortrait: { fontSize: 16, fontWeight: '600', color: C.text, marginBottom: 12 },
+  itemsListPortrait: { flex: 1 },
+  displayItemPortrait: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  itemLeftPortrait: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  itemQtyBadgePortrait: {
+    backgroundColor: C.green, width: 28, height: 28, borderRadius: 6,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  itemQtyTextPortrait: { color: C.white, fontSize: 12, fontWeight: '700' },
+  itemNamePortrait: { fontSize: 15, color: C.text, fontWeight: '500' },
+  itemPricePortrait: { fontSize: 15, color: C.textSec, fontWeight: '600' },
 });
