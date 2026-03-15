@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
-  TextInput, Modal, Platform, Dimensions, StatusBar,
+  TextInput, Modal, ScrollView, Dimensions, StatusBar, Image,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -23,18 +24,19 @@ interface DisplayData {
   order_id?: string;
 }
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 export default function App() {
-  // Pairing state
+  // Pairing state - Display generates code, POS enters it
   const [isPaired, setIsPaired] = useState(false);
-  const [pairingCode, setPairingCode] = useState('');
-  const [pairingError, setPairingError] = useState('');
-  const [pairing, setPairing] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [generatingCode, setGeneratingCode] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [storeName, setStoreName] = useState('');
+  const [loading, setLoading] = useState(true);
 
   // Display state
   const [displayData, setDisplayData] = useState<DisplayData | null>(null);
-  const [loading, setLoading] = useState(true);
 
   // Email receipt modal
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -43,16 +45,18 @@ export default function App() {
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
 
-  // Sound - using new expo-audio hook
+  // Thank you countdown
+  const [thankYouCountdown, setThankYouCountdown] = useState(15);
+  const thankYouTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sound
   const player = useAudioPlayer(require('./assets/pling.mp3'));
   const lastStatusRef = useRef<DisplayStatus>('idle');
 
   // Keep screen awake
   useEffect(() => {
     activateKeepAwakeAsync();
-    return () => {
-      deactivateKeepAwake();
-    };
+    return () => deactivateKeepAwake();
   }, []);
 
   // Lock to portrait orientation
@@ -69,9 +73,7 @@ export default function App() {
     try {
       player.seekTo(0);
       player.play();
-    } catch (e) {
-      // Silent fail - sound is not critical
-    }
+    } catch (e) {}
   };
 
   const loadSavedPairing = async () => {
@@ -79,69 +81,135 @@ export default function App() {
       const saved = await AsyncStorage.getItem('display_pairing');
       if (saved) {
         const { userId: savedUserId, storeName: savedStoreName } = JSON.parse(saved);
-        setUserId(savedUserId);
-        setStoreName(savedStoreName || '');
-        setIsPaired(true);
+        // Verify pairing is still valid
+        try {
+          const status = await api.get(`/api/customer-display/pairing-status?display_code=${savedUserId}`);
+          if (status.paired) {
+            setUserId(savedUserId);
+            setStoreName(savedStoreName || status.store_name || '');
+            setIsPaired(true);
+          } else {
+            // Pairing no longer valid, generate new code
+            await AsyncStorage.removeItem('display_pairing');
+            generateNewCode();
+          }
+        } catch {
+          // Can't verify, generate new code
+          await AsyncStorage.removeItem('display_pairing');
+          generateNewCode();
+        }
+      } else {
+        generateNewCode();
       }
     } catch (e) {
-      console.error('Failed to load pairing:', e);
+      generateNewCode();
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePair = async () => {
-    if (!pairingCode.trim()) {
-      setPairingError('Ange en parkoplingskod');
-      return;
-    }
-    setPairing(true);
-    setPairingError('');
+  // Generate a new 4-digit pairing code
+  const generateNewCode = async () => {
+    setGeneratingCode(true);
     try {
-      const res = await api.post('/api/customer-display/pair-with-code', { pairing_code: pairingCode.trim().toUpperCase() });
-      const pairedUserId = res.user_id;
-      const pairedStoreName = res.store_name || '';
-      
-      await AsyncStorage.setItem('display_pairing', JSON.stringify({
-        userId: pairedUserId,
-        storeName: pairedStoreName,
-      }));
-      
-      setUserId(pairedUserId);
-      setStoreName(pairedStoreName);
-      setIsPaired(true);
-      setPairingCode('');
-    } catch (e: any) {
-      setPairingError(e.message || 'Parkopplingen misslyckades');
+      const res = await api.post('/api/customer-display/generate-code', {});
+      setGeneratedCode(res.code);
+      // Start polling for when POS pairs with this code
+      pollForPairing(res.code);
+    } catch (e) {
+      // Generate local fallback code
+      const code = String(Math.floor(1000 + Math.random() * 9000));
+      setGeneratedCode(code);
     } finally {
-      setPairing(false);
+      setGeneratingCode(false);
     }
   };
 
+  // Poll to check if POS has paired with our code
+  const pollForPairing = (code: string) => {
+    const checkPairing = async () => {
+      try {
+        const res = await api.get(`/api/customer-display/check-pairing?code=${code}`);
+        if (res.paired && res.user_id) {
+          await AsyncStorage.setItem('display_pairing', JSON.stringify({
+            userId: res.user_id,
+            storeName: res.store_name || '',
+          }));
+          setUserId(res.user_id);
+          setStoreName(res.store_name || '');
+          setIsPaired(true);
+          return true;
+        }
+      } catch {}
+      return false;
+    };
+
+    const interval = setInterval(async () => {
+      const paired = await checkPairing();
+      if (paired) {
+        clearInterval(interval);
+      }
+    }, 2000);
+
+    // Stop polling after 10 minutes and generate new code
+    setTimeout(() => {
+      clearInterval(interval);
+      if (!isPaired) {
+        generateNewCode();
+      }
+    }, 10 * 60 * 1000);
+  };
+
+  // Unpair and generate new code
   const handleUnpair = async () => {
+    // Notify backend
+    try {
+      if (userId) {
+        await api.post('/api/customer-display/unpair', { user_id: userId });
+      }
+    } catch {}
+    
     await AsyncStorage.removeItem('display_pairing');
     setIsPaired(false);
     setUserId(null);
     setStoreName('');
     setDisplayData(null);
+    generateNewCode();
   };
 
-  // Poll display data
+  // Poll display data when paired
   useEffect(() => {
     if (!isPaired || !userId) return;
 
     const fetchDisplayData = async () => {
       try {
         const data = await api.get(`/api/customer-display?user_id=${userId}`);
+        
+        // Check if we've been unpaired
+        if (data.unpaired) {
+          handleUnpair();
+          return;
+        }
+        
         setDisplayData(data);
         
-        // Play pling when QR code appears (transition to payment_pending)
-        if (data.status === 'payment_pending' && lastStatusRef.current !== 'payment_pending') {
+        // Play pling when payment completes
+        if (data.status === 'payment_complete' && lastStatusRef.current !== 'payment_complete') {
           playPling();
+          // Start thank you countdown
+          setThankYouCountdown(15);
+          setShowEmailModal(true);
         }
+        
         lastStatusRef.current = data.status;
       } catch (e) {
-        console.error('Failed to fetch display data:', e);
+        // Check if unpaired
+        try {
+          const status = await api.get(`/api/customer-display/pairing-status?user_id=${userId}`);
+          if (!status.paired) {
+            handleUnpair();
+          }
+        } catch {}
       }
     };
 
@@ -149,6 +217,35 @@ export default function App() {
     const interval = setInterval(fetchDisplayData, 2000);
     return () => clearInterval(interval);
   }, [isPaired, userId]);
+
+  // Thank you countdown timer
+  useEffect(() => {
+    if (displayData?.status === 'payment_complete') {
+      thankYouTimerRef.current = setInterval(() => {
+        setThankYouCountdown(prev => {
+          if (prev <= 1) {
+            // Reset to idle
+            setShowEmailModal(false);
+            setEmail('');
+            setEmailSent(false);
+            return 15;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      if (thankYouTimerRef.current) {
+        clearInterval(thankYouTimerRef.current);
+      }
+      setThankYouCountdown(15);
+    }
+    
+    return () => {
+      if (thankYouTimerRef.current) {
+        clearInterval(thankYouTimerRef.current);
+      }
+    };
+  }, [displayData?.status]);
 
   const handleSendReceipt = async () => {
     if (!email.trim() || !displayData?.order_id) {
@@ -161,13 +258,9 @@ export default function App() {
       await api.post('/api/receipts/send', {
         order_id: displayData.order_id,
         email: email.trim(),
+        user_id: userId,
       });
       setEmailSent(true);
-      setTimeout(() => {
-        setShowEmailModal(false);
-        setEmailSent(false);
-        setEmail('');
-      }, 2000);
     } catch (e: any) {
       setEmailError(e.message || 'Kunde inte skicka kvitto');
     } finally {
@@ -185,7 +278,7 @@ export default function App() {
     );
   }
 
-  // Pairing screen
+  // Pairing screen - Show generated code
   if (!isPaired) {
     return (
       <View style={styles.container}>
@@ -197,48 +290,36 @@ export default function App() {
           <Text style={styles.pairingTitle}>QR-Kassan Display</Text>
           <Text style={styles.pairingSubtitle}>Kundskärm för betalning</Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Parkoplingskod</Text>
-            <TextInput
-              style={styles.input}
-              value={pairingCode}
-              onChangeText={setPairingCode}
-              placeholder="Ange kod från kassan"
-              placeholderTextColor={Colors.textMuted}
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
+          <View style={styles.codeContainer}>
+            <Text style={styles.codeLabel}>Ange denna kod i kassan:</Text>
+            {generatingCode ? (
+              <ActivityIndicator size="large" color={Colors.primary} />
+            ) : (
+              <Text style={styles.codeDisplay}>{generatedCode}</Text>
+            )}
           </View>
 
-          {pairingError ? (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={16} color={Colors.destructive} />
-              <Text style={styles.errorText}>{pairingError}</Text>
-            </View>
-          ) : null}
-
-          <TouchableOpacity
-            style={[styles.pairButton, pairing && styles.buttonDisabled]}
-            onPress={handlePair}
-            disabled={pairing}
-          >
-            {pairing ? (
-              <ActivityIndicator color={Colors.white} />
-            ) : (
-              <Text style={styles.pairButtonText}>Koppla skärm</Text>
-            )}
-          </TouchableOpacity>
-
           <Text style={styles.instructions}>
-            Öppna "Koppla skärm" i kassan för att få en parkoplingskod
+            Öppna "Koppla skärm" i kassan och ange koden ovan
           </Text>
+
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={generateNewCode}
+            disabled={generatingCode}
+          >
+            <Ionicons name="refresh" size={18} color={Colors.primary} />
+            <Text style={styles.refreshButtonText}>Generera ny kod</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
   }
 
-  // Display screen
+  // Display screen - Portrait: QR top 50%, Cart bottom 50%
   const status = displayData?.status || 'idle';
+  const showQR = status === 'payment_pending' && displayData?.qr_code_url;
+  const showThankYou = status === 'payment_complete';
 
   return (
     <View style={styles.container}>
@@ -252,81 +333,94 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Main content */}
-      <View style={styles.content}>
-        {status === 'idle' && (
-          <View style={styles.idleContainer}>
-            <Ionicons name="cart-outline" size={80} color={Colors.textMuted} />
-            <Text style={styles.idleText}>Väntar på order...</Text>
-          </View>
-        )}
-
-        {status === 'showing_cart' && displayData?.items && (
-          <View style={styles.cartContainer}>
-            <Text style={styles.cartTitle}>Din order</Text>
-            {displayData.items.map((item, idx) => (
-              <View key={idx} style={styles.cartItem}>
-                <Text style={styles.itemName}>{item.quantity}x {item.name}</Text>
-                <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
+      {/* Main Content - Split 50/50 */}
+      <View style={styles.splitContainer}>
+        
+        {/* Top 50% - QR Code or Status */}
+        <View style={styles.topHalf}>
+          {showThankYou ? (
+            <View style={styles.thankYouContainer}>
+              <View style={styles.checkCircle}>
+                <Ionicons name="checkmark" size={60} color={Colors.white} />
               </View>
-            ))}
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Totalt</Text>
-              <Text style={styles.totalValue}>{displayData.total} kr</Text>
+              <Text style={styles.thankYouTitle}>Tack för köpet!</Text>
+              <Text style={styles.thankYouSubtitle}>Betalningen är genomförd</Text>
+              <Text style={styles.countdownText}>Återställs om {thankYouCountdown}s</Text>
             </View>
-          </View>
-        )}
-
-        {status === 'payment_pending' && displayData?.qr_code_url && (
-          <View style={styles.paymentContainer}>
-            <Text style={styles.paymentTitle}>Betala med Swish</Text>
-            <View style={styles.qrContainer}>
-              <View style={styles.qrPlaceholder}>
-                <Ionicons name="qr-code" size={180} color={Colors.primary} />
+          ) : showQR ? (
+            <View style={styles.qrSection}>
+              <Text style={styles.qrTitle}>Betala med Swish</Text>
+              <View style={styles.qrBox}>
+                {displayData?.qr_code_url ? (
+                  <Image 
+                    source={{ uri: displayData.qr_code_url }} 
+                    style={styles.qrImage}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Ionicons name="qr-code" size={150} color={Colors.primary} />
+                )}
               </View>
+              <Text style={styles.qrAmount}>{displayData?.total} kr</Text>
+              <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
             </View>
-            <Text style={styles.totalAmount}>{displayData.total} kr</Text>
-            <Text style={styles.scanText}>Skanna QR-koden med Swish-appen</Text>
-          </View>
-        )}
+          ) : (
+            <View style={styles.idleTop}>
+              <Ionicons name="cart-outline" size={60} color={Colors.textMuted} />
+              <Text style={styles.idleText}>Väntar på order...</Text>
+            </View>
+          )}
+        </View>
 
-        {status === 'payment_complete' && (
-          <View style={styles.completeContainer}>
-            <View style={styles.checkCircle}>
-              <Ionicons name="checkmark" size={80} color={Colors.white} />
+        {/* Bottom 50% - Cart */}
+        <View style={styles.bottomHalf}>
+          {displayData?.items && displayData.items.length > 0 ? (
+            <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.cartTitle}>Din order</Text>
+              {displayData.items.map((item, idx) => (
+                <View key={idx} style={styles.cartItem}>
+                  <View style={styles.itemLeft}>
+                    <Text style={styles.itemQty}>{item.quantity}x</Text>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                  </View>
+                  <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
+                </View>
+              ))}
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Totalt att betala</Text>
+                <Text style={styles.totalValue}>{displayData.total} kr</Text>
+              </View>
+            </ScrollView>
+          ) : (
+            <View style={styles.emptyCart}>
+              <Ionicons name="basket-outline" size={40} color={Colors.textMuted} />
+              <Text style={styles.emptyCartText}>Varukorgen är tom</Text>
             </View>
-            <Text style={styles.completeTitle}>Tack för ditt köp!</Text>
-            <Text style={styles.completeSubtitle}>Betalningen är genomförd</Text>
-            
-            {/* Email receipt button */}
-            <TouchableOpacity
-              style={styles.receiptButton}
-              onPress={() => setShowEmailModal(true)}
-            >
-              <Ionicons name="mail-outline" size={20} color={Colors.primary} />
-              <Text style={styles.receiptButtonText}>Skicka kvitto via e-post</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
       </View>
 
-      {/* Email Receipt Modal */}
+      {/* Email Receipt Modal - Shows on payment complete */}
       <Modal
-        visible={showEmailModal}
+        visible={showEmailModal && showThankYou}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowEmailModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView 
+          style={styles.modalOverlay} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
           <View style={styles.modalContent}>
             {emailSent ? (
               <View style={styles.emailSentContainer}>
                 <Ionicons name="checkmark-circle" size={64} color={Colors.primary} />
                 <Text style={styles.emailSentText}>Kvitto skickat!</Text>
+                <Text style={styles.emailSentSubtext}>Kolla din inkorg</Text>
               </View>
             ) : (
               <>
-                <Text style={styles.modalTitle}>Skicka kvitto</Text>
+                <Text style={styles.modalTitle}>Vill du ha kvitto?</Text>
                 <Text style={styles.modalSubtitle}>Ange din e-postadress</Text>
                 
                 <TextInput
@@ -338,6 +432,7 @@ export default function App() {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  autoFocus
                 />
 
                 {emailError ? (
@@ -346,14 +441,10 @@ export default function App() {
 
                 <View style={styles.modalButtons}>
                   <TouchableOpacity
-                    style={styles.modalCancelBtn}
-                    onPress={() => {
-                      setShowEmailModal(false);
-                      setEmail('');
-                      setEmailError('');
-                    }}
+                    style={styles.modalSkipBtn}
+                    onPress={() => setShowEmailModal(false)}
                   >
-                    <Text style={styles.modalCancelText}>Avbryt</Text>
+                    <Text style={styles.modalSkipText}>Nej tack</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.modalSendBtn, sendingEmail && styles.buttonDisabled]}
@@ -361,7 +452,7 @@ export default function App() {
                     disabled={sendingEmail}
                   >
                     {sendingEmail ? (
-                      <ActivityIndicator color={Colors.white} size="small" />
+                      <ActivityIndicator color={Colors.white} />
                     ) : (
                       <Text style={styles.modalSendText}>Skicka</Text>
                     )}
@@ -370,19 +461,16 @@ export default function App() {
               </>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
-const { width } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    backgroundColor: '#0a0a0a',
   },
   
   // Pairing screen
@@ -393,15 +481,13 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   iconBox: {
-    width: 100,
-    height: 100,
+    width: 96,
+    height: 96,
     borderRadius: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: 'rgba(34,197,94,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   pairingTitle: {
     fontSize: 28,
@@ -411,70 +497,45 @@ const styles = StyleSheet.create({
   },
   pairingSubtitle: {
     fontSize: 16,
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     marginBottom: 40,
   },
-  inputGroup: {
-    width: '100%',
-    maxWidth: 320,
-    marginBottom: 16,
+  codeContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
+  codeLabel: {
+    fontSize: 16,
     color: Colors.textSecondary,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 16,
-    fontSize: 18,
-    color: Colors.textPrimary,
-    textAlign: 'center',
-    letterSpacing: 4,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239,68,68,0.1)',
-    padding: 12,
-    borderRadius: 8,
     marginBottom: 16,
-    gap: 8,
-    width: '100%',
-    maxWidth: 320,
   },
-  errorText: {
-    color: Colors.destructive,
-    fontSize: 14,
-    flex: 1,
-  },
-  pairButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 12,
-    width: '100%',
-    maxWidth: 320,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  pairButtonText: {
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: '600',
+  codeDisplay: {
+    fontSize: 72,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   instructions: {
     fontSize: 14,
     color: Colors.textMuted,
     textAlign: 'center',
-    marginTop: 24,
-    maxWidth: 280,
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: 'rgba(34,197,94,0.1)',
+  },
+  refreshButtonText: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '500',
   },
 
   // Display screen
@@ -483,241 +544,260 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingTop: 60,
+    paddingBottom: 12,
   },
   storeName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: Colors.textPrimary,
   },
   unpairBtn: {
     padding: 8,
   },
-  content: {
+
+  // Split container
+  splitContainer: {
     flex: 1,
+  },
+  topHalf: {
+    height: SCREEN_HEIGHT * 0.45,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  bottomHalf: {
+    flex: 1,
+    padding: 16,
   },
 
   // Idle state
-  idleContainer: {
+  idleTop: {
     alignItems: 'center',
   },
   idleText: {
-    fontSize: 24,
+    fontSize: 18,
     color: Colors.textMuted,
-    marginTop: 24,
+    marginTop: 16,
   },
 
-  // Cart state
-  cartContainer: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  // QR section
+  qrSection: {
+    alignItems: 'center',
+    padding: 16,
   },
-  cartTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  cartItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  itemName: {
-    fontSize: 18,
-    color: Colors.textPrimary,
-  },
-  itemPrice: {
-    fontSize: 18,
-    color: Colors.textSecondary,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 16,
-  },
-  totalLabel: {
-    fontSize: 22,
+  qrTitle: {
+    fontSize: 20,
     fontWeight: '600',
     color: Colors.textPrimary,
-  },
-  totalValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-
-  // Payment state
-  paymentContainer: {
-    alignItems: 'center',
-  },
-  paymentTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 24,
-  },
-  qrContainer: {
-    backgroundColor: Colors.white,
-    padding: 24,
-    borderRadius: 20,
-    marginBottom: 24,
-  },
-  qrPlaceholder: {
-    width: 200,
-    height: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  totalAmount: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: Colors.primary,
     marginBottom: 16,
   },
-  scanText: {
-    fontSize: 18,
-    color: Colors.textSecondary,
-    textAlign: 'center',
+  qrBox: {
+    backgroundColor: Colors.white,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  qrImage: {
+    width: 180,
+    height: 180,
+  },
+  qrAmount: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginBottom: 8,
+  },
+  qrHint: {
+    fontSize: 14,
+    color: Colors.textMuted,
   },
 
-  // Complete state
-  completeContainer: {
+  // Thank you
+  thankYouContainer: {
     alignItems: 'center',
   },
   checkCircle: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 20,
   },
-  completeTitle: {
-    fontSize: 32,
+  thankYouTitle: {
+    fontSize: 28,
     fontWeight: '700',
     color: Colors.textPrimary,
     marginBottom: 8,
   },
-  completeSubtitle: {
-    fontSize: 18,
-    color: Colors.textSecondary,
-    marginBottom: 32,
+  thankYouSubtitle: {
+    fontSize: 16,
+    color: Colors.textMuted,
+    marginBottom: 12,
   },
-  receiptButton: {
+  countdownText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+  },
+
+  // Cart
+  cartScroll: {
+    flex: 1,
+  },
+  cartTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 16,
+  },
+  cartItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  itemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.surface,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.primary,
+    flex: 1,
   },
-  receiptButtonText: {
+  itemQty: {
+    fontSize: 14,
     color: Colors.primary,
+    fontWeight: '600',
+    marginRight: 8,
+    minWidth: 32,
+  },
+  itemName: {
+    fontSize: 16,
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  itemPrice: {
     fontSize: 16,
     fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    marginTop: 8,
+    borderTopWidth: 2,
+    borderTopColor: Colors.primary,
+  },
+  totalLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  totalValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  emptyCart: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyCartText: {
+    fontSize: 16,
+    color: Colors.textMuted,
+    marginTop: 12,
   },
 
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    padding: 28,
-    width: '85%',
-    maxWidth: 360,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: Colors.textPrimary,
+    textAlign: 'center',
     marginBottom: 8,
   },
   modalSubtitle: {
     fontSize: 16,
-    color: Colors.textSecondary,
-    marginBottom: 20,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginBottom: 24,
   },
   modalInput: {
-    backgroundColor: Colors.background,
+    backgroundColor: '#0a0a0a',
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
     padding: 16,
-    fontSize: 16,
+    fontSize: 18,
     color: Colors.textPrimary,
     marginBottom: 16,
+    textAlign: 'center',
   },
   modalError: {
     color: Colors.destructive,
     fontSize: 14,
+    textAlign: 'center',
     marginBottom: 16,
   },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
   },
-  modalCancelBtn: {
+  modalSkipBtn: {
     flex: 1,
-    height: 50,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
-    justifyContent: 'center',
+    padding: 16,
     alignItems: 'center',
-    backgroundColor: Colors.surfaceHighlight,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  modalCancelText: {
-    color: Colors.textPrimary,
+  modalSkipText: {
     fontSize: 16,
+    color: Colors.textMuted,
     fontWeight: '600',
   },
   modalSendBtn: {
     flex: 1,
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: Colors.primary,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
   },
   modalSendText: {
-    color: Colors.white,
     fontSize: 16,
+    color: Colors.white,
     fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   emailSentContainer: {
     alignItems: 'center',
-    paddingVertical: 20,
+    padding: 24,
   },
   emailSentText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.textPrimary,
     marginTop: 16,
+  },
+  emailSentSubtext: {
+    fontSize: 16,
+    color: Colors.textMuted,
+    marginTop: 8,
   },
 });

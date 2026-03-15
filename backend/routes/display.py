@@ -30,7 +30,9 @@ def cleanup_expired_codes():
 
 @router.post("/generate-code")
 async def generate_display_code():
-    """Generate a 4-digit pairing code for customer display"""
+    """Generate a 4-digit pairing code for customer display.
+    Display app calls this to get a code that POS user will enter.
+    """
     cleanup_expired_codes()
     
     # Generate unique code
@@ -41,15 +43,84 @@ async def generate_display_code():
     # Generate unique display_id for this device
     display_id = f"display_{uuid.uuid4().hex[:12]}"
     
-    # Store with 5-minute expiration
+    # Store with 10-minute expiration
     pairing_codes[code] = {
-        'expires': datetime.now(timezone.utc) + timedelta(minutes=5),
+        'expires': datetime.now(timezone.utc) + timedelta(minutes=10),
         'user_id': None,
         'paired': False,
-        'display_id': display_id
+        'display_id': display_id,
+        'store_name': ''
     }
     
-    return {"code": code, "expires_in": 300, "display_id": display_id}
+    return {"code": code, "expires_in": 600, "display_id": display_id}
+
+
+@router.get("/check-pairing")
+async def check_pairing(code: str = Query(...)):
+    """Display polls this to check if POS has paired with the code"""
+    cleanup_expired_codes()
+    
+    if code not in pairing_codes:
+        return {"paired": False, "expired": True}
+    
+    data = pairing_codes[code]
+    
+    if data.get('paired') and data.get('user_id'):
+        return {
+            "paired": True,
+            "user_id": data['user_id'],
+            "store_name": data.get('store_name', ''),
+            "display_id": data['display_id']
+        }
+    
+    return {"paired": False, "expired": False}
+
+
+@router.get("/pairing-status")
+async def get_pairing_status(
+    user_id: Optional[str] = Query(None),
+    display_code: Optional[str] = Query(None)
+):
+    """Check if a display is still paired"""
+    db = get_db()
+    
+    if user_id:
+        display = await db.paired_displays.find_one({"user_id": user_id}, {"_id": 0})
+        if display:
+            return {"paired": True, "store_name": display.get("store_name", "")}
+    
+    if display_code:
+        display = await db.paired_displays.find_one({"display_id": display_code}, {"_id": 0})
+        if display:
+            # Get store name
+            settings = await db.settings.find_one({"user_id": display["user_id"]}, {"_id": 0})
+            return {
+                "paired": True, 
+                "store_name": settings.get("store_name", "") if settings else ""
+            }
+    
+    return {"paired": False}
+
+
+@router.post("/unpair")
+async def unpair_display(request: Request):
+    """Unpair a display (called from Display app when disconnecting)"""
+    body = await request.json()
+    user_id = body.get("user_id")
+    display_id = body.get("display_id")
+    
+    db = get_db()
+    
+    if user_id:
+        await db.paired_displays.delete_many({"user_id": user_id})
+    if display_id:
+        await db.paired_displays.delete_one({"display_id": display_id})
+    
+    # Also clear any active display data
+    if user_id:
+        await db.display_data.delete_many({"user_id": user_id})
+    
+    return {"success": True}
 
 
 @router.get("/check-code/{code}")
@@ -91,7 +162,9 @@ async def check_pairing_code(code: str, response: Response):
 
 @router.post("/pair")
 async def pair_display(request: Request):
-    """Pair a display code with the current user (called from POS app)"""
+    """Pair a display code with the current user (called from POS app).
+    POS user enters the code shown on Display app.
+    """
     user = await get_current_user(request)
     if not user:
         return {"success": False, "message": "Autentisering krävs"}
@@ -108,18 +181,25 @@ async def pair_display(request: Request):
     # Get display_id from pairing code
     display_id = pairing_codes[code].get('display_id', f"display_{uuid.uuid4().hex[:12]}")
     
+    db = get_db()
+    
+    # Get store name from settings
+    settings = await db.settings.find_one({"user_id": user['user_id']}, {"_id": 0})
+    store_name = settings.get("store_name", "") if settings else ""
+    
     # Pair the code with user
     pairing_codes[code]['user_id'] = user['user_id']
     pairing_codes[code]['paired'] = True
+    pairing_codes[code]['store_name'] = store_name
     
     # Store paired display in database
-    db = get_db()
     await db.paired_displays.update_one(
         {"display_id": display_id},
         {"$set": {
             "display_id": display_id,
             "user_id": user['user_id'],
             "device_name": device_name,
+            "store_name": store_name,
             "paired_at": datetime.now(timezone.utc).isoformat(),
             "last_active": datetime.now(timezone.utc).isoformat()
         }},
