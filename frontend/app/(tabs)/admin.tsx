@@ -582,13 +582,20 @@ export default function AdminScreen() {
     );
   };
 
-  const handleResendInvite = async (user: SubUser) => {
-    try {
-      await api.fetch(`/org/users/${user.user_id}/resend-invite`, { method: 'POST' });
-      showAlert('Klart', 'Välkomstmail skickat!');
-    } catch (e: any) {
-      showAlert('Fel', e.message);
-    }
+  const handleSendCredentials = async (user: SubUser) => {
+    confirmAction(
+      'Skicka inloggningsinfo',
+      `Skicka ny inloggningskod och lösenord till ${user.email}? Tidigare inloggningsuppgifter kommer sluta fungera.`,
+      async () => {
+        try {
+          await api.fetch(`/org/users/${user.user_id}/send-credentials`, { method: 'POST' });
+          showAlert('Klart', 'Ny inloggningsinfo skickad till användaren!');
+          loadSubUsers();
+        } catch (e: any) {
+          showAlert('Fel', e.message);
+        }
+      }
+    );
   };
 
   const handleRegenerateCode = (user: SubUser) => {
@@ -1110,24 +1117,10 @@ export default function AdminScreen() {
                   <View style={styles.userRowActions}>
                     <TouchableOpacity
                       style={[styles.userActionBtn, isWide && styles.userActionBtnWide]}
-                      onPress={() => handleResendInvite(item)}
+                      onPress={() => handleSendCredentials(item)}
                     >
-                      <Ionicons name="mail-outline" size={18} color={Colors.info} />
-                      {isWide && <Text style={[styles.userActionText, { color: Colors.info }]}>Skicka mail</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.userActionBtn, isWide && styles.userActionBtnWide]}
-                      onPress={() => handleRegenerateCode(item)}
-                    >
-                      <Ionicons name="key-outline" size={18} color={Colors.warning} />
-                      {isWide && <Text style={[styles.userActionText, { color: Colors.warning }]}>Ny kod</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.userActionBtn, isWide && styles.userActionBtnWide]}
-                      onPress={() => handleResetPassword(item)}
-                    >
-                      <Ionicons name="lock-closed-outline" size={18} color={Colors.primary} />
-                      {isWide && <Text style={[styles.userActionText, { color: Colors.primary }]}>Lösenord</Text>}
+                      <Ionicons name="send-outline" size={18} color={Colors.info} />
+                      {isWide && <Text style={[styles.userActionText, { color: Colors.info }]}>Skicka info</Text>}
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.userActionBtn, isWide && styles.userActionBtnWide]}

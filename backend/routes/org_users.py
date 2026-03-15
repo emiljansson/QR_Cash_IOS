@@ -268,3 +268,114 @@ async def regenerate_login_code(request: Request, sub_user_id: str):
         "message": "Ny inloggningskod skapad",
         "login_code": new_code
     }
+
+
+@router.post("/users/{sub_user_id}/send-credentials")
+async def send_new_credentials(request: Request, sub_user_id: str):
+    """Generate new login code and password, then send email with credentials"""
+    import secrets
+    import string
+    
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ej inloggad")
+    
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Endast admin kan skicka inloggningsinfo")
+    
+    db = get_db()
+    
+    # Verify the sub-user belongs to this organization
+    sub_user = await db.users.find_one({
+        "user_id": sub_user_id,
+        "parent_user_id": user["user_id"]
+    })
+    
+    if not sub_user:
+        raise HTTPException(status_code=404, detail="Användare hittades inte")
+    
+    # Generate new unique login code
+    new_code = generate_login_code()
+    while await db.users.find_one({"login_code": new_code}):
+        new_code = generate_login_code()
+    
+    # Generate new temporary password
+    alphabet = string.ascii_letters + string.digits
+    new_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+    
+    # Hash the password
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    hashed_password = pwd_context.hash(new_password)
+    
+    # Update user with new code and password
+    await db.users.update_one(
+        {"user_id": sub_user_id},
+        {"$set": {
+            "login_code": new_code,
+            "hashed_password": hashed_password,
+            "password_reset_required": True
+        }}
+    )
+    
+    # Send email with new credentials
+    try:
+        await send_credentials_email(
+            email=sub_user["email"],
+            organization_name=user.get("organization_name", ""),
+            login_code=new_code,
+            password=new_password
+        )
+        logger.info(f"Credentials email sent to {sub_user['email']}")
+    except Exception as e:
+        logger.error(f"Failed to send credentials email: {e}")
+        raise HTTPException(status_code=500, detail="Kunde inte skicka mail")
+    
+    return {
+        "success": True,
+        "message": "Ny inloggningsinfo skickad till användaren"
+    }
+
+
+async def send_credentials_email(email: str, organization_name: str, login_code: str, password: str):
+    """Send email with new login credentials"""
+    import os
+    import resend
+    
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    if not resend.api_key:
+        raise Exception("RESEND_API_KEY not configured")
+    
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #22c55e;">Ny inloggningsinformation</h2>
+        <p>Hej!</p>
+        <p>Här kommer din nya inloggningsinformation för {organization_name or 'QR-Kassan'}:</p>
+        
+        <div style="background-color: #f4f4f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <p style="margin: 0 0 10px 0;"><strong>Snabbkod för kassan:</strong></p>
+            <p style="font-size: 32px; font-weight: bold; color: #22c55e; margin: 0 0 20px 0; letter-spacing: 8px;">{login_code}</p>
+            
+            <p style="margin: 0 0 10px 0;"><strong>Lösenord:</strong></p>
+            <p style="font-size: 18px; font-family: monospace; background: #fff; padding: 10px; border-radius: 4px; margin: 0;">{password}</p>
+        </div>
+        
+        <p style="color: #71717a; font-size: 14px;">
+            Du kan logga in med snabbkoden direkt i kassan, eller med din e-post och lösenord.
+            Vi rekommenderar att du byter lösenord efter första inloggningen.
+        </p>
+        
+        <p style="margin-top: 30px; color: #a1a1aa; font-size: 12px;">
+            Detta mail skickades från QR-Kassan.
+        </p>
+    </div>
+    """
+    
+    params = {
+        "from": "QR-Kassan <noreply@resend.dev>",
+        "to": [email],
+        "subject": f"Ny inloggningsinformation - {organization_name or 'QR-Kassan'}",
+        "html": html_content,
+    }
+    
+    resend.Emails.send(params)
