@@ -433,28 +433,32 @@ export default function AdminScreen() {
                   </View>
                   <View style={styles.userRowActions}>
                     <TouchableOpacity
-                      style={styles.userActionBtn}
+                      style={[styles.userActionBtn, isWide && styles.userActionBtnWide]}
                       onPress={() => handleResendInvite(item)}
                     >
                       <Ionicons name="mail-outline" size={18} color={Colors.info} />
+                      {isWide && <Text style={[styles.userActionText, { color: Colors.info }]}>Skicka mail</Text>}
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.userActionBtn}
+                      style={[styles.userActionBtn, isWide && styles.userActionBtnWide]}
                       onPress={() => handleRegenerateCode(item)}
                     >
                       <Ionicons name="key-outline" size={18} color={Colors.warning} />
+                      {isWide && <Text style={[styles.userActionText, { color: Colors.warning }]}>Ny kod</Text>}
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.userActionBtn}
+                      style={[styles.userActionBtn, isWide && styles.userActionBtnWide]}
                       onPress={() => handleResetPassword(item)}
                     >
                       <Ionicons name="lock-closed-outline" size={18} color={Colors.primary} />
+                      {isWide && <Text style={[styles.userActionText, { color: Colors.primary }]}>Lösenord</Text>}
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.userActionBtn}
+                      style={[styles.userActionBtn, isWide && styles.userActionBtnWide]}
                       onPress={() => handleDeleteUser(item)}
                     >
                       <Ionicons name="trash-outline" size={18} color={Colors.destructive} />
+                      {isWide && <Text style={[styles.userActionText, { color: Colors.destructive }]}>Ta bort</Text>}
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -775,5 +779,9 @@ const styles = StyleSheet.create({
   userActionBtn: { 
     padding: 8, backgroundColor: Colors.surfaceHighlight, borderRadius: 8,
   },
+  userActionBtnWide: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12,
+  },
+  userActionText: { fontSize: 12, fontWeight: '500' },
   emptySubtext: { fontSize: 14, color: Colors.textMuted, marginTop: 8 },
 });

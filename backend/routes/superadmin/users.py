@@ -287,7 +287,9 @@ async def update_user_full(request: Request, user_id: str):
         email = update_data.get("email", user.get("email"))
         org_name = update_data.get("organization_name", user.get("organization_name", ""))
         login_code = user.get("login_code")
-        await send_welcome_email(email, org_name, login_code)
+        # Check if user is a sub-user
+        is_sub_user = user.get("parent_user_id") is not None
+        await send_welcome_email(email, org_name, login_code, is_sub_user=is_sub_user)
         logger.info(f"Welcome email sent to {email}")
     
     # Return updated user
