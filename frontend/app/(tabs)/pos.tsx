@@ -308,40 +308,42 @@ export default function POSScreen() {
 
             {cart.length > 0 ? (
               <>
-                <ScrollView style={styles.cartItems} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                  {cart.map(item => (
-                    <View key={item.product_id} style={styles.cartItem}>
-                      <View style={styles.cartItemInfo}>
-                        <Text style={styles.cartItemName}>{item.name}</Text>
-                        <Text style={styles.cartItemPrice}>{(item.price * item.quantity).toFixed(0)} kr</Text>
+                <View style={{ minHeight: Math.min(cart.length * 56, 200), maxHeight: 200 }}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                    {cart.map(item => (
+                      <View key={item.product_id} style={styles.cartItem}>
+                        <View style={styles.cartItemInfo}>
+                          <Text style={styles.cartItemName}>{item.name}</Text>
+                          <Text style={styles.cartItemPrice}>{(item.price * item.quantity).toFixed(0)} kr</Text>
+                        </View>
+                        <View style={styles.cartItemControls}>
+                          <TouchableOpacity
+                            testID={`cart-minus-${item.product_id}`}
+                            onPress={() => updateQuantity(item.product_id, -1)}
+                            style={styles.qtyBtn}
+                          >
+                            <Ionicons name="remove" size={16} color={Colors.textPrimary} />
+                          </TouchableOpacity>
+                          <Text style={styles.qtyText}>{item.quantity}</Text>
+                          <TouchableOpacity
+                            testID={`cart-plus-${item.product_id}`}
+                            onPress={() => updateQuantity(item.product_id, 1)}
+                            style={styles.qtyBtn}
+                          >
+                            <Ionicons name="add" size={16} color={Colors.textPrimary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            testID={`cart-remove-${item.product_id}`}
+                            onPress={() => removeFromCart(item.product_id)}
+                            style={styles.removeBtn}
+                          >
+                            <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                      <View style={styles.cartItemControls}>
-                        <TouchableOpacity
-                          testID={`cart-minus-${item.product_id}`}
-                          onPress={() => updateQuantity(item.product_id, -1)}
-                          style={styles.qtyBtn}
-                        >
-                          <Ionicons name="remove" size={16} color={Colors.textPrimary} />
-                        </TouchableOpacity>
-                        <Text style={styles.qtyText}>{item.quantity}</Text>
-                        <TouchableOpacity
-                          testID={`cart-plus-${item.product_id}`}
-                          onPress={() => updateQuantity(item.product_id, 1)}
-                          style={styles.qtyBtn}
-                        >
-                          <Ionicons name="add" size={16} color={Colors.textPrimary} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          testID={`cart-remove-${item.product_id}`}
-                          onPress={() => removeFromCart(item.product_id)}
-                          style={styles.removeBtn}
-                        >
-                          <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  ))}
-                </ScrollView>
+                    ))}
+                  </ScrollView>
+                </View>
 
                 <View style={styles.cartFooter}>
                   <View style={styles.cartTotal}>
@@ -461,7 +463,7 @@ const styles = StyleSheet.create({
   },
   displayBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '500' },
   // Main content layout
-  mainContent: { flex: 1, flexDirection: 'column-reverse' },
+  mainContent: { flex: 1 },
   mainContentTablet: { flexDirection: 'row' },
   productSection: { flex: 1 },
   productSectionTablet: { flex: 2 }, // 60% av bredden
