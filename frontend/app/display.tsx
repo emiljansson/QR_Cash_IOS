@@ -285,7 +285,7 @@ export default function CustomerDisplayScreen() {
           }
         }
 
-        // Handle state transitions
+        // Handle state transitions - but NEVER leave paid state from polling
         if (data.status === 'paid' && state !== 'paired_paid') {
           setState('paired_paid');
           setPaidAnimation(true);
@@ -301,6 +301,13 @@ export default function CustomerDisplayScreen() {
               setThankYouCountdown(prev => {
                 if (prev <= 1) {
                   if (countdownRef.current) clearInterval(countdownRef.current);
+                  countdownRef.current = null;
+                  // Reset state after countdown
+                  countdownStartedRef.current = false;
+                  setState('paired_idle');
+                  setShowEmailModal(false);
+                  setEmailSent(false);
+                  setPaidAnimation(false);
                   return 0;
                 }
                 return prev - 1;
@@ -308,37 +315,24 @@ export default function CustomerDisplayScreen() {
             }, 1000);
           }
         } else if (state === 'paired_paid') {
-          // Stay on thank you screen until countdown reaches 0
-          // Ignore backend status changes while showing thank you
-          if (thankYouCountdown <= 0) {
-            setState('paired_idle');
-            setShowEmailModal(false);
-            setEmailSent(false);
-            setPaidAnimation(false);
-            countdownStartedRef.current = false;
-          }
+          // IMPORTANT: Stay on thank you screen - ignore ALL backend status changes
+          // The countdown timer handles the transition back to idle
+          return;
         } else if (data.status === 'waiting' && state !== 'paired_waiting') {
           setState('paired_waiting');
-          setShowEmailModal(false);
-          setEmailSent(false);
-          countdownStartedRef.current = false;
         } else if (data.status === 'idle' && state !== 'paired_idle') {
           setState('paired_idle');
-          setShowEmailModal(false);
-          setEmailSent(false);
-          setPaidAnimation(false);
-          countdownStartedRef.current = false;
         }
       } catch {}
     };
 
     fetchDisplay();
     dataPollRef.current = setInterval(fetchDisplay, 2000);
+    
     return () => { 
       if (dataPollRef.current) clearInterval(dataPollRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
     };
-  }, [userId, state, thankYouCountdown]);
+  }, [userId, state]); // Removed thankYouCountdown from dependencies
 
   // SCREEN: Loading saved pairing
   if (state === 'loading') {
