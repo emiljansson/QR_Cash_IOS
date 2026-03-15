@@ -23,16 +23,22 @@ router = APIRouter()
 
 @router.get("/users")
 async def list_users(request: Request, skip: int = 0, limit: int = 50):
-    """List all users/tenants"""
+    """List all users/tenants (only admins, not sub-users)"""
     await require_admin(request)
     db = get_db()
     
+    # Only get admin users (organizations), not sub-users
     users = await db.users.find(
-        {},
+        {"$or": [{"parent_user_id": None}, {"parent_user_id": {"$exists": False}}]},
         {"_id": 0, "password_hash": 0, "verification_token": 0}
     ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     
-    total = await db.users.count_documents({})
+    # Count sub-users for each admin
+    for user in users:
+        sub_count = await db.users.count_documents({"parent_user_id": user["user_id"]})
+        user["sub_user_count"] = sub_count
+    
+    total = await db.users.count_documents({"$or": [{"parent_user_id": None}, {"parent_user_id": {"$exists": False}}]})
     
     return {
         "users": users,
@@ -40,6 +46,20 @@ async def list_users(request: Request, skip: int = 0, limit: int = 50):
         "skip": skip,
         "limit": limit
     }
+
+
+@router.get("/users/{user_id}/sub-users")
+async def list_sub_users(request: Request, user_id: str):
+    """List all sub-users for a specific organization"""
+    await require_admin(request)
+    db = get_db()
+    
+    sub_users = await db.users.find(
+        {"parent_user_id": user_id},
+        {"_id": 0, "password_hash": 0, "verification_token": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    return {"sub_users": sub_users}
 
 
 @router.get("/users/{user_id}")

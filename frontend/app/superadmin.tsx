@@ -123,6 +123,11 @@ function UsersTab() {
   const [sendWelcomeEmail, setSendWelcomeEmail] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [newPin, setNewPin] = useState('');
+  
+  // Sub-users state
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [subUsers, setSubUsers] = useState<{[key: string]: any[]}>({});
+  const [loadingSubUsers, setLoadingSubUsers] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
     try {
@@ -130,6 +135,23 @@ function UsersTab() {
       setUsers(data.users || []);
     } catch {} finally { setLoading(false); }
   }, []);
+
+  const loadSubUsers = async (userId: string) => {
+    if (expandedUser === userId) {
+      setExpandedUser(null);
+      return;
+    }
+    setLoadingSubUsers(userId);
+    try {
+      const data = await adminFetch(`/users/${userId}/sub-users`);
+      setSubUsers(prev => ({ ...prev, [userId]: data.sub_users || [] }));
+      setExpandedUser(userId);
+    } catch (e: any) {
+      Alert.alert('Fel', e.message);
+    } finally {
+      setLoadingSubUsers(null);
+    }
+  };
 
   const loadGuest1 = useCallback(async () => {
     try { const data = await adminFetch('/guest1-status'); setGuest1Status(data); } catch {}
@@ -331,42 +353,88 @@ function UsersTab() {
 
       <Text style={s.sectionTitle}>Kunder ({users.length})</Text>
       {users.map(user => (
-        <View key={user.user_id} testID={`user-row-${user.user_id}`} style={s.userCard}>
-          <View style={s.userHeader}>
-            <TouchableOpacity style={{ flex: 1 }} onPress={() => openEditModal(user)}>
-              <Text style={[s.userName, { color: C.blue }]}>{user.organization_name || user.email}</Text>
-              <Text style={s.userEmail}>{user.email}</Text>
-            </TouchableOpacity>
-            <View style={[s.subBadge, user.subscription_active ? s.subOn : s.subOff]}>
-              <View style={[s.subDot, { backgroundColor: user.subscription_active ? C.green : C.red }]} />
-              <Text style={[s.subBadgeText, { color: user.subscription_active ? C.green : C.red }]}>
-                {user.subscription_active ? 'Aktiv' : 'Inaktiv'}
-              </Text>
+        <View key={user.user_id} testID={`user-row-${user.user_id}`}>
+          <View style={s.userCard}>
+            <View style={s.userHeader}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => openEditModal(user)}>
+                <Text style={[s.userName, { color: C.blue }]}>{user.organization_name || user.email}</Text>
+                <Text style={s.userEmail}>{user.email}</Text>
+              </TouchableOpacity>
+              <View style={[s.subBadge, user.subscription_active ? s.subOn : s.subOff]}>
+                <View style={[s.subDot, { backgroundColor: user.subscription_active ? C.green : C.red }]} />
+                <Text style={[s.subBadgeText, { color: user.subscription_active ? C.green : C.red }]}>
+                  {user.subscription_active ? 'Aktiv' : 'Inaktiv'}
+                </Text>
+              </View>
+            </View>
+            <View style={s.userMeta}>
+              <Text style={s.metaText}>Tel: {user.phone || '-'}</Text>
+              <Text style={s.metaText}>Verifierad: {user.email_verified ? 'Ja' : 'Nej'}</Text>
+              {user.subscription_end && (
+                <Text style={s.metaText}>Giltig t.o.m: {new Date(user.subscription_end).toLocaleDateString('sv-SE')}</Text>
+              )}
+            </View>
+            <View style={[s.userActions, !isWide && { flexWrap: 'wrap' }]}>
+              <TouchableOpacity testID={`sub-btn-${user.user_id}`} style={s.actionChip} onPress={() => {
+                setSubModal(user);
+                setSubActive(user.subscription_active);
+                setSubEnd(user.subscription_end ? user.subscription_end.split('T')[0] : '');
+              }}>
+                <Ionicons name="diamond-outline" size={14} color={C.blue} />
+                <Text style={[s.actionChipText, { color: C.blue }]}>Abonnemang</Text>
+              </TouchableOpacity>
+              {!user.email_verified && (
+                <TouchableOpacity testID={`verify-btn-${user.user_id}`} style={s.actionChip} onPress={() => handleVerifyEmail(user.user_id)}>
+                  <Ionicons name="checkmark-circle-outline" size={14} color={C.green} />
+                  <Text style={[s.actionChipText, { color: C.green }]}>Verifiera</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity 
+                style={[s.actionChip, { backgroundColor: 'rgba(139,92,246,0.1)' }]} 
+                onPress={() => loadSubUsers(user.user_id)}
+              >
+                {loadingSubUsers === user.user_id ? (
+                  <ActivityIndicator size="small" color="#8b5cf6" />
+                ) : (
+                  <>
+                    <Ionicons 
+                      name={expandedUser === user.user_id ? "chevron-up" : "people-outline"} 
+                      size={14} 
+                      color="#8b5cf6" 
+                    />
+                    <Text style={[s.actionChipText, { color: '#8b5cf6' }]}>
+                      Användare ({user.sub_user_count || 0})
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-          <View style={s.userMeta}>
-            <Text style={s.metaText}>Tel: {user.phone || '-'}</Text>
-            <Text style={s.metaText}>Verifierad: {user.email_verified ? 'Ja' : 'Nej'}</Text>
-            {user.subscription_end && (
-              <Text style={s.metaText}>Giltig t.o.m: {new Date(user.subscription_end).toLocaleDateString('sv-SE')}</Text>
-            )}
-          </View>
-          <View style={[s.userActions, !isWide && { flexWrap: 'wrap' }]}>
-            <TouchableOpacity testID={`sub-btn-${user.user_id}`} style={s.actionChip} onPress={() => {
-              setSubModal(user);
-              setSubActive(user.subscription_active);
-              setSubEnd(user.subscription_end ? user.subscription_end.split('T')[0] : '');
-            }}>
-              <Ionicons name="diamond-outline" size={14} color={C.blue} />
-              <Text style={[s.actionChipText, { color: C.blue }]}>Abonnemang</Text>
-            </TouchableOpacity>
-            {!user.email_verified && (
-              <TouchableOpacity testID={`verify-btn-${user.user_id}`} style={s.actionChip} onPress={() => handleVerifyEmail(user.user_id)}>
-                <Ionicons name="checkmark-circle-outline" size={14} color={C.green} />
-                <Text style={[s.actionChipText, { color: C.green }]}>Verifiera</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          
+          {/* Expanded sub-users section */}
+          {expandedUser === user.user_id && subUsers[user.user_id] && (
+            <View style={s.subUsersSection}>
+              <Text style={s.subUsersSectionTitle}>Användare i {user.organization_name}</Text>
+              {subUsers[user.user_id].length === 0 ? (
+                <Text style={s.noSubUsers}>Inga användare</Text>
+              ) : (
+                subUsers[user.user_id].map(subUser => (
+                  <View key={subUser.user_id} style={s.subUserRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.subUserName}>{subUser.name || subUser.email}</Text>
+                      <Text style={s.subUserEmail}>{subUser.email}</Text>
+                      <Text style={s.subUserCode}>Kod: {subUser.login_code || '-'}</Text>
+                    </View>
+                    <Text style={s.subUserLogin}>
+                      {subUser.last_login 
+                        ? new Date(subUser.last_login).toLocaleDateString('sv-SE')
+                        : 'Aldrig inloggad'}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
         </View>
       ))}
 
@@ -937,6 +1005,22 @@ const s = StyleSheet.create({
     minHeight: 36,
   },
   actionChipText: { fontSize: 13, fontWeight: '500' },
+
+  // Sub-users section
+  subUsersSection: {
+    backgroundColor: C.surfaceHi, borderRadius: 12, padding: 14, marginTop: -6, marginBottom: 10,
+    borderWidth: 1, borderColor: C.border, marginLeft: 16, marginRight: 4,
+  },
+  subUsersSectionTitle: { fontSize: 13, fontWeight: '600', color: C.textSec, marginBottom: 10 },
+  noSubUsers: { fontSize: 13, color: C.textMut, fontStyle: 'italic' },
+  subUserRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border,
+  },
+  subUserName: { fontSize: 14, fontWeight: '500', color: C.text },
+  subUserEmail: { fontSize: 12, color: C.textMut, marginTop: 2 },
+  subUserCode: { fontSize: 11, color: C.blue, marginTop: 2 },
+  subUserLogin: { fontSize: 11, color: C.textMut },
 
   // Stats
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
