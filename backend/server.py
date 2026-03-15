@@ -99,25 +99,6 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
-async def cleanup_old_orders():
-    """Delete pending and cancelled orders older than 6 hours"""
-    from utils.database import get_db
-    db = get_db()
-    
-    try:
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
-        
-        result = await db.orders.delete_many({
-            "status": {"$in": ["pending", "cancelled"]},
-            "created_at": {"$lt": cutoff_time}
-        })
-        
-        if result.deleted_count > 0:
-            logger.info(f"Cleaned up {result.deleted_count} old pending/cancelled orders")
-    except Exception as e:
-        logger.error(f"Error cleaning up old orders: {e}")
-
-
 async def nightly_cleanup_all_pending():
     """Delete ALL pending and cancelled orders - runs at 02:00 every night"""
     from utils.database import get_db
@@ -167,8 +148,7 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Could not create indexes: {e}")
     
-    # Start the scheduler for background tasks
-    scheduler.add_job(cleanup_old_orders, 'interval', hours=1, id='cleanup_orders')
+    # Start the scheduler for background tasks - nightly cleanup at 02:00
     scheduler.add_job(
         nightly_cleanup_all_pending, 
         'cron', 
@@ -178,7 +158,7 @@ async def startup_event():
         timezone='Europe/Stockholm'
     )
     scheduler.start()
-    logger.info("Background scheduler started - hourly cleanup + nightly cleanup at 02:00")
+    logger.info("Background scheduler started - nightly cleanup at 02:00")
 
 
 @app.on_event("shutdown")
