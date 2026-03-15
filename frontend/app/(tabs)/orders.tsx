@@ -114,8 +114,8 @@ export default function OrdersScreen() {
 
   const renderOrder = ({ item }: { item: Order }) => {
     const isExpanded = expandedId === item.id;
-    // Show delete button for pending orders, or for admin on any order
-    const canDelete = item.status === 'pending' || isAdmin;
+    // Show delete button for pending/cancelled orders, or for admin on any order
+    const canDelete = item.status === 'pending' || item.status === 'cancelled' || isAdmin;
     
     return (
       <View testID={`order-row-${item.id}`} style={styles.orderCard}>
@@ -304,10 +304,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(34,197,94,0.08)', padding: 8, borderRadius: 6,
   },
   emailSentText: { fontSize: 12, color: Colors.primary },
-  orderActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  orderActions: { flexDirection: 'row', gap: 8, marginTop: 10, justifyContent: 'flex-end' },
   receiptBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, backgroundColor: 'rgba(59,130,246,0.1)', paddingVertical: 10, borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, backgroundColor: 'rgba(59,130,246,0.1)', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8,
   },
   receiptBtnText: { color: '#3b82f6', fontSize: 13, fontWeight: '500' },
   deleteOrderBtn: {
