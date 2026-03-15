@@ -248,7 +248,7 @@ export default function POSScreen() {
             data={products}
             renderItem={renderProduct}
             keyExtractor={item => item.id}
-            numColumns={isTablet ? 2 : 3}
+            numColumns={isTablet ? 5 : 3}
             key={isTablet ? 'tablet' : 'mobile'}
             contentContainerStyle={styles.productGrid}
             columnWrapperStyle={styles.productRow}
