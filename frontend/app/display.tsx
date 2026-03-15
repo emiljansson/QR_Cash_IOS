@@ -655,7 +655,7 @@ export default function CustomerDisplayScreen() {
       <View style={styles.displayHeader}>
         <View style={styles.storeInfo}>
           <Image 
-            source={require('../../assets/images/icons/icon-48.png')} 
+            source={{ uri: '/icon.png' }} 
             style={styles.headerLogo} 
           />
           <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
