@@ -107,7 +107,8 @@ async def create_sub_user(request: Request, data: CreateSubUserRequest):
         await send_welcome_email(
             email=data.email,
             organization_name=user.get("organization_name", ""),
-            login_code=login_code
+            login_code=login_code,
+            is_sub_user=True
         )
         logger.info(f"Welcome email sent to new sub-user {data.email}")
     except Exception as e:
@@ -218,7 +219,8 @@ async def resend_invite(request: Request, sub_user_id: str):
         await send_welcome_email(
             email=sub_user["email"],
             organization_name=user.get("organization_name", ""),
-            login_code=sub_user.get("login_code", "")
+            login_code=sub_user.get("login_code", ""),
+            is_sub_user=True
         )
         logger.info(f"Welcome email resent to {sub_user['email']}")
     except Exception as e:

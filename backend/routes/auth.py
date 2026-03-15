@@ -203,7 +203,7 @@ async def send_admin_notification_email(user_email: str, organization_name: str,
         return False
 
 
-async def send_welcome_email(email: str, organization_name: str, login_code: str = None):
+async def send_welcome_email(email: str, organization_name: str, login_code: str = None, is_sub_user: bool = False):
     """Send welcome email with instructions, PIN code and login code after verification"""
     import os
     db = get_db()
@@ -246,70 +246,114 @@ async def send_welcome_email(email: str, organization_name: str, login_code: str
         
         frontend_url = os.environ.get("FRONTEND_URL", "https://qrkassa.frontproduction.se")
         
-        params = {
-            "from": sender_email,
-            "to": [email],
-            "subject": f"Välkommen till {app_name}! - Kom igång guide",
-            "html": f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
-                <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                    <h1 style="color: #1a1a1a; margin-bottom: 20px;">Välkommen till {app_name}, {organization_name}!</h1>
-                    
-                    <p style="font-size: 16px; color: #333;">Din e-post är nu verifierad och ditt konto är redo att användas!</p>
-                    
-                    {login_code_section}
-                    
-                    <h2 style="color: #1a1a1a; margin-top: 30px; font-size: 18px;">🚀 Så här kommer du igång:</h2>
-                    
-                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <h3 style="color: #1a1a1a; margin-top: 0;">1. Logga in på kassasystemet</h3>
-                        <p style="color: #666;">Gå till <a href="{frontend_url}" style="color: #2563eb;">{frontend_url}</a> och logga in med din inloggningskod eller e-post/lösenord.</p>
+        # Different email content for sub-users
+        if is_sub_user:
+            params = {
+                "from": sender_email,
+                "to": [email],
+                "subject": f"Välkommen till {app_name}! - Ditt användarkonto",
+                "html": f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
+                    <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                        <h1 style="color: #1a1a1a; margin-bottom: 20px;">Välkommen till {app_name}!</h1>
+                        
+                        <p style="font-size: 16px; color: #333;">Du har blivit inbjuden som användare i {organization_name}.</p>
+                        
+                        {login_code_section}
+                        
+                        <h2 style="color: #1a1a1a; margin-top: 30px; font-size: 18px;">🚀 Så här kommer du igång:</h2>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #1a1a1a; margin-top: 0;">1. Logga in på kassasystemet</h3>
+                            <p style="color: #666;">Ladda ner appen QR-Kassa på App Store eller Google Play.</p>
+                            <p style="color: #666;">Logga in med kontoinformationen från det här mailet.</p>
+                        </div>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #1a1a1a; margin-top: 0;">2. Börja sälja!</h3>
+                            <p style="color: #666;">Välj produkter i kassan, visa QR-koden för kunden och bekräfta betalningen.</p>
+                        </div>
+                        
+                        <h2 style="color: #1a1a1a; margin-top: 30px; font-size: 18px;">✨ Funktioner:</h2>
+                        <ul style="color: #666; line-height: 1.8;">
+                            <li><strong>QR-betalningar</strong> - Generera Swish QR-koder automatiskt</li>
+                            <li><strong>Kundskärm</strong> - Visa QR-koden på en separat skärm för kunden</li>
+                            <li><strong>Parkerade kundvagnar</strong> - Spara och återuppta ordrar</li>
+                        </ul>
+                        
+                        <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">
+                            Har du frågor? Kontakta din administratör.
+                        </p>
                     </div>
-                    
-                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <h3 style="color: #1a1a1a; margin-top: 0;">2. Lägg till produkter</h3>
-                        <p style="color: #666;">Gå till Admin-panelen och lägg till dina produkter med bilder och priser.</p>
-                    </div>
-                    
-                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <h3 style="color: #1a1a1a; margin-top: 0;">3. Konfigurera Swish</h3>
-                        <p style="color: #666;">Ange ditt Swish-nummer i inställningarna för att ta emot betalningar.</p>
-                    </div>
-                    
-                    <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <h3 style="color: #1a1a1a; margin-top: 0;">4. Börja sälja!</h3>
-                        <p style="color: #666;">Välj produkter i kassan, visa QR-koden för kunden och bekräfta betalningen.</p>
-                    </div>
-                    
-                    <div style="background: #fffbeb; border: 1px solid #f59e0b; padding: 20px; border-radius: 8px; margin: 30px 0;">
-                        <h3 style="color: #92400e; margin-top: 0;">🔐 Din Admin PIN-kod</h3>
-                        <p style="color: #92400e; margin-bottom: 10px;">För att komma åt administrationen använder du denna PIN-kod:</p>
-                        <p style="font-size: 32px; font-weight: bold; color: #1a1a1a; text-align: center; letter-spacing: 8px; margin: 15px 0;">1234</p>
-                        <p style="color: #92400e; font-size: 14px;">⚠️ Vi rekommenderar att du ändrar PIN-koden i inställningarna efter första inloggningen.</p>
-                    </div>
-                    
-                    <h2 style="color: #1a1a1a; margin-top: 30px; font-size: 18px;">✨ Funktioner i {app_name}:</h2>
-                    <ul style="color: #666; line-height: 1.8;">
-                        <li><strong>QR-betalningar</strong> - Generera Swish QR-koder automatiskt</li>
-                        <li><strong>Produkthantering</strong> - Lägg till produkter med bilder och kategorier</li>
-                        <li><strong>Kundskärm</strong> - Visa QR-koden på en separat skärm för kunden</li>
-                        <li><strong>Statistik</strong> - Följ upp din försäljning i realtid</li>
-                        <li><strong>Parkerade kundvagnar</strong> - Spara och återuppta ordrar</li>
-                    </ul>
-                    
-                    <div style="text-align: center; margin-top: 30px;">
-                        <a href="{frontend_url}" style="display: inline-block; background: #1a1a1a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                            Logga in nu
-                        </a>
-                    </div>
-                    
-                    <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">
-                        Har du frågor? Svara på detta mail så hjälper vi dig!
-                    </p>
                 </div>
-            </div>
-            """
-        }
+                """
+            }
+        else:
+            # Original admin email
+            params = {
+                "from": sender_email,
+                "to": [email],
+                "subject": f"Välkommen till {app_name}! - Kom igång guide",
+                "html": f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9;">
+                    <div style="background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                        <h1 style="color: #1a1a1a; margin-bottom: 20px;">Välkommen till {app_name}, {organization_name}!</h1>
+                        
+                        <p style="font-size: 16px; color: #333;">Din e-post är nu verifierad och ditt konto är redo att användas!</p>
+                        
+                        {login_code_section}
+                        
+                        <h2 style="color: #1a1a1a; margin-top: 30px; font-size: 18px;">🚀 Så här kommer du igång:</h2>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #1a1a1a; margin-top: 0;">1. Logga in på kassasystemet</h3>
+                            <p style="color: #666;">Gå till <a href="{frontend_url}" style="color: #2563eb;">{frontend_url}</a> och logga in med din inloggningskod eller e-post/lösenord.</p>
+                        </div>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #1a1a1a; margin-top: 0;">2. Lägg till produkter</h3>
+                            <p style="color: #666;">Gå till Admin-panelen och lägg till dina produkter med bilder och priser.</p>
+                        </div>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #1a1a1a; margin-top: 0;">3. Konfigurera Swish</h3>
+                            <p style="color: #666;">Ange ditt Swish-nummer i inställningarna för att ta emot betalningar.</p>
+                        </div>
+                        
+                        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                            <h3 style="color: #1a1a1a; margin-top: 0;">4. Börja sälja!</h3>
+                            <p style="color: #666;">Välj produkter i kassan, visa QR-koden för kunden och bekräfta betalningen.</p>
+                        </div>
+                        
+                        <div style="background: #fffbeb; border: 1px solid #f59e0b; padding: 20px; border-radius: 8px; margin: 30px 0;">
+                            <h3 style="color: #92400e; margin-top: 0;">🔐 Din Admin PIN-kod</h3>
+                            <p style="color: #92400e; margin-bottom: 10px;">För att komma åt administrationen använder du denna PIN-kod:</p>
+                            <p style="font-size: 32px; font-weight: bold; color: #1a1a1a; text-align: center; letter-spacing: 8px; margin: 15px 0;">1234</p>
+                            <p style="color: #92400e; font-size: 14px;">⚠️ Vi rekommenderar att du ändrar PIN-koden i inställningarna efter första inloggningen.</p>
+                        </div>
+                        
+                        <h2 style="color: #1a1a1a; margin-top: 30px; font-size: 18px;">✨ Funktioner i {app_name}:</h2>
+                        <ul style="color: #666; line-height: 1.8;">
+                            <li><strong>QR-betalningar</strong> - Generera Swish QR-koder automatiskt</li>
+                            <li><strong>Produkthantering</strong> - Lägg till produkter med bilder och kategorier</li>
+                            <li><strong>Kundskärm</strong> - Visa QR-koden på en separat skärm för kunden</li>
+                            <li><strong>Statistik</strong> - Följ upp din försäljning i realtid</li>
+                            <li><strong>Parkerade kundvagnar</strong> - Spara och återuppta ordrar</li>
+                        </ul>
+                        
+                        <div style="text-align: center; margin-top: 30px;">
+                            <a href="{frontend_url}" style="display: inline-block; background: #1a1a1a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                                Logga in nu
+                            </a>
+                        </div>
+                        
+                        <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">
+                            Har du frågor? Svara på detta mail så hjälper vi dig!
+                        </p>
+                    </div>
+                </div>
+                """
+            }
         
         await asyncio.to_thread(resend.Emails.send, params)
         logger.info(f"Welcome email sent to {email}")
