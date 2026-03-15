@@ -1,6 +1,5 @@
 const express = require('express');
 const path = require('path');
-const { execSync } = require('child_process');
 const fs = require('fs');
 
 const app = express();
@@ -10,16 +9,17 @@ const distPath = path.join(__dirname, 'dist');
 
 console.log('Starting QR-Kassan web server...');
 
-// Check if we need to build
-if (!fs.existsSync(distPath) || process.env.FORCE_BUILD === 'true') {
-  console.log('Building web app...');
+// Check if dist folder exists (should be built by Railway's build step)
+if (!fs.existsSync(distPath) || !fs.existsSync(path.join(distPath, 'index.html'))) {
+  console.error('ERROR: dist folder not found. Run "npm run build" first.');
+  console.log('Attempting to build now...');
+  const { execSync } = require('child_process');
   try {
     execSync('npx expo export --platform web', { 
       stdio: 'inherit',
       cwd: __dirname,
       env: { ...process.env, NODE_ENV: 'production' }
     });
-    console.log('Build complete!');
   } catch (error) {
     console.error('Build failed:', error.message);
     process.exit(1);
@@ -27,7 +27,10 @@ if (!fs.existsSync(distPath) || process.env.FORCE_BUILD === 'true') {
 }
 
 // Serve static files from dist directory
-app.use(express.static(distPath));
+app.use(express.static(distPath, {
+  maxAge: '1d',  // Cache static assets for 1 day
+  etag: true
+}));
 
 // Handle client-side routing - serve index.html for all routes
 app.use((req, res) => {
