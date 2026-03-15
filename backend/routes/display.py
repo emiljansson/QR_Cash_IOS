@@ -28,6 +28,16 @@ def cleanup_expired_codes():
         del pairing_codes[code]
 
 
+async def update_display_data(db, user_id: str, data: dict):
+    """Update display data with automatic timestamp"""
+    data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.current_display.update_one(
+        {"user_id": user_id},
+        {"$set": data},
+        upsert=True
+    )
+
+
 @router.post("/generate-code")
 async def generate_display_code():
     """Generate a 4-digit pairing code for customer display.
@@ -164,6 +174,7 @@ async def check_pairing_code(code: str, response: Response):
 async def pair_display(request: Request):
     """Pair a display code with the current user (called from POS app).
     POS user enters the code shown on Display app.
+    Also clears any old display data to start fresh.
     """
     user = await get_current_user(request)
     if not user:
@@ -202,6 +213,20 @@ async def pair_display(request: Request):
             "store_name": store_name,
             "paired_at": datetime.now(timezone.utc).isoformat(),
             "last_active": datetime.now(timezone.utc).isoformat()
+        }},
+        upsert=True
+    )
+    
+    # Clear old display data - start fresh for the new display
+    await db.current_display.update_one(
+        {"user_id": user['user_id']},
+        {"$set": {
+            "status": "idle",
+            "order_id": None,
+            "qr_data": None,
+            "total": None,
+            "items": [],
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }},
         upsert=True
     )
@@ -304,6 +329,8 @@ async def get_customer_display(request: Request, user_id: Optional[str] = Query(
     1. By authenticated user (gets their own display)
     2. By user_id query param (for customer display screen)
     3. By display_user_id cookie (for paired displays)
+    
+    Display data older than 5 minutes is automatically cleared.
     """
     db = get_db()
     
@@ -345,6 +372,34 @@ async def get_customer_display(request: Request, user_id: Optional[str] = Query(
     
     if not display:
         return {"status": "idle", "order_id": None, "qr_data": None, "total": None}
+    
+    # Check if display data is older than 5 minutes - auto-clear stale data
+    updated_at = display.get("updated_at")
+    if updated_at:
+        try:
+            if isinstance(updated_at, str):
+                updated_time = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+            else:
+                updated_time = updated_at
+            
+            five_minutes_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
+            
+            if updated_time < five_minutes_ago:
+                # Data is stale, reset to idle
+                await db.current_display.update_one(
+                    {"user_id": target_user_id},
+                    {"$set": {
+                        "status": "idle", 
+                        "order_id": None, 
+                        "qr_data": None, 
+                        "total": None, 
+                        "items": [],
+                        "updated_at": datetime.now(timezone.utc).isoformat()
+                    }}
+                )
+                return {"status": "idle", "order_id": None, "qr_data": None, "total": None}
+        except:
+            pass  # If parsing fails, continue with the data
     
     # Also get tenant settings for logo/store name
     settings = await db.settings.find_one({"user_id": target_user_id}, {"_id": 0})

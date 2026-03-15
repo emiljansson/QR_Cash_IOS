@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from models.order import Order, OrderCreate
 from utils.database import get_db
@@ -67,7 +67,7 @@ async def create_order(request: Request, data: OrderCreate):
     doc['created_at'] = doc['created_at'].isoformat()
     await db.orders.insert_one(doc)
     
-    # Update current display for this user
+    # Update current display for this user with timestamp
     await db.current_display.update_one(
         {"user_id": user["user_id"]},
         {"$set": {
@@ -76,7 +76,8 @@ async def create_order(request: Request, data: OrderCreate):
             "qr_data": qr_data,
             "total": order.total,
             "status": "waiting",
-            "items": [item.model_dump() for item in order.items]
+            "items": [item.model_dump() for item in order.items],
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }},
         upsert=True
     )
