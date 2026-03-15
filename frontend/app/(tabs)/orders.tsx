@@ -7,6 +7,21 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
+import { useAuth } from '../../src/contexts/AuthContext';
+
+// Cross-platform confirm dialog
+const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) {
+      onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Avbryt', style: 'cancel' },
+      { text: 'OK', style: 'destructive', onPress: onConfirm }
+    ]);
+  }
+};
 
 interface Order {
   id: string;
@@ -18,6 +33,8 @@ interface Order {
 }
 
 export default function OrdersScreen() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -77,19 +94,29 @@ export default function OrdersScreen() {
   };
 
   const handleDeleteOrder = (order: Order) => {
-    Alert.alert('Radera order', `Radera order #${order.id.substring(0, 8)}?`, [
-      { text: 'Avbryt', style: 'cancel' },
-      {
-        text: 'Radera', style: 'destructive', onPress: async () => {
-          try { await api.deleteOrder(order.id); loadOrders(); }
-          catch (e: any) { Alert.alert('Fel', e.message); }
+    confirmAction(
+      'Radera order',
+      `Radera order #${order.id.substring(0, 8)}?`,
+      async () => {
+        try {
+          await api.deleteOrder(order.id);
+          loadOrders();
+        } catch (e: any) {
+          if (Platform.OS === 'web') {
+            window.alert(e.message || 'Kunde inte radera order');
+          } else {
+            Alert.alert('Fel', e.message);
+          }
         }
       }
-    ]);
+    );
   };
 
   const renderOrder = ({ item }: { item: Order }) => {
     const isExpanded = expandedId === item.id;
+    // Show delete button for pending orders, or for admin on any order
+    const canDelete = item.status === 'pending' || isAdmin;
+    
     return (
       <View testID={`order-row-${item.id}`} style={styles.orderCard}>
         <TouchableOpacity style={styles.orderHeader} onPress={() => setExpandedId(isExpanded ? null : item.id)}>
@@ -129,13 +156,15 @@ export default function OrdersScreen() {
                 <Ionicons name="mail-outline" size={16} color={Colors.info} />
                 <Text style={styles.receiptBtnText}>Kvitto</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                testID={`delete-order-${item.id}`}
-                style={styles.deleteOrderBtn}
-                onPress={() => handleDeleteOrder(item)}
-              >
-                <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
-              </TouchableOpacity>
+              {canDelete && (
+                <TouchableOpacity
+                  testID={`delete-order-${item.id}`}
+                  style={styles.deleteOrderBtn}
+                  onPress={() => handleDeleteOrder(item)}
+                >
+                  <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
