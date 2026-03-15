@@ -188,7 +188,7 @@ export default function POSScreen() {
   const renderProduct = ({ item }: { item: Product }) => (
     <TouchableOpacity
       testID={`product-card-${item.id}`}
-      style={styles.productCard}
+      style={[styles.productCard, { maxWidth: `${100 / numColumns - 2}%` }]}
       onPress={() => addToCart(item)}
       activeOpacity={0.7}
     >
