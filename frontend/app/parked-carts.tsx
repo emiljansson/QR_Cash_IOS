@@ -165,7 +165,7 @@ export default function ParkedCartsScreen() {
                   <View style={styles.cartActions}>
                     <TouchableOpacity testID={`restore-cart-${item.id}`} style={styles.restoreBtn} onPress={() => handleRestore(item)}>
                       <Ionicons name="arrow-undo" size={16} color={Colors.primary} />
-                      <Text style={styles.restoreBtnText}>Återställ</Text>
+                      <Text style={styles.restoreBtnText}>Till kassan</Text>
                     </TouchableOpacity>
                     <TouchableOpacity testID={`delete-cart-${item.id}`} style={styles.deleteBtn} onPress={() => handleDelete(item)}>
                       <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
