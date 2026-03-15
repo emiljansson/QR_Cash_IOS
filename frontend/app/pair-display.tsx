@@ -17,6 +17,28 @@ interface PairedDisplay {
   last_active: string;
 }
 
+// Web-compatible alert helpers
+const showAlert = (title: string, message: string) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+};
+
+const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) {
+      onConfirm();
+    }
+  } else {
+    Alert.alert(title, message, [
+      { text: 'Avbryt', style: 'cancel' },
+      { text: 'OK', onPress: onConfirm },
+    ]);
+  }
+};
+
 export default function PairDisplayScreen() {
   const { user } = useAuth();
   const router = useRouter();
@@ -30,12 +52,8 @@ export default function PairDisplayScreen() {
   const loadDisplays = useCallback(async () => {
     try {
       const [displaysRes, statusRes] = await Promise.all([
-        api.getSettings().then(() => fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/customer-display/paired-displays`, {
-          headers: { 'Authorization': `Bearer ${api.getToken()}` }
-        }).then(r => r.json())),
-        fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/customer-display/connection-status`, {
-          headers: { 'Authorization': `Bearer ${api.getToken()}` }
-        }).then(r => r.json()),
+        api.fetch('/customer-display/paired-displays'),
+        api.fetch('/customer-display/connection-status'),
       ]);
       setDisplays(displaysRes.displays || []);
       setConnectionStatus(statusRes);
@@ -48,47 +66,36 @@ export default function PairDisplayScreen() {
 
   const handlePair = async () => {
     if (code.length !== 4) {
-      Alert.alert('Fel', 'Ange en 4-siffrig kod');
+      showAlert('Fel', 'Ange en 4-siffrig kod');
       return;
     }
     setPairing(true);
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/customer-display/pair`, {
+      const data = await api.fetch('/customer-display/pair', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${api.getToken()}`,
-        },
         body: JSON.stringify({ code, device_name: deviceName }),
       });
-      const data = await res.json();
       if (data.success) {
-        Alert.alert('Kopplad!', 'Kundskärmen är nu ansluten');
+        showAlert('Kopplad!', 'Kundskärmen är nu ansluten');
         setCode('');
         loadDisplays();
       } else {
-        Alert.alert('Fel', data.message || 'Kunde inte koppla skärm');
+        showAlert('Fel', data.message || 'Kunde inte koppla skärm');
       }
     } catch (e: any) {
-      Alert.alert('Fel', 'Något gick fel');
+      showAlert('Fel', 'Något gick fel');
     } finally { setPairing(false); }
   };
 
   const handleUnpair = (display: PairedDisplay) => {
-    Alert.alert('Koppla bort', `Vill du koppla bort "${display.device_name}"?`, [
-      { text: 'Avbryt', style: 'cancel' },
-      {
-        text: 'Koppla bort', style: 'destructive', onPress: async () => {
-          try {
-            await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/customer-display/paired-displays/${display.display_id}`, {
-              method: 'DELETE',
-              headers: { 'Authorization': `Bearer ${api.getToken()}` },
-            });
-            loadDisplays();
-          } catch {}
-        }
-      }
-    ]);
+    confirmAction('Koppla bort', `Vill du koppla bort "${display.device_name}"?`, async () => {
+      try {
+        await api.fetch(`/customer-display/paired-displays/${display.display_id}`, {
+          method: 'DELETE',
+        });
+        loadDisplays();
+      } catch {}
+    });
   };
 
   const formatDate = (dateStr: string) => {

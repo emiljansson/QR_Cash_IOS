@@ -91,7 +91,7 @@ async def check_pairing_code(code: str, response: Response):
 
 @router.post("/pair")
 async def pair_display(request: Request):
-    """Pair a display code with the current user"""
+    """Pair a display code with the current user (called from POS app)"""
     user = await get_current_user(request)
     if not user:
         return {"success": False, "message": "Autentisering krävs"}
@@ -127,6 +127,39 @@ async def pair_display(request: Request):
     )
     
     return {"success": True, "message": "Kundskärm kopplad!", "display_id": display_id}
+
+
+@router.post("/pair-with-code")
+async def pair_display_with_code(request: Request):
+    """Pair display using a pairing code (called from Display app).
+    This is the reverse flow - display enters POS code to pair.
+    """
+    from fastapi import HTTPException
+    
+    body = await request.json()
+    code = body.get("pairing_code", "").strip()
+    
+    cleanup_expired_codes()
+    
+    if not code or code not in pairing_codes:
+        raise HTTPException(status_code=400, detail="Ogiltig eller utgången kod")
+    
+    data = pairing_codes[code]
+    
+    # If already paired, return the user data
+    if data.get('paired') and data.get('user_id'):
+        db = get_db()
+        # Get store name from settings
+        settings = await db.settings.find_one({"user_id": data['user_id']}, {"_id": 0})
+        store_name = settings.get("store_name", "") if settings else ""
+        
+        return {
+            "success": True,
+            "user_id": data['user_id'],
+            "store_name": store_name
+        }
+    
+    raise HTTPException(status_code=400, detail="Koden har inte kopplats från kassan ännu")
 
 
 @router.get("/paired-displays")

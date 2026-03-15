@@ -121,7 +121,7 @@ export default function App() {
     setPairing(true);
     setPairingError('');
     try {
-      const res = await api.post('/api/display/pair', { pairing_code: pairingCode.trim().toUpperCase() });
+      const res = await api.post('/api/customer-display/pair-with-code', { pairing_code: pairingCode.trim().toUpperCase() });
       const pairedUserId = res.user_id;
       const pairedStoreName = res.store_name || '';
       
