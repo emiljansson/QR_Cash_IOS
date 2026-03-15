@@ -12,10 +12,10 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Colors } from './src/utils/colors';
 import { api } from './src/utils/api';
 
-type DisplayStatus = 'idle' | 'showing_cart' | 'payment_pending' | 'payment_complete';
+type DisplayState = 'loading' | 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired';
 
 interface DisplayData {
-  status: DisplayStatus;
+  status: string;
   items?: { name: string; price: number; quantity: number }[];
   total?: number;
   qr_code_url?: string;
@@ -23,70 +23,44 @@ interface DisplayData {
   message?: string;
   store_name?: string;
   order_id?: string;
+  logo_url?: string;
 }
 
 export default function App() {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   
-  // Pairing state - Display generates code, POS enters it
-  const [isPaired, setIsPaired] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState('');
-  const [generatingCode, setGeneratingCode] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [displayId, setDisplayId] = useState<string | null>(null);
+  // State management
+  const [state, setState] = useState<DisplayState>('loading');
+  const [pairingCode, setPairingCode] = useState('');
+  const [displayId, setDisplayId] = useState('');
+  const [userId, setUserId] = useState('');
+  const [displayData, setDisplayData] = useState<DisplayData | null>(null);
   const [storeName, setStoreName] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Display state
-  const [displayData, setDisplayData] = useState<DisplayData | null>(null);
-
-  // Email receipt modal
+  const [error, setError] = useState('');
+  
+  // Email receipt state
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [email, setEmail] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
-  const [emailError, setEmailError] = useState('');
-
-  // Thank you countdown
-  const [thankYouCountdown, setThankYouCountdown] = useState(15);
-  const thankYouTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [thankYouCountdown, setThankYouCountdown] = useState(20);
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [paidAnimation, setPaidAnimation] = useState(false);
+  
+  // Refs
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const dataPollRef = useRef<NodeJS.Timeout | null>(null);
+  const pairingValidationRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownStartedRef = useRef(false);
+  const openedDuringCountdownRef = useRef(false);
+  const lastDataHashRef = useRef<string>('');
+  const isInitializedRef = useRef(false);
 
   // Sound
   const player = useAudioPlayer(require('./assets/pling.mp3'));
-  const lastStatusRef = useRef<DisplayStatus>('idle');
-
-  // Keep screen awake
-  useEffect(() => {
-    activateKeepAwakeAsync();
-    return () => deactivateKeepAwake();
-  }, []);
-
-  // Allow all orientations for responsive layout
-  useEffect(() => {
-    ScreenOrientation.unlockAsync();
-  }, []);
-
-  // Refs for intervals to prevent duplicates
-  const pairingPollRef = useRef<NodeJS.Timeout | null>(null);
-  const dataPollRef = useRef<NodeJS.Timeout | null>(null);
-  const validationPollRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitializedRef = useRef(false);
-
-  // Load saved pairing on mount - only once
-  useEffect(() => {
-    if (isInitializedRef.current) return;
-    isInitializedRef.current = true;
-    loadSavedPairing();
-    
-    return () => {
-      // Cleanup all intervals on unmount
-      if (pairingPollRef.current) clearInterval(pairingPollRef.current);
-      if (dataPollRef.current) clearInterval(dataPollRef.current);
-      if (validationPollRef.current) clearInterval(validationPollRef.current);
-    };
-  }, []);
 
   const playPling = () => {
     try {
@@ -95,12 +69,37 @@ export default function App() {
     } catch (e) {}
   };
 
-  const loadSavedPairing = async () => {
+  // Keep screen awake
+  useEffect(() => {
+    activateKeepAwakeAsync();
+    return () => deactivateKeepAwake();
+  }, []);
+
+  // Allow all orientations
+  useEffect(() => {
+    ScreenOrientation.unlockAsync();
+  }, []);
+
+  // Load saved pairing on mount - only once
+  useEffect(() => {
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+    checkSavedPairing();
+    
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (dataPollRef.current) clearInterval(dataPollRef.current);
+      if (pairingValidationRef.current) clearInterval(pairingValidationRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, []);
+
+  // Check for saved pairing
+  const checkSavedPairing = async () => {
     try {
       const saved = await AsyncStorage.getItem('display_pairing');
       if (saved) {
         const { userId: savedUserId, displayId: savedDisplayId, storeName: savedStoreName } = JSON.parse(saved);
-        // Verify pairing is still valid using displayId
         if (savedDisplayId) {
           try {
             const status = await api.get(`/api/customer-display/pairing-status?display_code=${savedDisplayId}`);
@@ -108,108 +107,57 @@ export default function App() {
               setUserId(status.user_id || savedUserId);
               setDisplayId(savedDisplayId);
               setStoreName(status.store_name || savedStoreName || '');
-              setIsPaired(true);
-              setLoading(false);
+              setState('paired_idle');
               return;
             }
-          } catch {
-            // Can't verify - continue to generate new code
-          }
+          } catch {}
         }
-        // Clear invalid pairing
         await AsyncStorage.removeItem('display_pairing');
       }
-      // No valid pairing found, generate new code
-      await generateNewCode();
+      generateCode();
     } catch (e) {
-      await generateNewCode();
-    } finally {
-      setLoading(false);
+      generateCode();
     }
   };
 
-  // Generate a new 4-digit pairing code
-  const generateNewCode = async () => {
-    // Clear any existing pairing poll
-    if (pairingPollRef.current) {
-      clearInterval(pairingPollRef.current);
-      pairingPollRef.current = null;
+  // Generate pairing code
+  const generateCode = async () => {
+    setState('generating');
+    setError('');
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
     }
     
-    setGeneratingCode(true);
     try {
       const res = await api.post('/api/customer-display/generate-code', {});
-      setGeneratedCode(res.code);
-      setDisplayId(res.display_id || null);
-      // Start polling for when POS pairs with this code
-      startPairingPoll(res.code, res.display_id);
+      setPairingCode(res.code);
+      setDisplayId(res.display_id || '');
+      setState('waiting_pair');
     } catch (e) {
-      // Generate local fallback code
-      const code = String(Math.floor(1000 + Math.random() * 9000));
-      setGeneratedCode(code);
-    } finally {
-      setGeneratingCode(false);
+      setError('Kunde inte ansluta till servern');
+      setState('error');
     }
   };
 
-  // Poll to check if POS has paired with our code
-  const startPairingPoll = (code: string, newDisplayId: string | null) => {
-    // Clear any existing poll first
-    if (pairingPollRef.current) {
-      clearInterval(pairingPollRef.current);
-      pairingPollRef.current = null;
-    }
-    
-    const checkPairing = async () => {
-      try {
-        const res = await api.get(`/api/customer-display/check-pairing?code=${code}`);
-        if (res.paired && res.user_id) {
-          // Stop polling
-          if (pairingPollRef.current) {
-            clearInterval(pairingPollRef.current);
-            pairingPollRef.current = null;
-          }
-          
-          await AsyncStorage.setItem('display_pairing', JSON.stringify({
-            userId: res.user_id,
-            displayId: newDisplayId || code,
-            storeName: res.store_name || '',
-          }));
-          setUserId(res.user_id);
-          setDisplayId(newDisplayId || code);
-          setStoreName(res.store_name || '');
-          setIsPaired(true);
-          return true;
-        }
-      } catch {}
-      return false;
-    };
-
-    // Poll every 2 seconds
-    pairingPollRef.current = setInterval(checkPairing, 2000);
-
-    // Stop polling after 10 minutes and generate new code
-    setTimeout(() => {
-      if (pairingPollRef.current) {
-        clearInterval(pairingPollRef.current);
-        pairingPollRef.current = null;
-      }
-      // Only regenerate if not paired yet
-      if (!isPaired) {
-        generateNewCode();
-      }
-    }, 10 * 60 * 1000);
+  // Save pairing
+  const savePairing = async (newUserId: string, newDisplayId: string, newStoreName: string) => {
+    await AsyncStorage.setItem('display_pairing', JSON.stringify({
+      userId: newUserId,
+      displayId: newDisplayId,
+      storeName: newStoreName,
+    }));
   };
 
-  // Unpair and generate new code
+  // Unpair
   const handleUnpair = async () => {
-    // Stop all polls
     if (dataPollRef.current) clearInterval(dataPollRef.current);
-    if (validationPollRef.current) clearInterval(validationPollRef.current);
+    if (pairingValidationRef.current) clearInterval(pairingValidationRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
     dataPollRef.current = null;
-    validationPollRef.current = null;
+    pairingValidationRef.current = null;
+    countdownRef.current = null;
     
-    // Notify backend
     try {
       if (userId) {
         await api.post('/api/customer-display/unpair', { user_id: userId });
@@ -217,207 +165,425 @@ export default function App() {
     } catch {}
     
     await AsyncStorage.removeItem('display_pairing');
-    setIsPaired(false);
-    setUserId(null);
-    setDisplayId(null);
+    setUserId('');
+    setDisplayId('');
     setStoreName('');
     setLogoUrl(null);
     setDisplayData(null);
-    generateNewCode();
+    countdownStartedRef.current = false;
+    generateCode();
   };
 
-  // Poll display data when paired + Background validation of pairing
+  // Background validation of pairing
   useEffect(() => {
-    if (!isPaired || !userId) return;
-
-    const fetchDisplayData = async () => {
-      try {
-        const data = await api.get(`/api/customer-display?user_id=${userId}`);
-        
-        // Check if we've been unpaired
-        if (data.unpaired || data.status === 'unpaired') {
-          handleUnpair();
-          return;
-        }
-        
-        setDisplayData(data);
-        
-        // Update store name and logo
-        if (data.store_name) setStoreName(data.store_name);
-        if (data.logo_url) setLogoUrl(data.logo_url);
-        
-        // Play pling when payment completes
-        if (data.status === 'payment_complete' && lastStatusRef.current !== 'payment_complete') {
-          playPling();
-          // Start thank you countdown
-          setThankYouCountdown(15);
-          setShowEmailModal(true);
-        }
-        
-        lastStatusRef.current = data.status;
-      } catch (e) {
-        // Error fetching display data - don't disconnect yet
+    if (!displayId || state === 'waiting_pair' || state === 'generating' || state === 'error' || state === 'unpaired' || state === 'loading') {
+      if (pairingValidationRef.current) {
+        clearInterval(pairingValidationRef.current);
+        pairingValidationRef.current = null;
       }
-    };
-
-    // Background validation of pairing status - runs every 10 seconds
-    const validatePairing = async () => {
-      if (!displayId) return;
-      try {
-        const status = await api.get(`/api/customer-display/pairing-status?display_code=${displayId}`);
-        if (!status.paired) {
-          handleUnpair();
-        }
-      } catch {
-        // Network error - don't disconnect, just skip this check
-      }
-    };
-
-    fetchDisplayData();
-    // Poll for display data every 3 seconds
-    dataPollRef.current = setInterval(fetchDisplayData, 3000);
-    
-    // Validate pairing every 10 seconds
-    validationPollRef.current = setInterval(validatePairing, 10000);
-
-    return () => {
-      if (dataPollRef.current) clearInterval(dataPollRef.current);
-      if (validationPollRef.current) clearInterval(validationPollRef.current);
-    };
-  }, [isPaired, userId, displayId]);
-
-  // Thank you countdown timer
-  useEffect(() => {
-    if (displayData?.status === 'payment_complete') {
-      thankYouTimerRef.current = setInterval(() => {
-        setThankYouCountdown(prev => {
-          if (prev <= 1) {
-            // Reset to idle
-            setShowEmailModal(false);
-            setEmail('');
-            setEmailSent(false);
-            return 15;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      if (thankYouTimerRef.current) {
-        clearInterval(thankYouTimerRef.current);
-      }
-      setThankYouCountdown(15);
-    }
-    
-    return () => {
-      if (thankYouTimerRef.current) {
-        clearInterval(thankYouTimerRef.current);
-      }
-    };
-  }, [displayData?.status]);
-
-  const handleSendReceipt = async () => {
-    if (!email.trim() || !displayData?.order_id) {
-      setEmailError('Ange en giltig e-postadress');
       return;
     }
+
+    const validatePairing = async () => {
+      try {
+        const res = await api.get(`/api/customer-display/pairing-status?display_code=${displayId}`);
+        if (!res.paired) {
+          await AsyncStorage.removeItem('display_pairing');
+          setState('unpaired');
+        }
+      } catch {}
+    };
+
+    validatePairing();
+    pairingValidationRef.current = setInterval(validatePairing, 10000);
+    
+    return () => {
+      if (pairingValidationRef.current) {
+        clearInterval(pairingValidationRef.current);
+        pairingValidationRef.current = null;
+      }
+    };
+  }, [displayId, state]);
+
+  // Poll for pairing
+  useEffect(() => {
+    if (state !== 'waiting_pair' || !pairingCode) return;
+
+    const checkPairing = async () => {
+      try {
+        const res = await api.get(`/api/customer-display/check-code/${pairingCode}`);
+        if (res.paired && res.user_id) {
+          const newUserId = res.user_id;
+          const newDisplayId = res.display_id || displayId;
+          
+          setUserId(newUserId);
+          if (res.display_id) setDisplayId(newDisplayId);
+          
+          await savePairing(newUserId, newDisplayId, '');
+          setState('paired_idle');
+        } else if (!res.valid) {
+          generateCode();
+        }
+      } catch {}
+    };
+
+    pollRef.current = setInterval(checkPairing, 2000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [state, pairingCode, displayId]);
+
+  // Poll display data once paired
+  useEffect(() => {
+    if (!userId || (state !== 'paired_idle' && state !== 'paired_waiting' && state !== 'paired_paid')) return;
+
+    const fetchDisplay = async () => {
+      try {
+        const data = await api.get(`/api/customer-display?user_id=${userId}`);
+
+        if (data.status === 'unpaired') {
+          await AsyncStorage.removeItem('display_pairing');
+          setState('unpaired');
+          return;
+        }
+
+        // Create hash to check if data changed
+        const dataHash = JSON.stringify({
+          status: data.status,
+          items: data.items,
+          total: data.total,
+          qr_data: data.qr_data
+        });
+        
+        if (dataHash !== lastDataHashRef.current) {
+          lastDataHashRef.current = dataHash;
+          setDisplayData(data);
+          
+          if (data.store_name) setStoreName(data.store_name);
+          if (data.logo_url) setLogoUrl(data.logo_url);
+        }
+
+        // Handle state transitions - NEVER leave paid state from polling
+        if (data.status === 'paid' && state !== 'paired_paid') {
+          setState('paired_paid');
+          setPaidAnimation(true);
+          setPaidAmount(data.total || 0);
+          playPling();
+          
+          // Only start countdown once
+          if (!countdownStartedRef.current) {
+            countdownStartedRef.current = true;
+            setThankYouCountdown(20);
+            
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            countdownRef.current = setInterval(() => {
+              setThankYouCountdown(prev => {
+                if (prev <= 1) {
+                  if (countdownRef.current) clearInterval(countdownRef.current);
+                  countdownRef.current = null;
+                  countdownStartedRef.current = false;
+                  setState('paired_idle');
+                  setPaidAnimation(false);
+                  return 0;
+                }
+                return prev - 1;
+              });
+            }, 1000);
+          }
+        } else if (state === 'paired_paid') {
+          // Stay on thank you screen - ignore backend status changes
+          return;
+        } else if (data.status === 'waiting' && state !== 'paired_waiting') {
+          setState('paired_waiting');
+        } else if (data.status === 'idle' && state !== 'paired_idle') {
+          setState('paired_idle');
+        }
+      } catch {}
+    };
+
+    fetchDisplay();
+    dataPollRef.current = setInterval(fetchDisplay, 2000);
+    
+    return () => { 
+      if (dataPollRef.current) clearInterval(dataPollRef.current);
+    };
+  }, [userId, state]);
+
+  // Handle email submission
+  const handleSendReceipt = async () => {
+    if (!email || !email.includes('@')) return;
     setSendingEmail(true);
-    setEmailError('');
     try {
-      await api.post('/api/receipts/send', {
-        order_id: displayData.order_id,
-        email: email.trim(),
-        user_id: userId,
+      const res = await api.post('/api/customer-display/send-receipt', {
+        email,
+        user_id: userId
       });
-      setEmailSent(true);
-    } catch (e: any) {
-      setEmailError(e.message || 'Kunde inte skicka kvitto');
+      if (res.success) {
+        setEmailSent(true);
+        
+        const wasOpenedDuringCountdown = openedDuringCountdownRef.current;
+        
+        // Show "Skickat!" for 5 seconds
+        setTimeout(() => {
+          setShowEmailModal(false);
+          setEmail('');
+          setEmailSent(false);
+          
+          if (wasOpenedDuringCountdown) {
+            // Sent within 20s - reset entire display
+            if (countdownRef.current) {
+              clearInterval(countdownRef.current);
+              countdownRef.current = null;
+            }
+            countdownStartedRef.current = false;
+            openedDuringCountdownRef.current = false;
+            setState('paired_idle');
+            setPaidAnimation(false);
+            setPaidAmount(0);
+          }
+        }, 5000);
+      }
+    } catch (e) {
+      // Silent fail
     } finally {
       setSendingEmail(false);
     }
   };
 
-  // Loading screen
-  if (loading) {
+  // Open email modal and track timing
+  const openEmailModal = () => {
+    openedDuringCountdownRef.current = state === 'paired_paid';
+    setShowEmailModal(true);
+  };
+
+  // SCREEN: Loading
+  if (state === 'loading') {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={C.green} />
+          <Text style={styles.statusText}>Kontrollerar anslutning...</Text>
+        </View>
       </View>
     );
   }
 
-  // Pairing screen - Show generated code
-  if (!isPaired) {
+  // SCREEN: Generating code
+  if (state === 'generating') {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <View style={styles.pairingCard}>
-          <View style={styles.iconBox}>
-            <Ionicons name="tv-outline" size={48} color={Colors.primary} />
-          </View>
-          <Text style={styles.pairingTitle}>QR-Kassan Display</Text>
-          <Text style={styles.pairingSubtitle}>Kundskärm för betalning</Text>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={C.green} />
+          <Text style={styles.statusText}>Förbereder kundskärm...</Text>
+        </View>
+      </View>
+    );
+  }
 
-          <View style={styles.codeContainer}>
-            <Text style={styles.codeLabel}>Ange denna kod i kassan:</Text>
-            {generatingCode ? (
-              <ActivityIndicator size="large" color={Colors.primary} />
-            ) : (
-              <Text style={styles.codeDisplay}>{generatedCode}</Text>
-            )}
-          </View>
-
-          <Text style={styles.instructions}>
-            Öppna "Koppla skärm" i kassan och ange koden ovan
-          </Text>
-
-          <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={generateNewCode}
-            disabled={generatingCode}
-          >
-            <Ionicons name="refresh" size={18} color={Colors.primary} />
-            <Text style={styles.refreshButtonText}>Generera ny kod</Text>
+  // SCREEN: Error
+  if (state === 'error') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.center}>
+          <Ionicons name="alert-circle" size={64} color={C.red} />
+          <Text style={styles.errorTitle}>Anslutningsfel</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={generateCode}>
+            <Text style={styles.retryBtnText}>Försök igen</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
-  // Display screen - Responsive layout for portrait/landscape
-  const status = displayData?.status || 'idle';
-  const hasCart = displayData?.items && displayData.items.length > 0;
-  const showQR = (status === 'payment_pending' || status === 'showing_cart') && (displayData?.qr_code_url || displayData?.qr_data);
-  const showThankYou = status === 'payment_complete';
-  const total = displayData?.total || 0;
+  // SCREEN: Unpaired
+  if (state === 'unpaired') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.center}>
+          <Ionicons name="unlink-outline" size={64} color={C.textMut} />
+          <Text style={styles.unpairedTitle}>Frånkopplad</Text>
+          <Text style={styles.unpairedText}>Skärmen har kopplats bort från kassan</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={handleUnpair}>
+            <Ionicons name="refresh" size={18} color={C.white} />
+            <Text style={styles.retryBtnText}>Koppla igen</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
-  // Portrait: 50% top (QR/Logo), 50% bottom (Cart)
-  // Landscape: Left side (Cart), Right side (QR/Logo)
+  // SCREEN: Waiting for pairing
+  if (state === 'waiting_pair') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.center}>
+          <View style={styles.pairIconContainer}>
+            <Ionicons name="tv-outline" size={48} color={C.green} />
+          </View>
+          <Text style={styles.pairTitle}>Koppla kundskärm</Text>
+          <Text style={styles.pairSubtitle}>Ange koden i kassaappen under "Koppla skärm"</Text>
+
+          <View style={styles.codeContainer}>
+            {pairingCode.split('').map((digit, idx) => (
+              <View key={idx} style={styles.codeDigit}>
+                <Text style={styles.codeDigitText}>{digit}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.waitingRow}>
+            <ActivityIndicator size="small" color={C.green} />
+            <Text style={styles.waitingText}>Väntar på koppling...</Text>
+          </View>
+
+          <TouchableOpacity style={styles.newCodeBtn} onPress={generateCode}>
+            <Ionicons name="refresh" size={16} color={C.textSec} />
+            <Text style={styles.newCodeBtnText}>Generera ny kod</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // SCREEN: Paired - show display
+  const items = displayData?.items || [];
+  const total = displayData?.total || 0;
+  const qrData = displayData?.qr_data;
+  const isPaid = state === 'paired_paid';
+  const isWaiting = state === 'paired_waiting';
+  const showQR = isWaiting && qrData;
+
+  // SCREEN: Payment complete - Thank you
+  if (isPaid) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.thankYouScreen}>
+          <View style={[styles.thankYouCheckCircle, paidAnimation && styles.thankYouCheckCircleAnimated]}>
+            <Ionicons name="checkmark" size={80} color={C.white} />
+          </View>
+          
+          <Text style={styles.thankYouTitle}>Tack för ditt köp!</Text>
+          <Text style={styles.thankYouAmount}>{paidAmount.toFixed(0)} kr</Text>
+          <Text style={styles.thankYouSubtitle}>Betalningen är genomförd</Text>
+
+          {/* Email receipt button */}
+          {!showEmailModal && !emailSent && (
+            <TouchableOpacity 
+              style={styles.emailReceiptBtn}
+              onPress={openEmailModal}
+            >
+              <Ionicons name="mail-outline" size={24} color={C.green} />
+              <Text style={styles.emailReceiptBtnText}>Få kvitto via e-post</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Email sent confirmation */}
+          {emailSent && (
+            <View style={styles.emailSentContainer}>
+              <Ionicons name="checkmark-circle" size={32} color={C.green} />
+              <Text style={styles.emailSentText}>Kvitto skickat!</Text>
+            </View>
+          )}
+
+          <Text style={styles.thankYouCountdown}>
+            Återställs om {thankYouCountdown}s
+          </Text>
+        </View>
+
+        {/* Email Modal */}
+        <Modal
+          visible={showEmailModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowEmailModal(false)}
+        >
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.emailModalOverlay}
+          >
+            <View style={styles.emailModalContent}>
+              <TouchableOpacity 
+                style={styles.emailModalClose}
+                onPress={() => setShowEmailModal(false)}
+              >
+                <Ionicons name="close" size={24} color={C.textMut} />
+              </TouchableOpacity>
+
+              {emailSent ? (
+                <View style={styles.emailModalSent}>
+                  <Ionicons name="checkmark-circle" size={64} color={C.green} />
+                  <Text style={styles.emailModalSentTitle}>Kvitto skickat!</Text>
+                  <Text style={styles.emailModalSentText}>Kolla din inkorg</Text>
+                </View>
+              ) : (
+                <>
+                  <Ionicons name="mail-outline" size={48} color={C.green} style={{ marginBottom: 16 }} />
+                  <Text style={styles.emailModalTitle}>Få kvitto via e-post</Text>
+                  <Text style={styles.emailModalSubtitle}>Ange din e-postadress nedan</Text>
+                  
+                  <TextInput
+                    style={styles.emailInput}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="din@email.se"
+                    placeholderTextColor={C.textMut}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
+                  />
+                  
+                  <TouchableOpacity 
+                    style={[styles.emailSendBtn, sendingEmail && styles.emailSendBtnDisabled]}
+                    onPress={handleSendReceipt}
+                    disabled={sendingEmail}
+                  >
+                    {sendingEmail ? (
+                      <ActivityIndicator color={C.white} />
+                    ) : (
+                      <Text style={styles.emailSendBtnText}>Skicka kvitto</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+      </View>
+    );
+  }
+
+  // SCREEN: Paired display (idle or waiting)
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.storeName}>{storeName || 'QR-Kassan'}</Text>
+        <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
         <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtn}>
-          <Ionicons name="close-circle-outline" size={24} color={Colors.textMuted} />
+          <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
         </TouchableOpacity>
       </View>
 
       {/* Main Content - Responsive layout */}
       <View style={[styles.mainContent, isLandscape && styles.mainContentLandscape]}>
         
-        {/* Cart Section (Left in landscape, Bottom in portrait) */}
+        {/* Cart Section */}
         <View style={[
           styles.cartSection, 
           isLandscape ? styles.cartSectionLandscape : styles.cartSectionPortrait
         ]}>
-          {hasCart ? (
+          {items.length > 0 ? (
             <>
               <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
                 <Text style={styles.cartTitle}>Din order</Text>
-                {displayData?.items?.map((item, idx) => (
+                {items.map((item, idx) => (
                   <View key={idx} style={styles.cartItem}>
                     <View style={styles.itemLeft}>
                       <Text style={styles.itemQty}>{item.quantity}x</Text>
@@ -434,27 +600,18 @@ export default function App() {
             </>
           ) : (
             <View style={styles.emptyCart}>
-              <Ionicons name="basket-outline" size={40} color={Colors.textMuted} />
+              <Ionicons name="basket-outline" size={40} color={C.textMut} />
               <Text style={styles.emptyCartText}>Varukorgen är tom</Text>
             </View>
           )}
         </View>
 
-        {/* QR/Status Section (Right in landscape, Top in portrait) */}
+        {/* QR/Status Section */}
         <View style={[
           styles.qrSection, 
           isLandscape ? styles.qrSectionLandscape : styles.qrSectionPortrait
         ]}>
-          {showThankYou ? (
-            <View style={styles.thankYouContainer}>
-              <View style={styles.checkCircle}>
-                <Ionicons name="checkmark" size={60} color={Colors.white} />
-              </View>
-              <Text style={styles.thankYouTitle}>Tack för köpet!</Text>
-              <Text style={styles.thankYouSubtitle}>Betalningen är genomförd</Text>
-              <Text style={styles.countdownText}>Återställs om {thankYouCountdown}s</Text>
-            </View>
-          ) : showQR ? (
+          {showQR ? (
             <View style={styles.qrContainer}>
               <Text style={styles.qrTitle}>Betala med Swish</Text>
               <View style={styles.qrBox}>
@@ -465,7 +622,7 @@ export default function App() {
                     resizeMode="contain"
                   />
                 ) : (
-                  <Ionicons name="qr-code" size={150} color={Colors.primary} />
+                  <Ionicons name="qr-code" size={150} color={C.green} />
                 )}
               </View>
               <Text style={styles.qrAmount}>{total} kr</Text>
@@ -476,7 +633,7 @@ export default function App() {
               {logoUrl ? (
                 <Image source={{ uri: logoUrl }} style={styles.centerLogo} resizeMode="contain" />
               ) : (
-                <Ionicons name="storefront" size={80} color={Colors.primary} />
+                <Ionicons name="storefront" size={80} color={C.green} />
               )}
               <Text style={styles.idleTitle}>{storeName || 'Välkommen!'}</Text>
               <Text style={styles.idleSubtitle}>Skanna QR-koden för att betala med Swish</Text>
@@ -484,88 +641,86 @@ export default function App() {
           )}
         </View>
       </View>
-
-      {/* Email Receipt Modal - Shows on payment complete */}
-      <Modal
-        visible={showEmailModal && showThankYou}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEmailModal(false)}
-      >
-        <KeyboardAvoidingView 
-          style={styles.modalOverlay} 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.modalContent}>
-            {emailSent ? (
-              <View style={styles.emailSentContainer}>
-                <Ionicons name="checkmark-circle" size={64} color={Colors.primary} />
-                <Text style={styles.emailSentText}>Kvitto skickat!</Text>
-                <Text style={styles.emailSentSubtext}>Kolla din inkorg</Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.modalTitle}>Vill du ha kvitto?</Text>
-                <Text style={styles.modalSubtitle}>Ange din e-postadress</Text>
-                
-                <TextInput
-                  style={styles.modalInput}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="din@email.se"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoFocus
-                />
-
-                {emailError ? (
-                  <Text style={styles.modalError}>{emailError}</Text>
-                ) : null}
-
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={styles.modalSkipBtn}
-                    onPress={() => setShowEmailModal(false)}
-                  >
-                    <Text style={styles.modalSkipText}>Nej tack</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalSendBtn, sendingEmail && styles.buttonDisabled]}
-                    onPress={handleSendReceipt}
-                    disabled={sendingEmail}
-                  >
-                    {sendingEmail ? (
-                      <ActivityIndicator color={Colors.white} />
-                    ) : (
-                      <Text style={styles.modalSendText}>Skicka</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }
 
+const C = {
+  bg: '#09090b',
+  surface: '#18181b',
+  surfaceHi: '#27272a',
+  border: '#3f3f46',
+  text: '#f4f4f5',
+  textSec: '#a1a1aa',
+  textMut: '#71717a',
+  green: '#22c55e',
+  greenDark: '#16a34a',
+  red: '#ef4444',
+  white: '#ffffff',
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: C.bg,
   },
-  
-  // Pairing screen
-  pairingCard: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
   },
-  iconBox: {
+  statusText: {
+    color: C.textSec,
+    fontSize: 16,
+    marginTop: 16,
+  },
+  
+  // Error screen
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: C.text,
+    marginTop: 16,
+  },
+  errorText: {
+    color: C.textMut,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: C.green,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 24,
+  },
+  retryBtnText: {
+    color: C.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  
+  // Unpaired screen
+  unpairedTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: C.text,
+    marginTop: 16,
+  },
+  unpairedText: {
+    color: C.textMut,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  
+  // Pairing screen
+  pairIconContainer: {
     width: 96,
     height: 96,
     borderRadius: 24,
@@ -574,56 +729,61 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  pairingTitle: {
+  pairTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: C.text,
     marginBottom: 8,
   },
-  pairingSubtitle: {
+  pairSubtitle: {
     fontSize: 16,
-    color: Colors.textMuted,
-    marginBottom: 40,
-  },
-  codeContainer: {
-    alignItems: 'center',
+    color: C.textMut,
+    textAlign: 'center',
     marginBottom: 32,
   },
-  codeLabel: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    marginBottom: 16,
+  codeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 32,
   },
-  codeDisplay: {
-    fontSize: 72,
+  codeDigit: {
+    width: 64,
+    height: 80,
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: C.green,
+  },
+  codeDigitText: {
+    fontSize: 36,
     fontWeight: '800',
-    color: Colors.primary,
-    letterSpacing: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: C.green,
   },
-  instructions: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  refreshButton: {
+  waitingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    backgroundColor: 'rgba(34,197,94,0.1)',
+    marginBottom: 24,
   },
-  refreshButtonText: {
+  waitingText: {
+    color: C.textSec,
     fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '500',
+  },
+  newCodeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  newCodeBtnText: {
+    color: C.textSec,
+    fontSize: 14,
   },
 
-  // Display screen
+  // Header
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -632,27 +792,27 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 12,
   },
-  storeName: {
+  storeNameText: {
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: C.text,
   },
   unpairBtn: {
     padding: 8,
   },
 
-  // Main content - responsive layout
+  // Main content
   mainContent: {
     flex: 1,
-    flexDirection: 'column-reverse', // Portrait: Cart at bottom, QR at top
+    flexDirection: 'column-reverse',
   },
   mainContentLandscape: {
-    flexDirection: 'row', // Landscape: Cart left, QR right
+    flexDirection: 'row',
   },
 
   // Cart section
   cartSection: {
-    backgroundColor: Colors.surface,
+    backgroundColor: C.surface,
     padding: 16,
   },
   cartSectionPortrait: {
@@ -665,112 +825,13 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: 'rgba(255,255,255,0.1)',
   },
-
-  // QR/Status section
-  qrSection: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  qrSectionPortrait: {
-    // Top half in portrait
-  },
-  qrSectionLandscape: {
-    // Right side in landscape, with padding
-    paddingHorizontal: 40,
-  },
-
-  // Idle state
-  idleContainer: {
-    alignItems: 'center',
-  },
-  idleTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginTop: 16,
-  },
-  idleSubtitle: {
-    fontSize: 16,
-    color: Colors.textMuted,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  centerLogo: {
-    width: 150,
-    height: 150,
-    borderRadius: 20,
-  },
-
-  // QR container
-  qrContainer: {
-    alignItems: 'center',
-  },
-  qrTitle: {
-    fontSize: 22,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 16,
-  },
-  qrBox: {
-    backgroundColor: Colors.white,
-    padding: 20,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  qrImage: {
-    width: 200,
-    height: 200,
-  },
-  qrAmount: {
-    fontSize: 42,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginBottom: 8,
-  },
-  qrHint: {
-    fontSize: 15,
-    color: Colors.textMuted,
-  },
-
-  // Thank you
-  thankYouContainer: {
-    alignItems: 'center',
-  },
-  checkCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  thankYouTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  thankYouSubtitle: {
-    fontSize: 16,
-    color: Colors.textMuted,
-    marginBottom: 12,
-  },
-  countdownText: {
-    fontSize: 14,
-    color: Colors.textMuted,
-  },
-
-  // Cart
   cartScroll: {
     flex: 1,
   },
   cartTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: C.text,
     marginBottom: 16,
   },
   cartItem: {
@@ -788,20 +849,20 @@ const styles = StyleSheet.create({
   },
   itemQty: {
     fontSize: 14,
-    color: Colors.primary,
+    color: C.green,
     fontWeight: '600',
     marginRight: 8,
     minWidth: 32,
   },
   itemName: {
     fontSize: 16,
-    color: Colors.textPrimary,
+    color: C.text,
     flex: 1,
   },
   itemPrice: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: C.text,
   },
   totalRow: {
     flexDirection: 'row',
@@ -810,17 +871,17 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     marginTop: 8,
     borderTopWidth: 2,
-    borderTopColor: Colors.primary,
+    borderTopColor: C.green,
   },
   totalLabel: {
     fontSize: 18,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: C.text,
   },
   totalValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: Colors.primary,
+    color: C.green,
   },
   emptyCart: {
     flex: 1,
@@ -829,95 +890,217 @@ const styles = StyleSheet.create({
   },
   emptyCartText: {
     fontSize: 16,
-    color: Colors.textMuted,
+    color: C.textMut,
     marginTop: 12,
   },
 
-  // Modal
-  modalOverlay: {
+  // QR section
+  qrSection: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  modalContent: {
-    backgroundColor: '#1a1a1a',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
+  qrSectionPortrait: {},
+  qrSectionLandscape: {
+    paddingHorizontal: 40,
   },
-  modalTitle: {
-    fontSize: 24,
+  qrContainer: {
+    alignItems: 'center',
+  },
+  qrTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: C.text,
+    marginBottom: 16,
+  },
+  qrBox: {
+    backgroundColor: C.white,
+    padding: 20,
+    borderRadius: 20,
+    marginBottom: 16,
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+  },
+  qrAmount: {
+    fontSize: 42,
     fontWeight: '700',
-    color: Colors.textPrimary,
-    textAlign: 'center',
+    color: C.green,
     marginBottom: 8,
   },
-  modalSubtitle: {
+  qrHint: {
+    fontSize: 15,
+    color: C.textMut,
+  },
+
+  // Idle state
+  idleContainer: {
+    alignItems: 'center',
+  },
+  idleTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: C.text,
+    marginTop: 16,
+  },
+  idleSubtitle: {
     fontSize: 16,
-    color: Colors.textMuted,
+    color: C.textMut,
+    marginTop: 8,
     textAlign: 'center',
+  },
+  centerLogo: {
+    width: 150,
+    height: 150,
+    borderRadius: 20,
+  },
+
+  // Thank you screen
+  thankYouScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  thankYouCheckCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: C.green,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 24,
   },
-  modalInput: {
-    backgroundColor: '#0a0a0a',
-    borderRadius: 12,
-    padding: 16,
+  thankYouCheckCircleAnimated: {
+    transform: [{ scale: 1.1 }],
+  },
+  thankYouTitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: C.text,
+    marginBottom: 8,
+  },
+  thankYouAmount: {
+    fontSize: 48,
+    fontWeight: '800',
+    color: C.green,
+    marginBottom: 8,
+  },
+  thankYouSubtitle: {
     fontSize: 18,
-    color: Colors.textPrimary,
-    marginBottom: 16,
-    textAlign: 'center',
+    color: C.textSec,
+    marginBottom: 32,
   },
-  modalError: {
-    color: Colors.destructive,
+  thankYouCountdown: {
     fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
+    color: C.textMut,
+    marginTop: 24,
   },
-  modalButtons: {
+  
+  // Email receipt button on thank you screen
+  emailReceiptBtn: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-  },
-  modalSkipBtn: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: C.surface,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: C.green,
   },
-  modalSkipText: {
+  emailReceiptBtnText: {
+    color: C.green,
     fontSize: 16,
-    color: Colors.textMuted,
     fontWeight: '600',
-  },
-  modalSendBtn: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  modalSendText: {
-    fontSize: 16,
-    color: Colors.white,
-    fontWeight: '600',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
   },
   emailSentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emailSentText: {
+    color: C.green,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+
+  // Email modal
+  emailModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
-  emailSentText: {
+  emailModalContent: {
+    backgroundColor: C.surface,
+    borderRadius: 24,
+    padding: 32,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  emailModalClose: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: 8,
+  },
+  emailModalTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: C.text,
+    marginBottom: 8,
+  },
+  emailModalSubtitle: {
+    fontSize: 14,
+    color: C.textMut,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  emailInput: {
+    width: '100%',
+    height: 56,
+    backgroundColor: C.bg,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 18,
+    color: C.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  emailSendBtn: {
+    width: '100%',
+    height: 56,
+    backgroundColor: C.green,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emailSendBtnDisabled: {
+    opacity: 0.6,
+  },
+  emailSendBtnText: {
+    color: C.white,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  emailModalSent: {
+    alignItems: 'center',
+    padding: 24,
+  },
+  emailModalSentTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: C.text,
     marginTop: 16,
   },
-  emailSentSubtext: {
-    fontSize: 16,
-    color: Colors.textMuted,
+  emailModalSentText: {
+    fontSize: 14,
+    color: C.textMut,
     marginTop: 8,
   },
 });
