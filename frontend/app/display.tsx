@@ -151,6 +151,46 @@ export default function CustomerDisplayScreen() {
     generateCode();
   }, [generateCode]);
 
+  // Background validation - check if pairing is still valid
+  const pairingValidationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  useEffect(() => {
+    // Only run validation when paired
+    if (!displayId || state === 'waiting_pair' || state === 'generating' || state === 'error' || state === 'unpaired' || state === 'loading') {
+      if (pairingValidationRef.current) {
+        clearInterval(pairingValidationRef.current);
+        pairingValidationRef.current = null;
+      }
+      return;
+    }
+
+    const validatePairing = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/customer-display/pairing-status?display_code=${displayId}`);
+        const data = await res.json();
+        
+        if (!data.paired) {
+          // Pairing has been removed from POS - disconnect
+          storage.clearPairing();
+          setState('unpaired');
+        }
+      } catch {
+        // Network error - don't disconnect, just skip this check
+      }
+    };
+
+    // Check immediately and then every 5 seconds
+    validatePairing();
+    pairingValidationRef.current = setInterval(validatePairing, 5000);
+    
+    return () => {
+      if (pairingValidationRef.current) {
+        clearInterval(pairingValidationRef.current);
+        pairingValidationRef.current = null;
+      }
+    };
+  }, [displayId, state]);
+
   // Initial load - check for saved pairing first
   useEffect(() => {
     const init = async () => {
@@ -164,6 +204,7 @@ export default function CustomerDisplayScreen() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       if (dataPollRef.current) clearInterval(dataPollRef.current);
+      if (pairingValidationRef.current) clearInterval(pairingValidationRef.current);
     };
   }, []);
 
