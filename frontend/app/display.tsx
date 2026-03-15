@@ -449,13 +449,13 @@ export default function CustomerDisplayScreen() {
                     <View style={styles.qrBox}>
                       <QRCode 
                         value={qrData} 
-                        size={Math.min(height * 0.5, width * 0.4, 350)} 
+                        size={Math.min(height * 0.6, width * 0.5, 450)} 
                         backgroundColor="white" 
                         color="black" 
                       />
                     </View>
                     <View style={styles.swishBranding}>
-                      <Ionicons name="phone-portrait-outline" size={20} color={C.swish} />
+                      <Ionicons name="phone-portrait-outline" size={24} color={C.swish} />
                       <Text style={styles.swishText}>Skanna med Swish</Text>
                     </View>
                   </View>
@@ -587,61 +587,61 @@ const styles = StyleSheet.create({
   // Waiting - Side by side layout
   waitingContainer: { flex: 1, flexDirection: 'row' },
   
-  // Left side - Cart + Total
+  // Left side - Cart + Total (smaller)
   leftSide: { 
     flex: 1, 
     padding: 24, 
     borderRightWidth: 1, 
     borderRightColor: C.border,
-    maxWidth: width * 0.45,
+    maxWidth: 320, // Fixed smaller width for cart
   },
-  itemsTitle: { fontSize: 22, fontWeight: '600', color: C.text, marginBottom: 16 },
+  itemsTitle: { fontSize: 20, fontWeight: '600', color: C.text, marginBottom: 12 },
   itemsList: { flex: 1 },
   displayItem: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: C.border,
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   itemQtyBadge: {
-    backgroundColor: C.green, width: 36, height: 36, borderRadius: 8,
+    backgroundColor: C.green, width: 32, height: 32, borderRadius: 6,
     justifyContent: 'center', alignItems: 'center',
   },
-  itemQtyText: { color: C.white, fontSize: 14, fontWeight: '700' },
-  itemName: { fontSize: 18, color: C.text, fontWeight: '500' },
-  itemPrice: { fontSize: 18, color: C.textSec, fontWeight: '600' },
+  itemQtyText: { color: C.white, fontSize: 13, fontWeight: '700' },
+  itemName: { fontSize: 15, color: C.text, fontWeight: '500' },
+  itemPrice: { fontSize: 15, color: C.textSec, fontWeight: '600' },
   
   // Total container - Fixed at bottom
   totalContainer: {
     borderTopWidth: 2,
     borderTopColor: C.green,
-    paddingTop: 20,
-    marginTop: 16,
+    paddingTop: 16,
+    marginTop: 12,
   },
-  totalLabel: { fontSize: 18, fontWeight: '500', color: C.textSec, marginBottom: 4 },
-  totalAmount: { fontSize: 48, fontWeight: '700', color: C.green },
+  totalLabel: { fontSize: 15, fontWeight: '500', color: C.textSec, marginBottom: 4 },
+  totalAmount: { fontSize: 36, fontWeight: '700', color: C.green },
 
-  // Right side - QR code maximized
+  // Right side - QR code maximized (larger)
   rightSide: { 
-    flex: 1, 
+    flex: 2, 
     justifyContent: 'center', 
     alignItems: 'center',
-    padding: 32,
+    padding: 40,
   },
   qrContainer: { 
     alignItems: 'center',
   },
   qrBox: {
     backgroundColor: C.white, 
-    borderRadius: 24, 
-    padding: 32,
+    borderRadius: 32, 
+    padding: 40,
     alignItems: 'center', 
     justifyContent: 'center',
   },
   swishBranding: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24,
-    backgroundColor: C.surface, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24,
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 32,
+    backgroundColor: C.surface, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 24,
   },
-  swishText: { color: C.swish, fontSize: 16, fontWeight: '600' },
+  swishText: { color: C.swish, fontSize: 18, fontWeight: '600' },
 
   // Paid overlay
   paidOverlay: {
