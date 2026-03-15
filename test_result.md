@@ -102,9 +102,24 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the customer display 'Thank you' screen and email receipt flow"
+user_problem_statement: "Test the password change endpoint for sub-users"
 
 backend:
+  - task: "POST /api/org/users/me/change-password - Change own password"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/org_users.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented new endpoint to allow users to change their own password. Accepts new_password in JSON body, validates minimum 6 characters, hashes password, and updates database."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: All password change scenarios work correctly. 1) Returns 401 'Ej inloggad' for unauthenticated requests, 2) Returns 400 'Lösenordet måste vara minst 6 tecken' for passwords <6 chars, 3) Successfully changes password with valid input returning 'Lösenordet har ändrats', 4) Old password is invalidated and new password works for login. Endpoint fully functional."
+
   - task: "POST /api/customer-display/generate-code - Generate pairing code"
     implemented: true
     working: true
@@ -173,12 +188,13 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Customer display backend endpoints testing complete"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
+  - agent: "main"
+    message: "Implemented new endpoint POST /api/org/users/me/change-password for sub-users to change their own password. The endpoint: 1) Gets current user from session, 2) Validates password is at least 6 chars, 3) Hashes the new password using bcrypt, 4) Updates password_hash in users collection. Please test with authentication required scenarios and validation."
   - agent: "testing"
-    message: "✅ Customer display backend testing complete! All endpoints working correctly: 1) POST /api/customer-display/generate-code generates 4-digit pairing codes successfully, 2) GET /api/customer-display handles both authenticated/unauthenticated access with proper status responses, 3) POST /api/customer-display/send-receipt validates input and handles email configuration gracefully, 4) Order confirmation flow properly updates display status to 'paid'. Fixed missing 'import os' in display.py. Email service returns appropriate message when not configured (expected behavior). All validation and error handling working correctly."
+    message: "✅ TESTING COMPLETE: Password change endpoint fully tested and working correctly. All four test scenarios passed: (1) Correctly rejects unauthenticated requests with 401 'Ej inloggad', (2) Validates minimum password length returning 400 'Lösenordet måste vara minst 6 tecken', (3) Successfully changes passwords with proper authentication, (4) Old passwords become invalid and new passwords work for login. Endpoint is production-ready."

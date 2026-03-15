@@ -31,6 +31,10 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 
+class ChangePasswordRequest(BaseModel):
+    new_password: str
+
+
 def generate_login_code() -> str:
     """Generate a unique 8-character login code"""
     chars = string.ascii_uppercase + string.digits
@@ -54,6 +58,36 @@ async def list_org_users(request: Request):
     ).sort("created_at", -1).to_list(100)
     
     return {"users": sub_users}
+
+
+@router.post("/users/me/change-password")
+async def change_my_password(request: Request, data: ChangePasswordRequest):
+    """Allow current user to change their own password"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ej inloggad")
+    
+    # Validate password length
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Lösenordet måste vara minst 6 tecken")
+    
+    db = get_db()
+    
+    # Hash the new password
+    hashed_password = hash_password(data.new_password)
+    
+    # Update the user's password in the database
+    result = await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": hashed_password}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=500, detail="Kunde inte uppdatera lösenord")
+    
+    logger.info(f"Password changed for user {user['user_id']}")
+    
+    return {"success": True, "message": "Lösenordet har ändrats"}
 
 
 @router.post("/users")
