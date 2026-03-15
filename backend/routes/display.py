@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 import random
 import string
 import uuid
+import os
 
 from utils.database import get_db
 from routes.auth import get_current_user
