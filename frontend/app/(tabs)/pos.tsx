@@ -373,7 +373,7 @@ export default function POSScreen() {
               <View style={styles.emptyCart}>
                 <Ionicons name="cart-outline" size={48} color={Colors.textMuted} />
                 <Text style={styles.emptyCartText}>Varukorgen är tom</Text>
-                <Text style={styles.emptyCartSubtext}>Tryck på en produkt för att lägga till</Text>
+                <Text style={styles.emptyCartSubtext}>Tryck för att lägga till</Text>
               </View>
             )}
           </View>
