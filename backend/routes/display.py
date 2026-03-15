@@ -97,7 +97,7 @@ async def get_pairing_status(
     if user_id:
         display = await db.paired_displays.find_one({"user_id": user_id}, {"_id": 0})
         if display:
-            return {"paired": True, "store_name": display.get("store_name", "")}
+            return {"paired": True, "store_name": display.get("store_name", ""), "user_id": user_id}
     
     if display_code:
         display = await db.paired_displays.find_one({"display_id": display_code}, {"_id": 0})
@@ -106,7 +106,8 @@ async def get_pairing_status(
             settings = await db.settings.find_one({"user_id": display["user_id"]}, {"_id": 0})
             return {
                 "paired": True, 
-                "store_name": settings.get("store_name", "") if settings else ""
+                "store_name": settings.get("store_name", "") if settings else "",
+                "user_id": display["user_id"]
             }
     
     return {"paired": False}

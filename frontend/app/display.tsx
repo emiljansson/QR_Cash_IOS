@@ -15,6 +15,42 @@ const getBackendUrl = () => {
 };
 const BACKEND_URL = getBackendUrl();
 
+// Storage keys for persistent pairing
+const STORAGE_KEYS = {
+  USER_ID: 'display_user_id',
+  DISPLAY_ID: 'display_id',
+  STORE_NAME: 'display_store_name',
+};
+
+// Helper functions for localStorage (web only)
+const storage = {
+  get: (key: string): string | null => {
+    if (Platform.OS !== 'web') return null;
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set: (key: string, value: string): void => {
+    if (Platform.OS !== 'web') return;
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  },
+  remove: (key: string): void => {
+    if (Platform.OS !== 'web') return;
+    try {
+      localStorage.removeItem(key);
+    } catch {}
+  },
+  clearPairing: (): void => {
+    storage.remove(STORAGE_KEYS.USER_ID);
+    storage.remove(STORAGE_KEYS.DISPLAY_ID);
+    storage.remove(STORAGE_KEYS.STORE_NAME);
+  },
+};
+
 const C = {
   bg: '#09090b',
   surface: '#18181b',
@@ -30,13 +66,13 @@ const C = {
   swish: '#D41420',
 };
 
-type DisplayState = 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired';
+type DisplayState = 'loading' | 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired';
 
 export default function CustomerDisplayScreen() {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   
-  const [state, setState] = useState<DisplayState>('generating');
+  const [state, setState] = useState<DisplayState>('loading');
   const [pairingCode, setPairingCode] = useState('');
   const [displayId, setDisplayId] = useState('');
   const [userId, setUserId] = useState('');
@@ -46,6 +82,42 @@ export default function CustomerDisplayScreen() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dataPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [paidAnimation, setPaidAnimation] = useState(false);
+
+  // Check for saved pairing on startup
+  const checkSavedPairing = useCallback(async () => {
+    const savedUserId = storage.get(STORAGE_KEYS.USER_ID);
+    const savedDisplayId = storage.get(STORAGE_KEYS.DISPLAY_ID);
+    const savedStoreName = storage.get(STORAGE_KEYS.STORE_NAME);
+    
+    if (savedUserId && savedDisplayId) {
+      // Verify pairing is still valid
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/customer-display/pairing-status?display_code=${savedDisplayId}`);
+        const data = await res.json();
+        
+        if (data.paired) {
+          // Pairing still valid - restore state
+          const restoredUserId = data.user_id || savedUserId;
+          setUserId(restoredUserId);
+          setDisplayId(savedDisplayId);
+          setStoreName(data.store_name || savedStoreName || '');
+          
+          // Update stored user_id if different
+          if (data.user_id && data.user_id !== savedUserId) {
+            storage.set(STORAGE_KEYS.USER_ID, data.user_id);
+          }
+          
+          setState('paired_idle');
+          return true;
+        }
+      } catch {}
+      
+      // Pairing no longer valid - clear storage
+      storage.clearPairing();
+    }
+    
+    return false;
+  }, []);
 
   // Step 1: Generate pairing code
   const generateCode = useCallback(async () => {
@@ -63,8 +135,32 @@ export default function CustomerDisplayScreen() {
     }
   }, []);
 
-  useEffect(() => {
+  // Save pairing to localStorage when paired
+  const savePairing = useCallback((newUserId: string, newDisplayId: string, newStoreName: string) => {
+    storage.set(STORAGE_KEYS.USER_ID, newUserId);
+    storage.set(STORAGE_KEYS.DISPLAY_ID, newDisplayId);
+    storage.set(STORAGE_KEYS.STORE_NAME, newStoreName);
+  }, []);
+
+  // Clear pairing and generate new code
+  const handleUnpair = useCallback(() => {
+    storage.clearPairing();
+    setUserId('');
+    setDisplayId('');
+    setStoreName('');
     generateCode();
+  }, [generateCode]);
+
+  // Initial load - check for saved pairing first
+  useEffect(() => {
+    const init = async () => {
+      const hasSavedPairing = await checkSavedPairing();
+      if (!hasSavedPairing) {
+        generateCode();
+      }
+    };
+    init();
+    
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       if (dataPollRef.current) clearInterval(dataPollRef.current);
@@ -80,8 +176,15 @@ export default function CustomerDisplayScreen() {
         const res = await fetch(`${BACKEND_URL}/api/customer-display/check-code/${pairingCode}`);
         const data = await res.json();
         if (data.paired && data.user_id) {
-          setUserId(data.user_id);
-          if (data.display_id) setDisplayId(data.display_id);
+          const newUserId = data.user_id;
+          const newDisplayId = data.display_id || displayId;
+          
+          setUserId(newUserId);
+          if (data.display_id) setDisplayId(newDisplayId);
+          
+          // Save pairing to localStorage for persistence
+          savePairing(newUserId, newDisplayId, '');
+          
           setState('paired_idle');
         } else if (!data.valid) {
           // Code expired
@@ -92,7 +195,7 @@ export default function CustomerDisplayScreen() {
 
     pollRef.current = setInterval(checkPairing, 2000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [state, pairingCode]);
+  }, [state, pairingCode, displayId, savePairing, generateCode]);
 
   // Step 3: Poll display data once paired
   useEffect(() => {
@@ -104,12 +207,18 @@ export default function CustomerDisplayScreen() {
         const data = await res.json();
 
         if (data.status === 'unpaired') {
+          // Clear localStorage and go to unpaired state
+          storage.clearPairing();
           setState('unpaired');
           return;
         }
 
         setDisplayData(data);
-        if (data.store_name) setStoreName(data.store_name);
+        if (data.store_name) {
+          setStoreName(data.store_name);
+          // Update stored store name
+          storage.set(STORAGE_KEYS.STORE_NAME, data.store_name);
+        }
 
         if (data.status === 'paid' && state !== 'paired_paid') {
           setState('paired_paid');
@@ -127,6 +236,18 @@ export default function CustomerDisplayScreen() {
     dataPollRef.current = setInterval(fetchDisplay, 2000);
     return () => { if (dataPollRef.current) clearInterval(dataPollRef.current); };
   }, [userId, state]);
+
+  // SCREEN: Loading saved pairing
+  if (state === 'loading') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={C.green} />
+          <Text style={styles.statusText}>Kontrollerar anslutning...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // SCREEN: Generating code
   if (state === 'generating') {
@@ -164,7 +285,7 @@ export default function CustomerDisplayScreen() {
           <Ionicons name="unlink-outline" size={64} color={C.textMut} />
           <Text style={styles.unpairedTitle}>Frånkopplad</Text>
           <Text style={styles.unpairedText}>Skärmen har kopplats bort från kassan</Text>
-          <TouchableOpacity testID="reconnect-btn" style={styles.retryBtn} onPress={generateCode}>
+          <TouchableOpacity testID="reconnect-btn" style={styles.retryBtn} onPress={handleUnpair}>
             <Ionicons name="refresh" size={18} color={C.white} />
             <Text style={styles.retryBtnText}>Koppla igen</Text>
           </TouchableOpacity>
