@@ -247,11 +247,11 @@ export default function CustomerDisplayScreen() {
         </View>
       )}
 
-      {/* Waiting for payment */}
+      {/* Waiting for payment - Side by side layout */}
       {isWaiting && !isPaid && (
         <View style={styles.waitingContainer}>
-          {/* Items list */}
-          <View style={styles.itemsSection}>
+          {/* LEFT SIDE: Cart items + Total at bottom */}
+          <View style={styles.leftSide}>
             <Text style={styles.itemsTitle}>Din beställning</Text>
             <ScrollView style={styles.itemsList} showsVerticalScrollIndicator={false}>
               {items.map((item: any, idx: number) => (
@@ -266,22 +266,28 @@ export default function CustomerDisplayScreen() {
                 </View>
               ))}
             </ScrollView>
-          </View>
-
-          {/* QR + Total section */}
-          <View style={styles.paymentSection}>
-            <View style={styles.totalRow}>
+            
+            {/* Total fixed at bottom */}
+            <View style={styles.totalContainer}>
               <Text style={styles.totalLabel}>Att betala</Text>
               <Text style={styles.totalAmount}>{total.toFixed(0)} kr</Text>
             </View>
+          </View>
 
+          {/* RIGHT SIDE: QR code maximized with padding */}
+          <View style={styles.rightSide}>
             {qrData && (
-              <View style={styles.qrSection}>
+              <View style={styles.qrContainer}>
                 <View style={styles.qrBox}>
-                  <QRCode value={qrData} size={Math.min(Dimensions.get('window').width * 0.4, 250)} backgroundColor="white" color="black" />
+                  <QRCode 
+                    value={qrData} 
+                    size={Math.min(Dimensions.get('window').height * 0.5, Dimensions.get('window').width * 0.4, 350)} 
+                    backgroundColor="white" 
+                    color="black" 
+                  />
                 </View>
                 <View style={styles.swishBranding}>
-                  <Ionicons name="phone-portrait-outline" size={16} color={C.swish} />
+                  <Ionicons name="phone-portrait-outline" size={20} color={C.swish} />
                   <Text style={styles.swishText}>Skanna med Swish</Text>
                 </View>
               </View>
@@ -293,7 +299,7 @@ export default function CustomerDisplayScreen() {
   );
 }
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
@@ -359,10 +365,18 @@ const styles = StyleSheet.create({
   idleTitle: { fontSize: 32, fontWeight: '700', color: C.text },
   idleSubtitle: { fontSize: 18, color: C.textSec, marginTop: 8, textAlign: 'center' },
 
-  // Waiting
-  waitingContainer: { flex: 1, flexDirection: width > 600 ? 'row' : 'column' },
-  itemsSection: { flex: 1, padding: 24, borderRightWidth: width > 600 ? 1 : 0, borderRightColor: C.border },
-  itemsTitle: { fontSize: 20, fontWeight: '600', color: C.text, marginBottom: 16 },
+  // Waiting - Side by side layout
+  waitingContainer: { flex: 1, flexDirection: 'row' },
+  
+  // Left side - Cart + Total
+  leftSide: { 
+    flex: 1, 
+    padding: 24, 
+    borderRightWidth: 1, 
+    borderRightColor: C.border,
+    maxWidth: width * 0.45,
+  },
+  itemsTitle: { fontSize: 22, fontWeight: '600', color: C.text, marginBottom: 16 },
   itemsList: { flex: 1 },
   displayItem: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -370,29 +384,45 @@ const styles = StyleSheet.create({
   },
   itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   itemQtyBadge: {
-    backgroundColor: C.green, width: 32, height: 32, borderRadius: 8,
+    backgroundColor: C.green, width: 36, height: 36, borderRadius: 8,
     justifyContent: 'center', alignItems: 'center',
   },
-  itemQtyText: { color: C.white, fontSize: 13, fontWeight: '700' },
-  itemName: { fontSize: 17, color: C.text, fontWeight: '500' },
-  itemPrice: { fontSize: 17, color: C.textSec, fontWeight: '600' },
-  paymentSection: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center' },
-  totalRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    width: '100%', marginBottom: 24, paddingBottom: 16, borderBottomWidth: 2, borderBottomColor: C.border,
+  itemQtyText: { color: C.white, fontSize: 14, fontWeight: '700' },
+  itemName: { fontSize: 18, color: C.text, fontWeight: '500' },
+  itemPrice: { fontSize: 18, color: C.textSec, fontWeight: '600' },
+  
+  // Total container - Fixed at bottom
+  totalContainer: {
+    borderTopWidth: 2,
+    borderTopColor: C.green,
+    paddingTop: 20,
+    marginTop: 16,
   },
-  totalLabel: { fontSize: 22, fontWeight: '600', color: C.textSec },
-  totalAmount: { fontSize: 40, fontWeight: '700', color: C.green },
-  qrSection: { alignItems: 'center' },
+  totalLabel: { fontSize: 18, fontWeight: '500', color: C.textSec, marginBottom: 4 },
+  totalAmount: { fontSize: 48, fontWeight: '700', color: C.green },
+
+  // Right side - QR code maximized
+  rightSide: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    padding: 32,
+  },
+  qrContainer: { 
+    alignItems: 'center',
+  },
   qrBox: {
-    backgroundColor: C.white, borderRadius: 20, padding: 24,
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.white, 
+    borderRadius: 24, 
+    padding: 32,
+    alignItems: 'center', 
+    justifyContent: 'center',
   },
   swishBranding: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16,
-    backgroundColor: C.surface, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24,
+    backgroundColor: C.surface, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24,
   },
-  swishText: { color: C.swish, fontSize: 14, fontWeight: '600' },
+  swishText: { color: C.swish, fontSize: 16, fontWeight: '600' },
 
   // Paid overlay
   paidOverlay: {
