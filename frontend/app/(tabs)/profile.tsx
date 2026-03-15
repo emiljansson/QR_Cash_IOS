@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert,
-  Platform, Modal,
+  Platform, Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { Colors } from '../../src/utils/colors';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import { api } from '../../src/utils/api';
 
 const appVersion = Constants.expoConfig?.version || '2.0.0';
 
@@ -15,6 +16,12 @@ export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const isSubUser = user?.role === 'user';
 
   const handleLogout = () => {
     if (Platform.OS === 'web') {
@@ -46,6 +53,37 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      Alert.alert('Fel', 'Fyll i båda fälten');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Fel', 'Lösenorden matchar inte');
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert('Fel', 'Lösenordet måste vara minst 6 tecken');
+      return;
+    }
+
+    setSavingPassword(true);
+    try {
+      await api.fetch('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ new_password: newPassword }),
+      });
+      setShowPasswordModal(false);
+      setNewPassword('');
+      setConfirmPassword('');
+      Alert.alert('Klart', 'Lösenordet har ändrats');
+    } catch (e: any) {
+      Alert.alert('Fel', e.message || 'Kunde inte ändra lösenord');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
   const subActive = user?.subscription_active;
   const subEnd = user?.subscription_end
     ? (() => {
@@ -73,44 +111,63 @@ export default function ProfileScreen() {
           {user?.phone ? <Text style={styles.phone}>{user.phone}</Text> : null}
         </View>
 
-        {/* Subscription Card */}
-        <View style={styles.subscriptionCard}>
-          <View style={styles.subHeader}>
-            <Ionicons name="diamond-outline" size={20} color={subActive ? Colors.primary : Colors.destructive} />
-            <Text style={styles.subTitle}>Prenumeration</Text>
-          </View>
-
-          <View style={[styles.subStatusBadge, subActive ? styles.subActive : styles.subInactive]}>
-            <Ionicons
-              name={subActive ? 'checkmark-circle' : 'close-circle'}
-              size={18}
-              color={subActive ? Colors.primary : Colors.destructive}
-            />
-            <Text style={[styles.subStatusText, { color: subActive ? Colors.primary : Colors.destructive }]}>
-              {subActive ? 'Aktiv' : 'Inaktiv'}
-            </Text>
-          </View>
-
-          <View style={styles.subDetails}>
-            <View style={styles.subDetailRow}>
-              <Text style={styles.subDetailLabel}>Startdatum</Text>
-              <Text style={styles.subDetailValue}>{subStart}</Text>
+        {/* Subscription Card - Only for admins */}
+        {!isSubUser && (
+          <View style={styles.subscriptionCard}>
+            <View style={styles.subHeader}>
+              <Ionicons name="diamond-outline" size={20} color={subActive ? Colors.primary : Colors.destructive} />
+              <Text style={styles.subTitle}>Prenumeration</Text>
             </View>
-            <View style={styles.subDetailRow}>
-              <Text style={styles.subDetailLabel}>Slutdatum</Text>
-              <Text style={styles.subDetailValue}>{subEnd}</Text>
-            </View>
-          </View>
 
-          {!subActive && (
-            <View style={styles.subWarning}>
-              <Ionicons name="warning-outline" size={16} color={Colors.warning} />
-              <Text style={styles.subWarningText}>
-                Ditt abonnemang är inaktivt. Kontakta administratören för att förnya.
+            <View style={[styles.subStatusBadge, subActive ? styles.subActive : styles.subInactive]}>
+              <Ionicons
+                name={subActive ? 'checkmark-circle' : 'close-circle'}
+                size={18}
+                color={subActive ? Colors.primary : Colors.destructive}
+              />
+              <Text style={[styles.subStatusText, { color: subActive ? Colors.primary : Colors.destructive }]}>
+                {subActive ? 'Aktiv' : 'Inaktiv'}
               </Text>
             </View>
-          )}
-        </View>
+
+            <View style={styles.subDetails}>
+              <View style={styles.subDetailRow}>
+                <Text style={styles.subDetailLabel}>Startdatum</Text>
+                <Text style={styles.subDetailValue}>{subStart}</Text>
+              </View>
+              <View style={styles.subDetailRow}>
+                <Text style={styles.subDetailLabel}>Slutdatum</Text>
+                <Text style={styles.subDetailValue}>{subEnd}</Text>
+              </View>
+            </View>
+
+            {!subActive && (
+              <View style={styles.subWarning}>
+                <Ionicons name="warning-outline" size={16} color={Colors.warning} />
+                <Text style={styles.subWarningText}>
+                  Ditt abonnemang är inaktivt. Kontakta administratören för att förnya.
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Change Password - For sub-users */}
+        {isSubUser && (
+          <View style={styles.passwordCard}>
+            <View style={styles.subHeader}>
+              <Ionicons name="lock-closed-outline" size={20} color={Colors.primary} />
+              <Text style={styles.subTitle}>Säkerhet</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.changePasswordBtn}
+              onPress={() => setShowPasswordModal(true)}
+            >
+              <Ionicons name="key-outline" size={18} color={Colors.primary} />
+              <Text style={styles.changePasswordBtnText}>Byt lösenord</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Info Cards */}
         <View style={styles.infoSection}>
@@ -163,6 +220,61 @@ export default function ProfileScreen() {
                   onPress={confirmLogout}
                 >
                   <Text style={styles.modalLogoutText}>Logga ut</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Password Change Modal */}
+        <Modal
+          visible={showPasswordModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowPasswordModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Byt lösenord</Text>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Nytt lösenord"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry
+                value={newPassword}
+                onChangeText={setNewPassword}
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Bekräfta lösenord"
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                autoCapitalize="none"
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => {
+                    setShowPasswordModal(false);
+                    setNewPassword('');
+                    setConfirmPassword('');
+                  }}
+                >
+                  <Text style={styles.modalCancelText}>Avbryt</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalLogoutBtn, { backgroundColor: Colors.primary }]}
+                  onPress={handleChangePassword}
+                  disabled={savingPassword}
+                >
+                  {savingPassword ? (
+                    <ActivityIndicator color={Colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.modalLogoutText}>Spara</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -269,4 +381,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.destructive,
   },
   modalLogoutText: { color: Colors.white, fontSize: 15, fontWeight: '600' },
+  passwordCard: {
+    backgroundColor: Colors.surface, borderRadius: 16, padding: 20, marginTop: 16,
+  },
+  changePasswordBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12,
+    paddingHorizontal: 16, backgroundColor: Colors.surfaceHighlight, borderRadius: 10,
+    marginTop: 12,
+  },
+  changePasswordBtnText: { color: Colors.primary, fontSize: 15, fontWeight: '600' },
+  passwordInput: {
+    height: 48, backgroundColor: Colors.surfaceHighlight, borderRadius: 10,
+    paddingHorizontal: 16, fontSize: 16, color: Colors.textPrimary, marginBottom: 12,
+    borderWidth: 1, borderColor: Colors.border,
+  },
 });
