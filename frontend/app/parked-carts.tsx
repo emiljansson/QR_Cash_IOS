@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, TextInput,
   ActivityIndicator, Alert, Modal, SafeAreaView, KeyboardAvoidingView, Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/utils/colors';
@@ -19,6 +20,8 @@ interface ParkedCart {
 export default function ParkedCartsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ cartItems?: string; cartTotal?: string }>();
+  const { width } = useWindowDimensions();
+  const isPhone = width < 768;
   const [carts, setCarts] = useState<ParkedCart[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSave, setShowSave] = useState(false);
@@ -165,7 +168,9 @@ export default function ParkedCartsScreen() {
                   <View style={styles.cartActions}>
                     <TouchableOpacity testID={`restore-cart-${item.id}`} style={styles.restoreBtn} onPress={() => handleRestore(item)}>
                       <Ionicons name="arrow-undo" size={16} color={Colors.primary} />
-                      <Text style={styles.restoreBtnText}>Återställ - skickar varukorgen tillbaka till kassan</Text>
+                      <Text style={styles.restoreBtnText}>
+                        {isPhone ? 'Skicka tillbaka till kassan' : 'Återställ - skickar varukorgen tillbaka till kassan'}
+                      </Text>
                     </TouchableOpacity>
                     <TouchableOpacity testID={`delete-cart-${item.id}`} style={styles.deleteBtn} onPress={() => handleDelete(item)}>
                       <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
