@@ -248,7 +248,7 @@ export default function POSScreen() {
             data={products}
             renderItem={renderProduct}
             keyExtractor={item => item.id}
-            numColumns={isTablet ? 5 : 3}
+            numColumns={isTablet ? 2 : 3}
             key={isTablet ? 'tablet' : 'mobile'}
             contentContainerStyle={styles.productGrid}
             columnWrapperStyle={styles.productRow}
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   mainContent: { flex: 1 },
   mainContentTablet: { flexDirection: 'row' },
   productSection: { flex: 1 },
-  productSectionTablet: { flex: 3 },
+  productSectionTablet: { flex: 2 }, // 60% av bredden
   productGrid: { padding: 8 },
   productRow: { gap: 8, paddingHorizontal: 8 },
   productCard: {
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, maxHeight: 320,
   },
   cartSectionTablet: {
-    flex: 2, maxWidth: 380, maxHeight: 'auto', height: '100%',
+    flex: 1, maxHeight: 'auto', height: '100%', // 40% av bredden
     borderTopWidth: 0, borderLeftWidth: 1, borderLeftColor: Colors.border,
   },
   cartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
