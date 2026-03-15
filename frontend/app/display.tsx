@@ -340,11 +340,7 @@ export default function CustomerDisplayScreen() {
       {/* Header */}
       <View style={styles.displayHeader}>
         <View style={styles.storeInfo}>
-          {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={styles.storeLogoDisplay} resizeMode="contain" />
-          ) : (
-            <Ionicons name="storefront" size={24} color={C.green} />
-          )}
+          <Ionicons name="storefront" size={24} color={C.green} />
           <Text style={styles.storeNameText}>{storeName || 'Butik'}</Text>
         </View>
         <View style={styles.connectedBadge}>
@@ -368,9 +364,13 @@ export default function CustomerDisplayScreen() {
       {/* Idle state */}
       {state === 'paired_idle' && (
         <View style={styles.idleContainer}>
-          <View style={styles.idleIconWrap}>
-            <Ionicons name="qr-code" size={64} color={C.green} />
-          </View>
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={styles.centerLogo} resizeMode="contain" />
+          ) : (
+            <View style={styles.idleIconWrap}>
+              <Ionicons name="qr-code" size={64} color={C.green} />
+            </View>
+          )}
           <Text style={styles.idleTitle}>{storeName || 'Välkommen!'}</Text>
           <Text style={styles.idleSubtitle}>Skanna QR-koden för att betala med Swish</Text>
         </View>
@@ -536,6 +536,9 @@ const styles = StyleSheet.create({
     width: 120, height: 120, borderRadius: 30, backgroundColor: C.surface,
     justifyContent: 'center', alignItems: 'center', marginBottom: 24,
     borderWidth: 1, borderColor: C.border,
+  },
+  centerLogo: {
+    width: 150, height: 150, borderRadius: 20, marginBottom: 24,
   },
   idleTitle: { fontSize: 32, fontWeight: '700', color: C.text },
   idleSubtitle: { fontSize: 18, color: C.textSec, marginTop: 8, textAlign: 'center' },
