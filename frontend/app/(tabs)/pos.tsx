@@ -8,7 +8,7 @@ import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import QRCode from 'react-native-qrcode-svg';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 
 interface Product {
   id: string;
@@ -74,8 +74,14 @@ export default function POSScreen() {
   useEffect(() => {
     loadProducts();
     loadSettings();
-    loadParkedCount();
   }, []);
+
+  // Reload parked count when screen gets focus
+  useFocusEffect(
+    useCallback(() => {
+      loadParkedCount();
+    }, [loadParkedCount])
+  );
 
   // Handle restoring parked cart
   useEffect(() => {
@@ -508,16 +514,16 @@ const styles = StyleSheet.create({
   totalAmount: { fontSize: 32, fontWeight: '700', color: Colors.primary },
   paymentButtons: { flexDirection: 'row', gap: 12, marginTop: 12 },
   swishButton: {
-    flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: Colors.swishBrand, height: 56, borderRadius: 12, gap: 8,
   },
-  swishButtonText: { color: Colors.white, fontSize: 18, fontWeight: '600' },
+  swishButtonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
   cashButton: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: Colors.surfaceHighlight, height: 56, borderRadius: 12, gap: 6,
+    backgroundColor: Colors.surfaceHighlight, height: 56, borderRadius: 12, gap: 8,
     borderWidth: 1, borderColor: Colors.border,
   },
-  cashButtonText: { color: Colors.textPrimary, fontSize: 16, fontWeight: '500' },
+  cashButtonText: { color: Colors.textPrimary, fontSize: 16, fontWeight: '600' },
   // Empty cart state
   emptyCart: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
   emptyCartText: { fontSize: 16, color: Colors.textMuted, marginTop: 12 },
