@@ -2,18 +2,14 @@
 /**
  * Version Synchronization Script for QR-Kassan and QR-Display
  * 
- * This script ensures each app has synchronized version numbers
- * between its package.json and app.json files.
- * 
- * NOTE: Frontend (Kassa) and Display-app have SEPARATE version tracks:
- *   - Frontend/Kassa: 2.x.x
- *   - Display-app: 1.x.x
+ * This script ensures both apps share the same PATCH number
+ * while maintaining separate MAJOR versions:
+ *   - Frontend/Kassa: 2.0.x
+ *   - Display-app: 1.0.x
  * 
  * Usage:
- *   node scripts/sync-versions.js                    # Sync versions within each app
- *   node scripts/sync-versions.js --bump             # Increment patch version for frontend only
- *   node scripts/sync-versions.js --bump-display     # Increment patch version for display-app only
- *   node scripts/sync-versions.js --bump-all         # Increment patch version for both apps
+ *   node scripts/sync-versions.js           # Sync patch numbers between apps
+ *   node scripts/sync-versions.js --bump    # Increment patch version for BOTH apps
  */
 
 const fs = require('fs');
@@ -55,89 +51,64 @@ function parseVersion(version) {
   };
 }
 
-function formatVersion(v) {
-  return `${v.major}.${v.minor}.${v.patch}`;
-}
-
-function bumpPatch(version) {
-  const v = parseVersion(version);
-  v.patch += 1;
-  return formatVersion(v);
-}
-
-function syncApp(name, packagePath, appPath, shouldBump) {
-  const pkg = readJson(packagePath);
-  const app = readJson(appPath);
-  
-  if (!pkg) {
-    console.error(`Could not read ${packagePath}`);
-    return false;
-  }
-  
-  let targetVersion = pkg.version;
-  const appVersion = app?.expo?.version || '0.0.0';
-  
-  // Use the higher version as base
-  const pkgParsed = parseVersion(targetVersion);
-  const appParsed = parseVersion(appVersion);
-  
-  if (appParsed.major > pkgParsed.major || 
-      (appParsed.major === pkgParsed.major && appParsed.minor > pkgParsed.minor) ||
-      (appParsed.major === pkgParsed.major && appParsed.minor === pkgParsed.minor && appParsed.patch > pkgParsed.patch)) {
-    targetVersion = appVersion;
-  }
-  
-  // Bump if requested
-  if (shouldBump) {
-    targetVersion = bumpPatch(targetVersion);
-  }
-  
-  console.log(`\n📦 ${name}`);
-  console.log(`   package.json: ${pkg.version}`);
-  console.log(`   app.json:     ${appVersion}`);
-  
-  if (pkg.version === targetVersion && appVersion === targetVersion && !shouldBump) {
-    console.log(`   ✅ Already in sync at ${targetVersion}`);
-    return true;
-  }
-  
-  // Update files
-  pkg.version = targetVersion;
-  writeJson(packagePath, pkg);
-  
-  if (app?.expo) {
-    app.expo.version = targetVersion;
-    writeJson(appPath, app);
-  }
-  
-  console.log(`   ✅ Synced to ${targetVersion}`);
-  return true;
-}
-
 function main() {
   const args = process.argv.slice(2);
-  const bumpFrontend = args.includes('--bump') || args.includes('--bump-all');
-  const bumpDisplay = args.includes('--bump-display') || args.includes('--bump-all');
+  const shouldBump = args.includes('--bump');
   
   console.log('📦 Version Sync Script');
   console.log('======================');
-  console.log('Note: Frontend (2.x.x) and Display-app (1.x.x) have separate version tracks');
+  console.log('Frontend (2.0.x) and Display-app (1.0.x) share the same PATCH number');
   
-  // Sync frontend (Kassa)
-  syncApp(
-    'Frontend (QR-Kassan)',
-    FILES.frontendPackage,
-    FILES.frontendApp,
-    bumpFrontend
-  );
+  // Read current versions
+  const frontendPkg = readJson(FILES.frontendPackage);
+  const frontendApp = readJson(FILES.frontendApp);
+  const displayPkg = readJson(FILES.displayPackage);
+  const displayApp = readJson(FILES.displayApp);
   
-  // Sync display-app
-  syncApp(
-    'Display-app (QR-Display)',
-    FILES.displayPackage,
-    FILES.displayApp,
-    bumpDisplay
-  );
+  if (!frontendPkg || !displayPkg) {
+    console.error('Could not read package.json files');
+    process.exit(1);
+  }
+  
+  // Get current patch numbers
+  const frontendVersion = parseVersion(frontendPkg.version);
+  const displayVersion = parseVersion(displayPkg.version);
+  
+  // Use the highest patch number
+  let targetPatch = Math.max(frontendVersion.patch, displayVersion.patch);
+  
+  // Bump if requested
+  if (shouldBump) {
+    targetPatch += 1;
+  }
+  
+  // Target versions (keep major.minor, sync patch)
+  const frontendTarget = `2.0.${targetPatch}`;
+  const displayTarget = `1.0.${targetPatch}`;
+  
+  console.log(`\n📦 Frontend (QR-Kassan)`);
+  console.log(`   Current: ${frontendPkg.version}`);
+  
+  // Update frontend
+  frontendPkg.version = frontendTarget;
+  writeJson(FILES.frontendPackage, frontendPkg);
+  if (frontendApp?.expo) {
+    frontendApp.expo.version = frontendTarget;
+    writeJson(FILES.frontendApp, frontendApp);
+  }
+  console.log(`   Updated: ${frontendTarget}`);
+  
+  console.log(`\n📦 Display-app (QR-Display)`);
+  console.log(`   Current: ${displayPkg.version}`);
+  
+  // Update display-app
+  displayPkg.version = displayTarget;
+  writeJson(FILES.displayPackage, displayPkg);
+  if (displayApp?.expo) {
+    displayApp.expo.version = displayTarget;
+    writeJson(FILES.displayApp, displayApp);
+  }
+  console.log(`   Updated: ${displayTarget}`);
   
   console.log('\n✅ Done!');
 }
