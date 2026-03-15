@@ -91,7 +91,7 @@ export default function AdminScreen() {
       const data = await api.fetch('/org/users');
       setSubUsers(data.users || []);
     } catch (e) {
-      console.error('Failed to load sub-users:', e);
+      // Silent fail - will show empty list
     } finally {
       setLoadingUsers(false);
     }

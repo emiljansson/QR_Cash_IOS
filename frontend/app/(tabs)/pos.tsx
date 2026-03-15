@@ -44,7 +44,7 @@ export default function POSScreen() {
       const data = await api.getProducts(true);
       setProducts(data);
     } catch (e) {
-      console.error('Failed to load products:', e);
+      // Silent fail - will show empty product list
     } finally {
       setLoading(false);
     }

@@ -128,6 +128,11 @@ function UsersTab() {
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [subUsers, setSubUsers] = useState<{[key: string]: any[]}>({});
   const [loadingSubUsers, setLoadingSubUsers] = useState<string | null>(null);
+  
+  // Link to parent modal state
+  const [linkModal, setLinkModal] = useState<any>(null);
+  const [parentSearch, setParentSearch] = useState('');
+  const [linkingSaving, setLinkingSaving] = useState(false);
 
   // Cross-platform confirm dialog
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
@@ -355,6 +360,42 @@ function UsersTab() {
     });
   };
 
+  // Link user to parent organization
+  const handleLinkToParent = async () => {
+    if (!linkModal || !parentSearch.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Ange en e-postadress eller organisationsnamn');
+      } else {
+        Alert.alert('Fel', 'Ange en e-postadress eller organisationsnamn');
+      }
+      return;
+    }
+    
+    setLinkingSaving(true);
+    try {
+      const result = await adminFetch(`/users/${linkModal.user_id}/set-parent`, {
+        method: 'POST',
+        body: JSON.stringify({ parent_email: parentSearch.trim() }),
+      });
+      if (Platform.OS === 'web') {
+        window.alert(result.message || 'Användare kopplad!');
+      } else {
+        Alert.alert('Klart', result.message || 'Användare kopplad!');
+      }
+      setLinkModal(null);
+      setParentSearch('');
+      loadUsers();
+    } catch (e: any) {
+      if (Platform.OS === 'web') {
+        window.alert(`Fel: ${e.message}`);
+      } else {
+        Alert.alert('Fel', e.message);
+      }
+    } finally {
+      setLinkingSaving(false);
+    }
+  };
+
   if (loading) return <ActivityIndicator size="large" color={C.blue} style={{ marginTop: 40 }} />;
 
   return (
@@ -535,6 +576,16 @@ function UsersTab() {
                   <Ionicons name="keypad-outline" size={14} color={C.yellow} />
                   <Text style={[s.actionChipText, { color: C.yellow }]}>Återställ PIN</Text>
                 </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[s.actionChip, { backgroundColor: 'rgba(34,197,94,0.15)' }]} 
+                  onPress={() => {
+                    setLinkModal(editModal);
+                    setParentSearch('');
+                  }}
+                >
+                  <Ionicons name="link-outline" size={14} color={C.green} />
+                  <Text style={[s.actionChipText, { color: C.green }]}>Koppla till org</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={[s.actionChip, { backgroundColor: 'rgba(239,68,68,0.15)' }]} onPress={handleDeleteFromModal}>
                   <Ionicons name="trash-outline" size={14} color={C.red} />
                   <Text style={[s.actionChipText, { color: C.red }]}>Radera</Text>
@@ -683,6 +734,60 @@ function UsersTab() {
                   <>
                     <Ionicons name="save-outline" size={16} color={C.white} />
                     <Text style={s.primaryBtnText}>Spara</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Link to Parent Organization Modal */}
+      <Modal visible={!!linkModal} transparent animationType="fade">
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[s.modal, !isWide && { width: '92%' }]}>
+            <View style={s.modalHead}>
+              <Text style={s.modalTitle}>Koppla till organisation</Text>
+              <TouchableOpacity onPress={() => { setLinkModal(null); setParentSearch(''); }}>
+                <Ionicons name="close" size={24} color={C.text} />
+              </TouchableOpacity>
+            </View>
+            
+            {linkModal && (
+              <Text style={[s.modalSub, { marginBottom: 16 }]}>
+                Gör {linkModal.organization_name || linkModal.email} till underkonto
+              </Text>
+            )}
+            
+            <View style={{ marginBottom: 16 }}>
+              <Text style={s.fieldLabel}>Huvudkonto (e-post eller organisationsnamn)</Text>
+              <TextInput
+                style={s.fieldInput}
+                value={parentSearch}
+                onChangeText={setParentSearch}
+                placeholder="t.ex. djurö vindö eller email@exempel.se"
+                placeholderTextColor={C.textMut}
+                autoCapitalize="none"
+              />
+            </View>
+            
+            <Text style={{ fontSize: 12, color: C.textMut, marginBottom: 16 }}>
+              Användaren blir ett underkonto och visas under den valda organisationen i kundlistan.
+            </Text>
+
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={s.cancelBtn} onPress={() => { setLinkModal(null); setParentSearch(''); }}>
+                <Text style={s.cancelText}>Avbryt</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.primaryBtn, linkingSaving && { opacity: 0.5 }]}
+                onPress={handleLinkToParent}
+                disabled={linkingSaving}
+              >
+                {linkingSaving ? <ActivityIndicator color={C.white} /> : (
+                  <>
+                    <Ionicons name="link-outline" size={16} color={C.white} />
+                    <Text style={s.primaryBtnText}>Koppla</Text>
                   </>
                 )}
               </TouchableOpacity>

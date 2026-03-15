@@ -83,7 +83,7 @@ export default function App() {
       );
       soundRef.current = sound;
     } catch (e) {
-      console.log('Could not load sound:', e);
+      // Silent fail - sound is not critical
     }
   };
 
@@ -93,7 +93,7 @@ export default function App() {
         await soundRef.current.replayAsync();
       }
     } catch (e) {
-      console.log('Could not play sound:', e);
+      // Silent fail - sound is not critical
     }
   };
 
