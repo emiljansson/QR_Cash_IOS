@@ -118,6 +118,24 @@ async def cleanup_old_orders():
         logger.error(f"Error cleaning up old orders: {e}")
 
 
+async def nightly_cleanup_all_pending():
+    """Delete ALL pending and cancelled orders - runs at 02:00 every night"""
+    from utils.database import get_db
+    db = get_db()
+    
+    try:
+        result = await db.orders.delete_many({
+            "status": {"$in": ["pending", "cancelled"]}
+        })
+        
+        if result.deleted_count > 0:
+            logger.info(f"Nightly cleanup: Deleted {result.deleted_count} pending/cancelled orders")
+        else:
+            logger.info("Nightly cleanup: No pending/cancelled orders to delete")
+    except Exception as e:
+        logger.error(f"Error in nightly cleanup: {e}")
+
+
 @app.on_event("startup")
 async def startup_event():
     """Create database indexes and start background scheduler"""
@@ -151,8 +169,16 @@ async def startup_event():
     
     # Start the scheduler for background tasks
     scheduler.add_job(cleanup_old_orders, 'interval', hours=1, id='cleanup_orders')
+    scheduler.add_job(
+        nightly_cleanup_all_pending, 
+        'cron', 
+        hour=2, 
+        minute=0, 
+        id='nightly_cleanup',
+        timezone='Europe/Stockholm'
+    )
     scheduler.start()
-    logger.info("Background scheduler started - cleanup job runs every hour")
+    logger.info("Background scheduler started - hourly cleanup + nightly cleanup at 02:00")
 
 
 @app.on_event("shutdown")
