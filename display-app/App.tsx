@@ -32,7 +32,9 @@ export default function App() {
   const [generatedCode, setGeneratedCode] = useState('');
   const [generatingCode, setGeneratingCode] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [displayId, setDisplayId] = useState<string | null>(null);
   const [storeName, setStoreName] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Display state
@@ -80,21 +82,28 @@ export default function App() {
     try {
       const saved = await AsyncStorage.getItem('display_pairing');
       if (saved) {
-        const { userId: savedUserId, storeName: savedStoreName } = JSON.parse(saved);
-        // Verify pairing is still valid
-        try {
-          const status = await api.get(`/api/customer-display/pairing-status?display_code=${savedUserId}`);
-          if (status.paired) {
-            setUserId(savedUserId);
-            setStoreName(savedStoreName || status.store_name || '');
-            setIsPaired(true);
-          } else {
-            // Pairing no longer valid, generate new code
+        const { userId: savedUserId, displayId: savedDisplayId, storeName: savedStoreName } = JSON.parse(saved);
+        // Verify pairing is still valid using displayId
+        if (savedDisplayId) {
+          try {
+            const status = await api.get(`/api/customer-display/pairing-status?display_code=${savedDisplayId}`);
+            if (status.paired) {
+              setUserId(status.user_id || savedUserId);
+              setDisplayId(savedDisplayId);
+              setStoreName(status.store_name || savedStoreName || '');
+              setIsPaired(true);
+            } else {
+              // Pairing no longer valid, generate new code
+              await AsyncStorage.removeItem('display_pairing');
+              generateNewCode();
+            }
+          } catch {
+            // Can't verify, generate new code
             await AsyncStorage.removeItem('display_pairing');
             generateNewCode();
           }
-        } catch {
-          // Can't verify, generate new code
+        } else {
+          // Old format without displayId, regenerate
           await AsyncStorage.removeItem('display_pairing');
           generateNewCode();
         }
@@ -114,8 +123,9 @@ export default function App() {
     try {
       const res = await api.post('/api/customer-display/generate-code', {});
       setGeneratedCode(res.code);
+      setDisplayId(res.display_id || null);
       // Start polling for when POS pairs with this code
-      pollForPairing(res.code);
+      pollForPairing(res.code, res.display_id);
     } catch (e) {
       // Generate local fallback code
       const code = String(Math.floor(1000 + Math.random() * 9000));
@@ -126,16 +136,18 @@ export default function App() {
   };
 
   // Poll to check if POS has paired with our code
-  const pollForPairing = (code: string) => {
+  const pollForPairing = (code: string, newDisplayId: string | null) => {
     const checkPairing = async () => {
       try {
         const res = await api.get(`/api/customer-display/check-pairing?code=${code}`);
         if (res.paired && res.user_id) {
           await AsyncStorage.setItem('display_pairing', JSON.stringify({
             userId: res.user_id,
+            displayId: newDisplayId || code,
             storeName: res.store_name || '',
           }));
           setUserId(res.user_id);
+          setDisplayId(newDisplayId || code);
           setStoreName(res.store_name || '');
           setIsPaired(true);
           return true;
@@ -172,26 +184,34 @@ export default function App() {
     await AsyncStorage.removeItem('display_pairing');
     setIsPaired(false);
     setUserId(null);
+    setDisplayId(null);
     setStoreName('');
+    setLogoUrl(null);
     setDisplayData(null);
     generateNewCode();
   };
 
-  // Poll display data when paired
+  // Poll display data when paired + Background validation of pairing
   useEffect(() => {
     if (!isPaired || !userId) return;
+
+    let validationInterval: NodeJS.Timeout | null = null;
 
     const fetchDisplayData = async () => {
       try {
         const data = await api.get(`/api/customer-display?user_id=${userId}`);
         
         // Check if we've been unpaired
-        if (data.unpaired) {
+        if (data.unpaired || data.status === 'unpaired') {
           handleUnpair();
           return;
         }
         
         setDisplayData(data);
+        
+        // Update store name and logo
+        if (data.store_name) setStoreName(data.store_name);
+        if (data.logo_url) setLogoUrl(data.logo_url);
         
         // Play pling when payment completes
         if (data.status === 'payment_complete' && lastStatusRef.current !== 'payment_complete') {
@@ -203,20 +223,34 @@ export default function App() {
         
         lastStatusRef.current = data.status;
       } catch (e) {
-        // Check if unpaired
-        try {
-          const status = await api.get(`/api/customer-display/pairing-status?user_id=${userId}`);
-          if (!status.paired) {
-            handleUnpair();
-          }
-        } catch {}
+        // Error fetching display data - don't disconnect yet
+      }
+    };
+
+    // Background validation of pairing status - runs every 5 seconds
+    const validatePairing = async () => {
+      if (!displayId) return;
+      try {
+        const status = await api.get(`/api/customer-display/pairing-status?display_code=${displayId}`);
+        if (!status.paired) {
+          handleUnpair();
+        }
+      } catch {
+        // Network error - don't disconnect, just skip this check
       }
     };
 
     fetchDisplayData();
-    const interval = setInterval(fetchDisplayData, 2000);
-    return () => clearInterval(interval);
-  }, [isPaired, userId]);
+    const dataInterval = setInterval(fetchDisplayData, 2000);
+    
+    // Start background validation
+    validationInterval = setInterval(validatePairing, 5000);
+
+    return () => {
+      clearInterval(dataInterval);
+      if (validationInterval) clearInterval(validationInterval);
+    };
+  }, [isPaired, userId, displayId]);
 
   // Thank you countdown timer
   useEffect(() => {
@@ -366,7 +400,11 @@ export default function App() {
             </View>
           ) : (
             <View style={styles.idleTop}>
-              <Ionicons name="cart-outline" size={60} color={Colors.textMuted} />
+              {logoUrl ? (
+                <Image source={{ uri: logoUrl }} style={styles.centerLogo} resizeMode="contain" />
+              ) : (
+                <Ionicons name="cart-outline" size={60} color={Colors.textMuted} />
+              )}
               <Text style={styles.idleText}>Väntar på order...</Text>
             </View>
           )}
@@ -580,6 +618,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: Colors.textMuted,
     marginTop: 16,
+  },
+  centerLogo: {
+    width: 120,
+    height: 120,
+    borderRadius: 16,
+    marginBottom: 8,
   },
 
   // QR section
