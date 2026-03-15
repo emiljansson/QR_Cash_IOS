@@ -148,14 +148,16 @@ export default function OrdersScreen() {
               </View>
             )}
             <View style={styles.orderActions}>
-              <TouchableOpacity
-                testID={`send-receipt-${item.id}`}
-                style={styles.receiptBtn}
-                onPress={() => { setReceiptModal(item); setReceiptEmail(item.customer_email || ''); }}
-              >
-                <Ionicons name="mail-outline" size={16} color={Colors.info} />
-                <Text style={styles.receiptBtnText}>Kvitto</Text>
-              </TouchableOpacity>
+              {item.status === 'paid' && (
+                <TouchableOpacity
+                  testID={`send-receipt-${item.id}`}
+                  style={styles.receiptBtn}
+                  onPress={() => { setReceiptModal(item); setReceiptEmail(item.customer_email || ''); }}
+                >
+                  <Ionicons name="mail-outline" size={16} color={Colors.info} />
+                  <Text style={styles.receiptBtnText}>Kvitto</Text>
+                </TouchableOpacity>
+              )}
               {canDelete && (
                 <TouchableOpacity
                   testID={`delete-order-${item.id}`}
