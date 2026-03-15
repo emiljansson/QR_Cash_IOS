@@ -155,7 +155,7 @@ export default function OrdersScreen() {
                   onPress={() => { setReceiptModal(item); setReceiptEmail(item.customer_email || ''); }}
                 >
                   <Ionicons name="mail-outline" size={16} color={Colors.info} />
-                  <Text style={styles.receiptBtnText}>Kvitto</Text>
+                  <Text style={styles.receiptBtnText}>Skicka kvitto till kund</Text>
                 </TouchableOpacity>
               )}
               {canDelete && (
