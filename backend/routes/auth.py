@@ -918,3 +918,117 @@ async def login_with_code(request: Request, response: Response):
         "user": safe_user,
         "session_token": session_token
     }
+
+
+@router.post("/request-password-reset")
+async def request_password_reset(request: Request):
+    """Send password reset email to user"""
+    import os
+    import secrets
+    
+    try:
+        body = await request.json()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    email = body.get("email", "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="E-post krävs")
+    
+    db = get_db()
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    
+    if not user:
+        # Return success even if user not found (security)
+        return {"success": True, "message": "Om e-postadressen finns skickas ett återställningsmail."}
+    
+    # Generate reset token
+    reset_token = secrets.token_urlsafe(32)
+    reset_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {
+            "password_reset_token": reset_token,
+            "password_reset_expires": reset_expires
+        }}
+    )
+    
+    # Send email
+    try:
+        import resend
+        resend.api_key = os.getenv("RESEND_API_KEY")
+        
+        app_name = os.getenv("APP_NAME", "QR-Kassan")
+        frontend_url = os.getenv("FRONTEND_URL", "https://qrkassa.frontproduction.se")
+        sender_email = os.getenv("SENDER_EMAIL", "noreply@qrkassa.frontproduction.se")
+        reset_url = f"{frontend_url}/reset-password?token={reset_token}"
+        
+        if resend.api_key:
+            params = {
+                "from": sender_email,
+                "to": [email],
+                "subject": f"{app_name} - Återställ lösenord",
+                "html": f"""
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #1a1a1a;">Återställ ditt lösenord</h2>
+                    <p>Hej{' ' + user.get('name', '') if user.get('name') else ''},</p>
+                    <p>Vi fick en begäran om att återställa lösenordet för ditt {app_name}-konto.</p>
+                    <div style="margin: 30px 0; text-align: center;">
+                        <a href="{reset_url}" style="display: inline-block; background: #1a1a1a; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                            Återställ lösenord
+                        </a>
+                    </div>
+                    <p style="color: #666; font-size: 14px;">Länken är giltig i 1 timme.</p>
+                    <p style="color: #666; font-size: 14px;">Om du inte begärde detta kan du ignorera detta mail.</p>
+                    <p style="color: #999; font-size: 12px; margin-top: 30px;">Detta mail skickades automatiskt från {app_name}.</p>
+                </div>
+                """
+            }
+            resend.Emails.send(params)
+            logger.info(f"Password reset email sent to {email}")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email: {e}")
+    
+    return {"success": True, "message": "Om e-postadressen finns skickas ett återställningsmail."}
+
+
+@router.post("/reset-password")
+async def reset_password(request: Request):
+    """Reset password using token"""
+    try:
+        body = await request.json()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    token = body.get("token", "").strip()
+    new_password = body.get("password", "").strip()
+    
+    if not token:
+        raise HTTPException(status_code=400, detail="Token krävs")
+    if not new_password or len(new_password) < 4:
+        raise HTTPException(status_code=400, detail="Lösenord måste vara minst 4 tecken")
+    
+    db = get_db()
+    user = await db.users.find_one({
+        "password_reset_token": token,
+        "password_reset_expires": {"$gt": datetime.now(timezone.utc)}
+    }, {"_id": 0})
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Ogiltig eller utgången länk. Begär en ny.")
+    
+    # Hash new password and clear reset token
+    password_hash = hash_password(new_password)
+    
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {
+            "$set": {"password_hash": password_hash},
+            "$unset": {"password_reset_token": "", "password_reset_expires": ""}
+        }
+    )
+    
+    logger.info(f"Password reset successful for {user['email']}")
+    
+    return {"success": True, "message": "Lösenordet har återställts. Du kan nu logga in."}

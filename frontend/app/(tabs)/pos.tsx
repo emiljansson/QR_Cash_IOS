@@ -38,6 +38,7 @@ export default function POSScreen() {
   const [showQR, setShowQR] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<any>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [parkedCount, setParkedCount] = useState(0);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -57,9 +58,19 @@ export default function POSScreen() {
     } catch {}
   }, []);
 
+  const loadParkedCount = useCallback(async () => {
+    try {
+      const carts = await api.getParkedCarts();
+      setParkedCount(Array.isArray(carts) ? carts.length : 0);
+    } catch {
+      setParkedCount(0);
+    }
+  }, []);
+
   useEffect(() => {
     loadProducts();
     loadSettings();
+    loadParkedCount();
   }, []);
 
   // Handle restoring parked cart
@@ -209,6 +220,11 @@ export default function POSScreen() {
         <View style={styles.headerActions}>
           <TouchableOpacity testID="view-parked-carts-btn" onPress={() => router.push('/parked-carts')} style={styles.parkedBtn}>
             <Ionicons name="bookmark-outline" size={18} color={Colors.warning} />
+            {parkedCount > 0 && (
+              <View style={styles.parkedBadge}>
+                <Text style={styles.parkedBadgeText}>{parkedCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
           <TouchableOpacity testID="pair-display-btn" onPress={() => router.push('/pair-display')} style={styles.displayBtn}>
             <Ionicons name="tv-outline" size={18} color={Colors.primary} />
@@ -384,8 +400,14 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   parkedBtn: {
     padding: 8, backgroundColor: 'rgba(245,158,11,0.1)', borderRadius: 8,
-    borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)',
+    borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)', position: 'relative',
   },
+  parkedBadge: {
+    position: 'absolute', top: -4, right: -4, backgroundColor: Colors.warning,
+    borderRadius: 10, minWidth: 18, height: 18, justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 4, borderWidth: 2, borderColor: Colors.background,
+  },
+  parkedBadgeText: { fontSize: 10, fontWeight: '700', color: Colors.white },
   displayBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 12, paddingVertical: 8,

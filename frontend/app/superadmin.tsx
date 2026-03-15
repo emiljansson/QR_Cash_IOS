@@ -360,6 +360,27 @@ function UsersTab() {
     });
   };
 
+  // Clear user data (orders, parked carts) but keep products
+  const handleClearData = () => {
+    if (!editModal) return;
+    confirmAction('Rensa databas', `Radera alla ordrar och parkerade kundvagnar för ${editModal.organization_name}? Produkter och inställningar behålls.`, async () => {
+      try {
+        const result = await adminFetch(`/users/${editModal.user_id}/clear-data`, { method: 'DELETE' });
+        if (Platform.OS === 'web') {
+          window.alert(result.message || 'Data rensad');
+        } else {
+          Alert.alert('Klart', result.message || 'Data rensad');
+        }
+      } catch (e: any) { 
+        if (Platform.OS === 'web') {
+          window.alert(`Fel: ${e.message}`);
+        } else {
+          Alert.alert('Fel', e.message);
+        }
+      }
+    });
+  };
+
   // Link user to parent organization
   const handleLinkToParent = async () => {
     if (!linkModal || !parentSearch.trim()) {
@@ -585,6 +606,10 @@ function UsersTab() {
                 >
                   <Ionicons name="link-outline" size={14} color={C.green} />
                   <Text style={[s.actionChipText, { color: C.green }]}>Koppla till org</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.actionChip, { backgroundColor: 'rgba(168,85,247,0.15)' }]} onPress={handleClearData}>
+                  <Ionicons name="server-outline" size={14} color="#a855f7" />
+                  <Text style={[s.actionChipText, { color: '#a855f7' }]}>Rensa db</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[s.actionChip, { backgroundColor: 'rgba(239,68,68,0.15)' }]} onPress={handleDeleteFromModal}>
                   <Ionicons name="trash-outline" size={14} color={C.red} />

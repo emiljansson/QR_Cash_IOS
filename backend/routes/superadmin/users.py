@@ -445,6 +445,31 @@ async def delete_user(request: Request, user_id: str):
     return {"success": True, "message": "Användare och all data raderad"}
 
 
+@router.delete("/users/{user_id}/clear-data")
+async def clear_user_data(request: Request, user_id: str):
+    """Clear user's transactional data (orders, parked carts) but keep products and settings"""
+    await require_admin(request)
+    db = get_db()
+    
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Only clear transactional data
+    orders_result = await db.orders.delete_many({"user_id": user_id})
+    parked_result = await db.parked_carts.delete_many({"user_id": user_id})
+    shared_result = await db.shared_images.delete_many({"user_id": user_id})
+    
+    total_deleted = orders_result.deleted_count + parked_result.deleted_count + shared_result.deleted_count
+    
+    logger.info(f"Cleared data for user {user_id}: {orders_result.deleted_count} orders, {parked_result.deleted_count} parked carts, {shared_result.deleted_count} shared images")
+    
+    return {
+        "success": True, 
+        "message": f"Rensade {total_deleted} poster ({orders_result.deleted_count} ordrar, {parked_result.deleted_count} parkerade, {shared_result.deleted_count} bilder)"
+    }
+
+
 @router.post("/users/{user_id}/reset-pin")
 async def reset_user_pin(request: Request, user_id: str):
     """Reset user's admin PIN to default (1234)"""
