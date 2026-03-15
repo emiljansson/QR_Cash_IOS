@@ -256,9 +256,9 @@ export default function POSScreen() {
       </View>
 
       {/* Main Content - Split layout for tablet, stacked for mobile */}
-      <View style={[styles.mainContent, isTablet && styles.mainContentTablet]}>
+      <View style={[styles.mainContent, isTablet && styles.mainContentTablet, !isTablet && styles.mainContentMobile]}>
         {/* Product Grid */}
-        <View style={[styles.productSection, isTablet && styles.productSectionTablet]}>
+        <View style={[styles.productSection, isTablet && styles.productSectionTablet, !isTablet && styles.productSectionMobile]}>
           <FlatList
             data={products}
             renderItem={renderProduct}
@@ -278,9 +278,8 @@ export default function POSScreen() {
           />
         </View>
 
-        {/* Cart Panel - Always visible on tablet, shown at bottom on mobile */}
-        {(isTablet || cart.length > 0) && (
-          <View style={[styles.cartSection, isTablet && styles.cartSectionTablet]}>
+        {/* Cart Panel - Always visible */}
+        <View style={[styles.cartSection, isTablet && styles.cartSectionTablet, !isTablet && styles.cartSectionMobile]}>
             <View style={styles.cartHeader}>
               <Text style={styles.cartTitle}>Kundkorg</Text>
               <View style={styles.cartHeaderActions}>
@@ -377,7 +376,6 @@ export default function POSScreen() {
               </View>
             )}
           </View>
-        )}
       </View>
 
       {/* QR Payment Modal */}
@@ -462,8 +460,10 @@ const styles = StyleSheet.create({
   // Main content layout
   mainContent: { flex: 1 },
   mainContentTablet: { flexDirection: 'row' },
+  mainContentMobile: { flexDirection: 'column' },
   productSection: { flex: 1 },
   productSectionTablet: { flex: 2 }, // 60% av bredden
+  productSectionMobile: { flex: 1 }, // 50% av höjden på mobil
   productGrid: { padding: 8 },
   productRow: { gap: 8, paddingHorizontal: 8 },
   productCard: {
@@ -480,12 +480,15 @@ const styles = StyleSheet.create({
   // Cart section
   cartSection: {
     backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border,
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, maxHeight: 320,
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16,
   },
   cartSectionTablet: {
-    flex: 1, maxHeight: 'auto', height: '100%',
+    flex: 1, height: '100%',
     borderTopWidth: 0, borderLeftWidth: 1, borderLeftColor: Colors.border,
     paddingHorizontal: 24, paddingTop: 20,
+  },
+  cartSectionMobile: {
+    flex: 1, // Tar halva skärmen på mobil
   },
   cartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   cartTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
