@@ -308,8 +308,8 @@ export default function POSScreen() {
 
             {cart.length > 0 ? (
               <>
-                <View style={{ minHeight: Math.min(cart.length * 44, 200), maxHeight: 200 }}>
-                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                <View style={isTablet ? { flex: 1 } : { minHeight: Math.min(cart.length * 44, 200), maxHeight: 200 }}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
                     {cart.map(item => (
                       <View key={item.product_id} style={styles.cartItem}>
                         <View style={styles.cartItemInfo}>
