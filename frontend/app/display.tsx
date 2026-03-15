@@ -91,6 +91,7 @@ export default function CustomerDisplayScreen() {
   const [emailSent, setEmailSent] = useState(false);
   const [thankYouCountdown, setThankYouCountdown] = useState(20);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownStartedRef = useRef(false); // Track if countdown has started
   
   // Cache last data hash to avoid unnecessary re-renders
   const lastDataHashRef = useRef<string>('');
@@ -288,27 +289,35 @@ export default function CustomerDisplayScreen() {
         if (data.status === 'paid' && state !== 'paired_paid') {
           setState('paired_paid');
           setPaidAnimation(true);
-          setThankYouCountdown(20);
-          // Start countdown timer
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          countdownRef.current = setInterval(() => {
-            setThankYouCountdown(prev => {
-              if (prev <= 1) {
-                if (countdownRef.current) clearInterval(countdownRef.current);
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
+          
+          // Only start countdown once
+          if (!countdownStartedRef.current) {
+            countdownStartedRef.current = true;
+            setThankYouCountdown(20);
+            
+            // Start countdown timer
+            if (countdownRef.current) clearInterval(countdownRef.current);
+            countdownRef.current = setInterval(() => {
+              setThankYouCountdown(prev => {
+                if (prev <= 1) {
+                  if (countdownRef.current) clearInterval(countdownRef.current);
+                  return 0;
+                }
+                return prev - 1;
+              });
+            }, 1000);
+          }
         } else if (data.status === 'waiting' && state !== 'paired_waiting') {
           setState('paired_waiting');
           setShowEmailModal(false);
           setEmailSent(false);
+          countdownStartedRef.current = false; // Reset for next payment
         } else if (data.status === 'idle' && state !== 'paired_idle') {
           setState('paired_idle');
           setShowEmailModal(false);
           setEmailSent(false);
           setPaidAnimation(false);
+          countdownStartedRef.current = false; // Reset for next payment
         }
       } catch {}
     };

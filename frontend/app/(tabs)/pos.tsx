@@ -32,6 +32,8 @@ export default function POSScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768; // iPad/tablet breakpoint
+  const isDesktop = width >= 1024; // Desktop breakpoint
+  const numColumns = isDesktop ? 4 : (isTablet ? 3 : 3); // 4 cols desktop, 3 cols tablet/mobile
   const params = useLocalSearchParams<{ restoreCart?: string; restoreTotal?: string; restoreCartId?: string }>();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -248,8 +250,8 @@ export default function POSScreen() {
             data={products}
             renderItem={renderProduct}
             keyExtractor={item => item.id}
-            numColumns={isTablet ? 2 : 3}
-            key={isTablet ? 'tablet' : 'mobile'}
+            numColumns={numColumns}
+            key={`grid-${numColumns}`}
             contentContainerStyle={styles.productGrid}
             columnWrapperStyle={styles.productRow}
             showsVerticalScrollIndicator={false}
