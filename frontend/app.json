@@ -1,15 +1,18 @@
 {
   "expo": {
     "name": "QR-Kassan",
-    "slug": "frontend",
-    "version": "2.0.169",
+    "slug": "qr-kassan",
+    "version": "2.0.170",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "qrkassan",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "owner": "emja",
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.emja.qrkassan",
+      "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "Fotografera produktbilder för kassan",
         "NSPhotoLibraryUsageDescription": "Välj produktbilder från galleriet"
@@ -20,6 +23,8 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
       },
+      "package": "com.emja.qrkassan",
+      "versionCode": 1,
       "edgeToEdgeEnabled": true,
       "permissions": [
         "android.permission.CAMERA",
@@ -53,6 +58,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
     }
   }
 }
