@@ -654,8 +654,11 @@ export default function CustomerDisplayScreen() {
       {/* Header */}
       <View style={styles.displayHeader}>
         <View style={styles.storeInfo}>
-          <Ionicons name="storefront" size={24} color={C.green} />
-          <Text style={styles.storeNameText}>{storeName || 'Butik'}</Text>
+          <Image 
+            source={require('../../assets/images/icons/icon-48.png')} 
+            style={styles.headerLogo} 
+          />
+          <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
         </View>
         <View style={styles.connectedBadge}>
           <View style={styles.connectedDot} />
@@ -831,6 +834,7 @@ const styles = StyleSheet.create({
   connectedDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: C.green },
   connectedText: { fontSize: 12, color: C.green, fontWeight: '500' },
   storeLogoDisplay: { width: 32, height: 32, borderRadius: 6 },
+  headerLogo: { width: 36, height: 36, borderRadius: 8 },
 
   // Idle
   idleContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
