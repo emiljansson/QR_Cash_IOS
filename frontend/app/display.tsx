@@ -587,13 +587,12 @@ const styles = StyleSheet.create({
   // Waiting - Side by side layout
   waitingContainer: { flex: 1, flexDirection: 'row' },
   
-  // Left side - Cart + Total (smaller)
+  // Left side - Cart + Total (1/3 of width)
   leftSide: { 
     flex: 1, 
     padding: 24, 
     borderRightWidth: 1, 
     borderRightColor: C.border,
-    maxWidth: 320, // Fixed smaller width for cart
   },
   itemsTitle: { fontSize: 20, fontWeight: '600', color: C.text, marginBottom: 12 },
   itemsList: { flex: 1 },
@@ -620,7 +619,7 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 15, fontWeight: '500', color: C.textSec, marginBottom: 4 },
   totalAmount: { fontSize: 36, fontWeight: '700', color: C.green },
 
-  // Right side - QR code maximized (larger)
+  // Right side - QR code maximized (2/3 of width)
   rightSide: { 
     flex: 2, 
     justifyContent: 'center', 
