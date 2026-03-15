@@ -308,7 +308,7 @@ export default function POSScreen() {
 
             {cart.length > 0 ? (
               <>
-                <View style={{ minHeight: Math.min(cart.length * 56, 200), maxHeight: 200 }}>
+                <View style={{ minHeight: Math.min(cart.length * 44, 200), maxHeight: 200 }}>
                   <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false}>
                     {cart.map(item => (
                       <View key={item.product_id} style={styles.cartItem}>
@@ -502,18 +502,18 @@ const styles = StyleSheet.create({
   cartItems: { flex: 1 },
   cartItem: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   cartItemInfo: { flex: 1 },
-  cartItemName: { fontSize: 16, color: Colors.textPrimary, fontWeight: '500' },
-  cartItemPrice: { fontSize: 15, color: Colors.textSecondary },
-  cartItemControls: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cartItemName: { fontSize: 14, color: Colors.textPrimary, fontWeight: '500' },
+  cartItemPrice: { fontSize: 13, color: Colors.textSecondary },
+  cartItemControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   qtyBtn: {
-    width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.surfaceHighlight,
+    width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.surfaceHighlight,
     justifyContent: 'center', alignItems: 'center',
   },
-  qtyText: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary, minWidth: 24, textAlign: 'center' },
-  removeBtn: { padding: 6, marginLeft: 4 },
+  qtyText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, minWidth: 20, textAlign: 'center' },
+  removeBtn: { padding: 4, marginLeft: 2 },
   cartFooter: { marginTop: 'auto' },
   cartTotal: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
