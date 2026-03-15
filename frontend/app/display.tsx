@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, SafeAreaView,
   Dimensions, ScrollView, TouchableOpacity, Platform, useWindowDimensions, Image,
-  TextInput,
+  TextInput, Modal, KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
@@ -467,7 +467,7 @@ export default function CustomerDisplayScreen() {
           <Text style={styles.thankYouAmount}>{total.toFixed(0)} kr</Text>
           <Text style={styles.thankYouSubtitle}>Betalningen är genomförd</Text>
 
-          {/* Email receipt section */}
+          {/* Email receipt button - only show if modal not open and email not sent */}
           {!showEmailModal && !emailSent && (
             <TouchableOpacity 
               style={styles.emailReceiptBtn}
@@ -476,39 +476,6 @@ export default function CustomerDisplayScreen() {
               <Ionicons name="mail-outline" size={24} color={C.green} />
               <Text style={styles.emailReceiptBtnText}>Få kvitto via e-post</Text>
             </TouchableOpacity>
-          )}
-
-          {/* Email input modal */}
-          {showEmailModal && !emailSent && (
-            <View style={styles.emailInputContainer}>
-              <Text style={styles.emailInputLabel}>Ange din e-postadress</Text>
-              <View style={styles.emailInputRow}>
-                <TextInput
-                  style={styles.emailInput}
-                  placeholder="din@email.se"
-                  placeholderTextColor={C.textMut}
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity 
-                  style={[styles.emailSendBtn, sendingEmail && styles.emailSendBtnDisabled]}
-                  onPress={handleSendReceipt}
-                  disabled={sendingEmail || !email.includes('@')}
-                >
-                  {sendingEmail ? (
-                    <ActivityIndicator size="small" color={C.white} />
-                  ) : (
-                    <Ionicons name="send" size={20} color={C.white} />
-                  )}
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity onPress={() => setShowEmailModal(false)}>
-                <Text style={styles.emailCancelText}>Nej tack</Text>
-              </TouchableOpacity>
-            </View>
           )}
 
           {/* Email sent confirmation */}
@@ -524,6 +491,63 @@ export default function CustomerDisplayScreen() {
             Återställs om {thankYouCountdown}s
           </Text>
         </View>
+
+        {/* Email Modal - Stays open independently */}
+        <Modal
+          visible={showEmailModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowEmailModal(false)}
+        >
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.emailModalOverlay}
+          >
+            <View style={styles.emailModalContent}>
+              <TouchableOpacity 
+                style={styles.emailModalClose}
+                onPress={() => setShowEmailModal(false)}
+              >
+                <Ionicons name="close" size={24} color={C.textMut} />
+              </TouchableOpacity>
+
+              <Ionicons name="mail-outline" size={48} color={C.green} />
+              <Text style={styles.emailModalTitle}>Få ditt kvitto</Text>
+              <Text style={styles.emailModalSubtitle}>Ange din e-postadress</Text>
+              
+              <TextInput
+                style={styles.emailModalInput}
+                placeholder="din@email.se"
+                placeholderTextColor={C.textMut}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoFocus={true}
+              />
+              
+              <TouchableOpacity 
+                style={[styles.emailModalSendBtn, (!email.includes('@') || sendingEmail) && styles.emailModalSendBtnDisabled]}
+                onPress={handleSendReceipt}
+                disabled={sendingEmail || !email.includes('@')}
+              >
+                {sendingEmail ? (
+                  <ActivityIndicator size="small" color={C.white} />
+                ) : (
+                  <>
+                    <Ionicons name="send" size={20} color={C.white} />
+                    <Text style={styles.emailModalSendBtnText}>Skicka kvitto</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => setShowEmailModal(false)}>
+                <Text style={styles.emailModalCancelText}>Nej tack</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -869,21 +893,32 @@ const styles = StyleSheet.create({
   },
   emailReceiptBtnText: { fontSize: 18, fontWeight: '600', color: C.green },
 
-  // Email input container
-  emailInputContainer: { alignItems: 'center', marginTop: 8 },
-  emailInputLabel: { fontSize: 16, color: C.textSec, marginBottom: 12 },
-  emailInputRow: { flexDirection: 'row', gap: 12 },
-  emailInput: {
-    width: 280, height: 52, backgroundColor: C.surface, borderRadius: 12,
-    paddingHorizontal: 16, fontSize: 16, color: C.text,
-    borderWidth: 1, borderColor: C.border,
-  },
-  emailSendBtn: {
-    width: 52, height: 52, backgroundColor: C.green, borderRadius: 12,
+  // Email Modal
+  emailModalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center', alignItems: 'center',
   },
-  emailSendBtnDisabled: { opacity: 0.5 },
-  emailCancelText: { fontSize: 14, color: C.textMut, marginTop: 16 },
+  emailModalContent: {
+    backgroundColor: C.surface, borderRadius: 24, padding: 32,
+    width: '90%', maxWidth: 400, alignItems: 'center',
+  },
+  emailModalClose: {
+    position: 'absolute', top: 16, right: 16, padding: 8,
+  },
+  emailModalTitle: { fontSize: 24, fontWeight: '700', color: C.text, marginTop: 16 },
+  emailModalSubtitle: { fontSize: 16, color: C.textSec, marginTop: 8, marginBottom: 24 },
+  emailModalInput: {
+    width: '100%', height: 56, backgroundColor: C.bg, borderRadius: 12,
+    paddingHorizontal: 20, fontSize: 18, color: C.text,
+    borderWidth: 2, borderColor: C.border, marginBottom: 16,
+  },
+  emailModalSendBtn: {
+    width: '100%', height: 56, backgroundColor: C.green, borderRadius: 12,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8,
+  },
+  emailModalSendBtnDisabled: { opacity: 0.5 },
+  emailModalSendBtnText: { fontSize: 18, fontWeight: '600', color: C.white },
+  emailModalCancelText: { fontSize: 16, color: C.textMut, marginTop: 20 },
 
   // Email sent confirmation
   emailSentContainer: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
