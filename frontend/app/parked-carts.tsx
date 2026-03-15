@@ -85,16 +85,6 @@ export default function ParkedCartsScreen() {
     });
   };
 
-  const handleSendToDisplay = async (cart: ParkedCart) => {
-    try {
-      const result = await api.sendParkedCartToDisplay(cart.id);
-      Alert.alert('Skickat', result.message || 'Skickad till kundskärm');
-      loadCarts();
-    } catch (e: any) {
-      Alert.alert('Fel', e.message);
-    }
-  };
-
   const formatDate = (d: string) => {
     try {
       const date = new Date(d);
@@ -176,10 +166,6 @@ export default function ParkedCartsScreen() {
                     <TouchableOpacity testID={`restore-cart-${item.id}`} style={styles.restoreBtn} onPress={() => handleRestore(item)}>
                       <Ionicons name="arrow-undo" size={16} color={Colors.primary} />
                       <Text style={styles.restoreBtnText}>Återställ</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity testID={`send-display-${item.id}`} style={styles.sendDisplayBtn} onPress={() => handleSendToDisplay(item)}>
-                      <Ionicons name="tv-outline" size={16} color={Colors.info} />
-                      <Text style={styles.sendDisplayBtnText}>Till skärm</Text>
                     </TouchableOpacity>
                     <TouchableOpacity testID={`delete-cart-${item.id}`} style={styles.deleteBtn} onPress={() => handleDelete(item)}>
                       <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
