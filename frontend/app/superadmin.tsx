@@ -973,7 +973,7 @@ function SettingsTab() {
             </View>
           </View>
         ))}
-        <TouchableOpacity testID="save-system-settings-btn" style={[s.primaryBtn, saving && { opacity: 0.5 }]} onPress={handleSave} disabled={saving}>
+        <TouchableOpacity testID="save-system-settings-btn" style={[s.primaryBtn, { flex: 0, marginTop: 8 }, saving && { opacity: 0.5 }]} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator color={C.white} /> : (
             <>
               <Ionicons name="save-outline" size={18} color={C.white} />
