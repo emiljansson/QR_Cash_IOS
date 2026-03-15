@@ -623,6 +623,53 @@ async def toggle_guest1(request: Request):
 
 
 
+@router.post("/users/{user_id}/set-parent")
+async def set_user_parent(request: Request, user_id: str):
+    """Set or change a user's parent (make them a sub-user)"""
+    await require_admin(request)
+    db = get_db()
+    
+    body = await request.json()
+    parent_email = body.get("parent_email")
+    
+    if not parent_email:
+        raise HTTPException(status_code=400, detail="parent_email krävs")
+    
+    # Find the user to convert
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Användare hittades inte")
+    
+    # Find the parent user
+    parent = await db.users.find_one({"email": parent_email.lower()}, {"_id": 0})
+    if not parent:
+        # Try organization name
+        parent = await db.users.find_one({"organization_name": {"$regex": parent_email, "$options": "i"}}, {"_id": 0})
+    
+    if not parent:
+        raise HTTPException(status_code=404, detail=f"Huvudkonto med '{parent_email}' hittades inte")
+    
+    if parent.get("parent_user_id"):
+        raise HTTPException(status_code=400, detail="Kan inte sätta ett underkonto som huvudkonto")
+    
+    # Update user to be sub-user of parent
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "parent_user_id": parent["user_id"],
+            "role": "user",
+            "organization_name": parent.get("organization_name", user.get("organization_name"))
+        }}
+    )
+    
+    logger.info(f"User {user_id} ({user.get('email')}) set as sub-user of {parent['user_id']} ({parent.get('email')})")
+    
+    return {
+        "success": True,
+        "message": f"{user.get('email')} är nu underkonto till {parent.get('organization_name')}"
+    }
+
+
 @router.post("/migrate-images-to-cloudinary")
 async def migrate_images_to_cloudinary(request: Request):
     """Migrate all product images from local URLs to Cloudinary URLs"""

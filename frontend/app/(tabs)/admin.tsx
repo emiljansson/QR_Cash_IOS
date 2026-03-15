@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, TextInput,
   ActivityIndicator, Alert, Modal, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform,
-  useWindowDimensions,
+  useWindowDimensions, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 
@@ -52,6 +53,10 @@ export default function AdminScreen() {
   const [showAddUser, setShowAddUser] = useState(false);
   const [userForm, setUserForm] = useState({ first_name: '', last_name: '', email: '' });
   const [savingUser, setSavingUser] = useState(false);
+  
+  // Image upload state
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [productImage, setProductImage] = useState<string | null>(null);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -208,6 +213,127 @@ export default function AdminScreen() {
     );
   };
 
+  // Image picker functions
+  const requestImagePermissions = async () => {
+    if (Platform.OS !== 'web') {
+      const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+      const { status: libraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (cameraStatus !== 'granted' || libraryStatus !== 'granted') {
+        Alert.alert('Behörighet krävs', 'Vi behöver tillgång till kamera och bildgalleri för att ladda upp produktbilder.');
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const uploadImageToCloudinary = async (uri: string): Promise<string | null> => {
+    try {
+      setUploadingImage(true);
+      
+      // Read the image as base64
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          try {
+            const base64 = reader.result as string;
+            
+            // Upload to Cloudinary via backend
+            const result = await api.fetch('/cloudinary/upload', {
+              method: 'POST',
+              body: JSON.stringify({
+                image: base64,
+                folder: 'products'
+              })
+            });
+            
+            if (result.success && result.url) {
+              resolve(result.url);
+            } else {
+              reject(new Error('Upload failed'));
+            }
+          } catch (e) {
+            reject(e);
+          }
+        };
+        reader.onerror = () => reject(new Error('Failed to read image'));
+        reader.readAsDataURL(blob);
+      });
+    } catch (e: any) {
+      Alert.alert('Uppladdningsfel', e.message || 'Kunde inte ladda upp bilden');
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const pickImageFromGallery = async () => {
+    const hasPermission = await requestImagePermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setProductImage(result.assets[0].uri);
+        const cloudinaryUrl = await uploadImageToCloudinary(result.assets[0].uri);
+        if (cloudinaryUrl) {
+          setProductForm(prev => ({ ...prev, image_url: cloudinaryUrl }));
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Fel', 'Kunde inte välja bild');
+    }
+  };
+
+  const takePhotoWithCamera = async () => {
+    const hasPermission = await requestImagePermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setProductImage(result.assets[0].uri);
+        const cloudinaryUrl = await uploadImageToCloudinary(result.assets[0].uri);
+        if (cloudinaryUrl) {
+          setProductForm(prev => ({ ...prev, image_url: cloudinaryUrl }));
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Fel', 'Kunde inte ta foto');
+    }
+  };
+
+  const showImagePicker = () => {
+    if (Platform.OS === 'web') {
+      // On web, directly open gallery
+      pickImageFromGallery();
+    } else {
+      Alert.alert(
+        'Välj bild',
+        'Hur vill du lägga till en produktbild?',
+        [
+          { text: 'Avbryt', style: 'cancel' },
+          { text: 'Ta foto', onPress: takePhotoWithCamera },
+          { text: 'Välj från galleri', onPress: pickImageFromGallery },
+        ]
+      );
+    }
+  };
+
   const handleSaveProduct = async () => {
     if (!productForm.name || !productForm.price) {
       Alert.alert('Fel', 'Namn och pris krävs');
@@ -334,6 +460,7 @@ export default function AdminScreen() {
               style={styles.addButton}
               onPress={() => {
                 setProductForm({ name: '', price: '', image_url: '', category: '' });
+                setProductImage(null);
                 setEditProduct(null);
                 setShowAddProduct(true);
               }}
@@ -368,6 +495,7 @@ export default function AdminScreen() {
                           image_url: item.image_url || '',
                           category: item.category || '',
                         });
+                        setProductImage(item.image_url || null);
                         setShowAddProduct(true);
                       }}
                     >
@@ -551,45 +679,102 @@ export default function AdminScreen() {
       {/* Add/Edit Product Modal */}
       <Modal visible={showAddProduct} animationType="slide" transparent>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.modal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editProduct ? 'Redigera produkt' : 'Ny produkt'}</Text>
-              <TouchableOpacity testID="close-modal-btn" onPress={() => { setShowAddProduct(false); setEditProduct(null); }}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+            <View style={styles.modal}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editProduct ? 'Redigera produkt' : 'Ny produkt'}</Text>
+                <TouchableOpacity testID="close-modal-btn" onPress={() => { 
+                  setShowAddProduct(false); 
+                  setEditProduct(null); 
+                  setProductImage(null);
+                }}>
+                  <Ionicons name="close" size={24} color={Colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Image picker section */}
+              <View style={styles.modalField}>
+                <Text style={styles.modalLabel}>Produktbild</Text>
+                <View style={styles.imagePickerContainer}>
+                  {(productImage || productForm.image_url) ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image 
+                        source={{ uri: productImage || productForm.image_url }} 
+                        style={styles.imagePreview}
+                      />
+                      <TouchableOpacity 
+                        style={styles.removeImageBtn}
+                        onPress={() => {
+                          setProductImage(null);
+                          setProductForm(prev => ({ ...prev, image_url: '' }));
+                        }}
+                      >
+                        <Ionicons name="close-circle" size={24} color={Colors.destructive} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity 
+                      style={styles.imagePickerBtn}
+                      onPress={showImagePicker}
+                      disabled={uploadingImage}
+                    >
+                      {uploadingImage ? (
+                        <ActivityIndicator color={Colors.primary} />
+                      ) : (
+                        <>
+                          <Ionicons name="camera-outline" size={32} color={Colors.textMuted} />
+                          <Text style={styles.imagePickerText}>
+                            {Platform.OS === 'web' ? 'Välj bild' : 'Ta foto eller välj från galleri'}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  
+                  {/* Change image button when image exists */}
+                  {(productImage || productForm.image_url) && !uploadingImage && (
+                    <TouchableOpacity 
+                      style={styles.changeImageBtn}
+                      onPress={showImagePicker}
+                    >
+                      <Ionicons name="camera-outline" size={16} color={Colors.primary} />
+                      <Text style={styles.changeImageText}>Byt bild</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {[
+                { key: 'name', label: 'Produktnamn *', placeholder: 'T.ex. Kaffe' },
+                { key: 'price', label: 'Pris (kr) *', placeholder: '25', keyboard: 'numeric' as const },
+                { key: 'category', label: 'Kategori', placeholder: 'T.ex. Dryck' },
+              ].map(f => (
+                <View key={f.key} style={styles.modalField}>
+                  <Text style={styles.modalLabel}>{f.label}</Text>
+                  <TextInput
+                    testID={`product-form-${f.key}`}
+                    style={styles.modalInput}
+                    value={productForm[f.key as keyof typeof productForm]}
+                    onChangeText={(v) => setProductForm(prev => ({ ...prev, [f.key]: v }))}
+                    placeholder={f.placeholder}
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType={f.keyboard || 'default'}
+                  />
+                </View>
+              ))}
+
+              <TouchableOpacity
+                testID="save-product-btn"
+                style={[styles.saveButton, (saving || uploadingImage) && { opacity: 0.6 }]}
+                onPress={handleSaveProduct}
+                disabled={saving || uploadingImage}
+              >
+                {saving ? <ActivityIndicator color={Colors.white} /> : (
+                  <Text style={styles.saveButtonText}>{editProduct ? 'Uppdatera' : 'Skapa produkt'}</Text>
+                )}
               </TouchableOpacity>
             </View>
-
-            {[
-              { key: 'name', label: 'Produktnamn *', placeholder: 'T.ex. Kaffe' },
-              { key: 'price', label: 'Pris (kr) *', placeholder: '25', keyboard: 'numeric' as const },
-              { key: 'category', label: 'Kategori', placeholder: 'T.ex. Dryck' },
-              { key: 'image_url', label: 'Bild-URL', placeholder: 'https://...' },
-            ].map(f => (
-              <View key={f.key} style={styles.modalField}>
-                <Text style={styles.modalLabel}>{f.label}</Text>
-                <TextInput
-                  testID={`product-form-${f.key}`}
-                  style={styles.modalInput}
-                  value={productForm[f.key as keyof typeof productForm]}
-                  onChangeText={(v) => setProductForm(prev => ({ ...prev, [f.key]: v }))}
-                  placeholder={f.placeholder}
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType={f.keyboard || 'default'}
-                />
-              </View>
-            ))}
-
-            <TouchableOpacity
-              testID="save-product-btn"
-              style={[styles.saveButton, saving && { opacity: 0.6 }]}
-              onPress={handleSaveProduct}
-              disabled={saving}
-            >
-              {saving ? <ActivityIndicator color={Colors.white} /> : (
-                <Text style={styles.saveButtonText}>{editProduct ? 'Uppdatera' : 'Skapa produkt'}</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -784,4 +969,20 @@ const styles = StyleSheet.create({
   },
   userActionText: { fontSize: 12, fontWeight: '500' },
   emptySubtext: { fontSize: 14, color: Colors.textMuted, marginTop: 8 },
+  // Image picker styles
+  imagePickerContainer: { alignItems: 'center' },
+  imagePickerBtn: {
+    width: 150, height: 150, borderRadius: 12, borderWidth: 2, borderColor: Colors.border,
+    borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  imagePickerText: { color: Colors.textMuted, fontSize: 12, textAlign: 'center', marginTop: 8, paddingHorizontal: 8 },
+  imagePreviewContainer: { position: 'relative' },
+  imagePreview: { width: 150, height: 150, borderRadius: 12 },
+  removeImageBtn: { position: 'absolute', top: -8, right: -8 },
+  changeImageBtn: { 
+    flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, 
+    paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.surfaceHighlight, borderRadius: 8,
+  },
+  changeImageText: { color: Colors.primary, fontSize: 13, fontWeight: '500' },
 });
