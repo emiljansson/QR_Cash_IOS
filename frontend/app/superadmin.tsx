@@ -129,6 +129,20 @@ function UsersTab() {
   const [subUsers, setSubUsers] = useState<{[key: string]: any[]}>({});
   const [loadingSubUsers, setLoadingSubUsers] = useState<string | null>(null);
 
+  // Cross-platform confirm dialog
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${title}\n\n${message}`)) {
+        onConfirm();
+      }
+    } else {
+      Alert.alert(title, message, [
+        { text: 'Avbryt' },
+        { text: 'OK', onPress: onConfirm }
+      ]);
+    }
+  };
+
   const loadUsers = useCallback(async () => {
     try {
       const data = await adminFetch('/users');
@@ -257,28 +271,41 @@ function UsersTab() {
   // Regenerate login code
   const handleRegenerateCode = async () => {
     if (!editModal) return;
-    Alert.alert('Byt inloggningskod', 'Skapa en ny inloggningskod? Den gamla slutar fungera.', [
-      { text: 'Avbryt' },
-      {
-        text: 'Byt kod', onPress: async () => {
-          try {
-            const data = await adminFetch(`/users/${editModal.user_id}/regenerate-login-code`, { method: 'POST' });
-            setEditForm((p: any) => ({ ...p, login_code: data.login_code }));
-            Alert.alert('Klart', `Ny kod: ${data.login_code}`);
-          } catch (e: any) { Alert.alert('Fel', e.message); }
+    confirmAction('Byt inloggningskod', 'Skapa en ny inloggningskod? Den gamla slutar fungera.', async () => {
+      try {
+        const data = await adminFetch(`/users/${editModal.user_id}/regenerate-login-code`, { method: 'POST' });
+        setEditForm((p: any) => ({ ...p, login_code: data.login_code }));
+        if (Platform.OS === 'web') {
+          window.alert(`Ny kod: ${data.login_code}`);
+        } else {
+          Alert.alert('Klart', `Ny kod: ${data.login_code}`);
+        }
+      } catch (e: any) { 
+        if (Platform.OS === 'web') {
+          window.alert(`Fel: ${e.message}`);
+        } else {
+          Alert.alert('Fel', e.message); 
         }
       }
-    ]);
+    });
   };
 
   // Change password
   const handleChangePassword = async () => {
     if (!editModal || !newPassword) {
-      Alert.alert('Fel', 'Ange ett nytt lösenord');
+      if (Platform.OS === 'web') {
+        window.alert('Ange ett nytt lösenord');
+      } else {
+        Alert.alert('Fel', 'Ange ett nytt lösenord');
+      }
       return;
     }
     if (newPassword.length < 4) {
-      Alert.alert('Fel', 'Lösenordet måste vara minst 4 tecken');
+      if (Platform.OS === 'web') {
+        window.alert('Lösenordet måste vara minst 4 tecken');
+      } else {
+        Alert.alert('Fel', 'Lösenordet måste vara minst 4 tecken');
+      }
       return;
     }
     try {
@@ -286,43 +313,63 @@ function UsersTab() {
         method: 'POST',
         body: JSON.stringify({ password: newPassword }),
       });
-      Alert.alert('Klart', 'Lösenord ändrat!');
+      if (Platform.OS === 'web') {
+        window.alert('Lösenord ändrat!');
+      } else {
+        Alert.alert('Klart', 'Lösenord ändrat!');
+      }
       setNewPassword('');
-    } catch (e: any) { Alert.alert('Fel', e.message); }
+    } catch (e: any) { 
+      if (Platform.OS === 'web') {
+        window.alert(`Fel: ${e.message}`);
+      } else {
+        Alert.alert('Fel', e.message);
+      }
+    }
   };
 
   // Change PIN
   const handleChangePin = async () => {
     if (!editModal) return;
-    Alert.alert('Återställ PIN', 'Återställ PIN-koden till 1234?', [
-      { text: 'Avbryt' },
-      {
-        text: 'Återställ', onPress: async () => {
-          try {
-            await adminFetch(`/users/${editModal.user_id}/reset-pin`, { method: 'POST' });
-            Alert.alert('Klart', 'PIN återställd till 1234');
-          } catch (e: any) { Alert.alert('Fel', e.message); }
+    confirmAction('Återställ PIN', 'Återställ PIN-koden till 1234?', async () => {
+      try {
+        await adminFetch(`/users/${editModal.user_id}/reset-pin`, { method: 'POST' });
+        if (Platform.OS === 'web') {
+          window.alert('PIN återställd till 1234');
+        } else {
+          Alert.alert('Klart', 'PIN återställd till 1234');
+        }
+      } catch (e: any) { 
+        if (Platform.OS === 'web') {
+          window.alert(`Fel: ${e.message}`);
+        } else {
+          Alert.alert('Fel', e.message);
         }
       }
-    ]);
+    });
   };
 
   // Delete account
   const handleDeleteFromModal = () => {
     if (!editModal) return;
-    Alert.alert('Radera kund', `Radera ${editModal.organization_name} och ALL data? Detta kan inte ångras.`, [
-      { text: 'Avbryt' },
-      {
-        text: 'Radera', style: 'destructive', onPress: async () => {
-          try {
-            await adminFetch(`/users/${editModal.user_id}`, { method: 'DELETE' });
-            setEditModal(null);
-            loadUsers();
-            Alert.alert('Klart', 'Kund raderad');
-          } catch (e: any) { Alert.alert('Fel', e.message); }
+    confirmAction('Radera kund', `Radera ${editModal.organization_name} och ALL data? Detta kan inte ångras.`, async () => {
+      try {
+        await adminFetch(`/users/${editModal.user_id}`, { method: 'DELETE' });
+        setEditModal(null);
+        loadUsers();
+        if (Platform.OS === 'web') {
+          window.alert('Kund raderad');
+        } else {
+          Alert.alert('Klart', 'Kund raderad');
+        }
+      } catch (e: any) { 
+        if (Platform.OS === 'web') {
+          window.alert(`Fel: ${e.message}`);
+        } else {
+          Alert.alert('Fel', e.message);
         }
       }
-    ]);
+    });
   };
 
   if (loading) return <ActivityIndicator size="large" color={C.blue} style={{ marginTop: 40 }} />;
