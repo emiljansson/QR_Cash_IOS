@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
+import { useAudioPlayer } from 'expo-audio';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Colors } from './src/utils/colors';
@@ -43,8 +43,8 @@ export default function App() {
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
 
-  // Sound
-  const soundRef = useRef<Audio.Sound | null>(null);
+  // Sound - using new expo-audio hook
+  const player = useAudioPlayer(require('./assets/pling.mp3'));
   const lastStatusRef = useRef<DisplayStatus>('idle');
 
   // Keep screen awake
@@ -63,35 +63,12 @@ export default function App() {
   // Load saved pairing on mount
   useEffect(() => {
     loadSavedPairing();
-    loadSound();
-    return () => {
-      if (soundRef.current) {
-        soundRef.current.unloadAsync();
-      }
-    };
   }, []);
 
-  const loadSound = async () => {
+  const playPling = () => {
     try {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
-      const { sound } = await Audio.Sound.createAsync(
-        require('./assets/pling.mp3'),
-        { shouldPlay: false }
-      );
-      soundRef.current = sound;
-    } catch (e) {
-      // Silent fail - sound is not critical
-    }
-  };
-
-  const playPling = async () => {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.replayAsync();
-      }
+      player.seekTo(0);
+      player.play();
     } catch (e) {
       // Silent fail - sound is not critical
     }

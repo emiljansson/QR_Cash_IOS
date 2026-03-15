@@ -17,8 +17,7 @@
       "bundleIdentifier": "com.emja.qrkassandisplay",
       "buildNumber": "1",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
-        "NSCameraUsageDescription": "Not used but required for some dependencies"
+        "UIBackgroundModes": ["audio"]
       }
     },
     "android": {
@@ -31,6 +30,14 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "your-project-id"
