@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   displayBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '500' },
   // Main content layout
-  mainContent: { flex: 1 },
+  mainContent: { flex: 1, flexDirection: 'column-reverse' },
   mainContentTablet: { flexDirection: 'row' },
   productSection: { flex: 1 },
   productSectionTablet: { flex: 2 }, // 60% av bredden
