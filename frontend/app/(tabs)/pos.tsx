@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
   // Cart section
   cartSection: {
     backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border,
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, maxHeight: 320,
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, maxHeight: '50%',
   },
   cartSectionTablet: {
     flex: 1, maxHeight: 'auto', height: '100%',
