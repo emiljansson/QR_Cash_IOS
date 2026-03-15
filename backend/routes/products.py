@@ -21,13 +21,21 @@ async def require_user(request: Request) -> dict:
     return user
 
 
+def get_owner_user_id(user: dict) -> str:
+    """Get the owner user_id - for sub-users this is parent_user_id, for admins it's their own user_id"""
+    return user.get("parent_user_id") or user["user_id"]
+
+
 @router.get("", response_model=List[Product])
 async def get_products(request: Request, active_only: bool = False):
     """Get all products for current user sorted by sort_order"""
     user = await require_user(request)
     db = get_db()
     
-    query = {"user_id": user["user_id"]}
+    # Sub-users see parent's products
+    owner_id = get_owner_user_id(user)
+    
+    query = {"user_id": owner_id}
     if active_only:
         # Include products where active is True OR active field doesn't exist (defaults to active)
         query["$or"] = [{"active": True}, {"active": {"$exists": False}}]

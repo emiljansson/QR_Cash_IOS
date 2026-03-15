@@ -18,6 +18,11 @@ async def require_user(request: Request) -> dict:
     return user
 
 
+def get_owner_user_id(user: dict) -> str:
+    """Get the owner user_id - for sub-users this is parent_user_id, for admins it's their own user_id"""
+    return user.get("parent_user_id") or user["user_id"]
+
+
 async def get_tenant_settings(user_id: str) -> dict:
     """Get tenant-specific settings"""
     db = get_db()
@@ -38,6 +43,9 @@ async def create_order(request: Request, data: OrderCreate):
     user = await require_user(request)
     db = get_db()
     
+    # Get owner ID (parent for sub-users, self for admins)
+    owner_id = get_owner_user_id(user)
+    
     # Create order first to get the ID
     order = Order(
         items=data.items,
@@ -47,7 +55,7 @@ async def create_order(request: Request, data: OrderCreate):
         customer_email=data.customer_email
     )
     
-    settings = await get_tenant_settings(user["user_id"])
+    settings = await get_tenant_settings(owner_id)
     formatted_message = format_swish_message(
         settings.get("swish_message", "Order %datetime%"),
         order_id=order.id
@@ -63,16 +71,16 @@ async def create_order(request: Request, data: OrderCreate):
     order.swish_phone = data.swish_phone or settings.get("swish_phone", "")
     
     doc = order.model_dump()
-    doc['user_id'] = user["user_id"]  # Multi-tenancy
+    doc['user_id'] = owner_id  # Multi-tenancy - use owner's ID
     doc['created_by_user_id'] = user["user_id"]  # Track which user created the order
     doc['created_at'] = doc['created_at'].isoformat()
     await db.orders.insert_one(doc)
     
-    # Update current display for this user with timestamp
+    # Update current display for the organization
     await db.current_display.update_one(
-        {"user_id": user["user_id"]},
+        {"user_id": owner_id},
         {"$set": {
-            "user_id": user["user_id"],
+            "user_id": owner_id,
             "order_id": order.id,
             "qr_data": qr_data,
             "total": order.total,
@@ -142,10 +150,13 @@ async def get_daily_stats(request: Request, period: str = "day", date: str = Non
         period_label = selected_date.strftime("%d %b %Y")
     
     # Query for paid orders in the period
+    # Use owner_id for statistics
+    owner_id = get_owner_user_id(user)
+    
     pipeline = [
         {
             "$match": {
-                "user_id": user["user_id"],
+                "user_id": owner_id,
                 "status": "paid",
                 "$expr": {
                     "$and": [
@@ -180,7 +191,7 @@ async def get_daily_stats(request: Request, period: str = "day", date: str = Non
     top_products_pipeline = [
         {
             "$match": {
-                "user_id": user["user_id"],
+                "user_id": owner_id,
                 "status": "paid",
                 "$expr": {
                     "$and": [
@@ -219,7 +230,8 @@ async def get_order(request: Request, order_id: str):
     """Get order by ID"""
     user = await require_user(request)
     db = get_db()
-    order = await db.orders.find_one({"id": order_id, "user_id": user["user_id"]}, {"_id": 0})
+    owner_id = get_owner_user_id(user)
+    order = await db.orders.find_one({"id": order_id, "user_id": owner_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     if isinstance(order.get('created_at'), str):
@@ -232,18 +244,19 @@ async def confirm_order(request: Request, order_id: str):
     """Confirm payment for an order"""
     user = await require_user(request)
     db = get_db()
-    order = await db.orders.find_one({"id": order_id, "user_id": user["user_id"]}, {"_id": 0})
+    owner_id = get_owner_user_id(user)
+    order = await db.orders.find_one({"id": order_id, "user_id": owner_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
     await db.orders.update_one(
-        {"id": order_id, "user_id": user["user_id"]},
+        {"id": order_id, "user_id": owner_id},
         {"$set": {"status": "paid"}}
     )
     
     # Update display to show paid
     await db.current_display.update_one(
-        {"user_id": user["user_id"]},
+        {"user_id": owner_id},
         {"$set": {"status": "paid"}}
     )
     
@@ -255,18 +268,19 @@ async def cancel_order(request: Request, order_id: str):
     """Cancel an order"""
     user = await require_user(request)
     db = get_db()
-    order = await db.orders.find_one({"id": order_id, "user_id": user["user_id"]}, {"_id": 0})
+    owner_id = get_owner_user_id(user)
+    order = await db.orders.find_one({"id": order_id, "user_id": owner_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
     await db.orders.update_one(
-        {"id": order_id, "user_id": user["user_id"]},
+        {"id": order_id, "user_id": owner_id},
         {"$set": {"status": "cancelled"}}
     )
     
     # Reset display
     await db.current_display.update_one(
-        {"user_id": user["user_id"]},
+        {"user_id": owner_id},
         {"$set": {"status": "idle", "order_id": None, "qr_data": None, "total": None}}
     )
     
@@ -278,7 +292,8 @@ async def delete_order(request: Request, order_id: str):
     """Delete an order completely"""
     user = await require_user(request)
     db = get_db()
-    order = await db.orders.find_one({"id": order_id, "user_id": user["user_id"]}, {"_id": 0})
+    owner_id = get_owner_user_id(user)
+    order = await db.orders.find_one({"id": order_id, "user_id": owner_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
@@ -286,13 +301,13 @@ async def delete_order(request: Request, order_id: str):
     if order.get("status") not in ["pending", "cancelled"]:
         raise HTTPException(status_code=400, detail="Kan endast radera väntande eller avbrutna ordrar")
     
-    await db.orders.delete_one({"id": order_id, "user_id": user["user_id"]})
+    await db.orders.delete_one({"id": order_id, "user_id": owner_id})
     
     # Reset display if this was the current order
-    current_display = await db.current_display.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    current_display = await db.current_display.find_one({"user_id": owner_id}, {"_id": 0})
     if current_display and current_display.get("order_id") == order_id:
         await db.current_display.update_one(
-            {"user_id": user["user_id"]},
+            {"user_id": owner_id},
             {"$set": {"status": "idle", "order_id": None, "qr_data": None, "total": None, "items": []}}
         )
     
@@ -304,8 +319,9 @@ async def get_orders(request: Request, status: Optional[str] = None, limit: int 
     """Get orders with optional status filter"""
     user = await require_user(request)
     db = get_db()
+    owner_id = get_owner_user_id(user)
     
-    query = {"user_id": user["user_id"]}
+    query = {"user_id": owner_id}
     if status:
         query["status"] = status
     
