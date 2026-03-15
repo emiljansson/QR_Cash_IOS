@@ -33,7 +33,7 @@ export default function POSScreen() {
   const { width } = useWindowDimensions();
   const isTablet = width >= 768; // iPad/tablet breakpoint
   const isDesktop = width >= 1024; // Desktop breakpoint
-  const numColumns = isDesktop ? 4 : (isTablet ? 3 : 3); // 4 cols desktop, 3 cols tablet/mobile
+  const numColumns = isDesktop ? 4 : (isTablet ? 2 : 3); // 4 cols desktop, 2 cols tablet, 3 cols mobile
   const params = useLocalSearchParams<{ restoreCart?: string; restoreTotal?: string; restoreCartId?: string }>();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
