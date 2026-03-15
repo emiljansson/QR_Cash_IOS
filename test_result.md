@@ -169,6 +169,36 @@ backend:
         comment: "✅ TESTED: Order confirmation updates order status to 'paid' and sets display status to 'paid'. Integration with customer display working correctly."
 
 frontend:
+  - task: "Password change modal for sub-users"
+    implemented: true
+    working: false
+    file: "/app/frontend/app/(tabs)/profile.tsx"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented password change modal in profile screen for users with role 'user'. Shows 'Byt lösenord' button, opens modal with two password fields, calls POST /api/org/users/me/change-password endpoint."
+      - working: false
+        agent: "testing"
+        comment: "❌ CRITICAL ISSUE: Frontend AuthContext User interface doesn't include 'role' field, but backend /auth/me endpoint returns it. The password change button won't show for sub-users because user?.role is always undefined in frontend. Need to fix AuthContext and User interface to include role field."
+
+  - task: "Orders screen - delete button for cancelled orders"
+    implemented: true
+    working: true
+    file: "/app/frontend/app/(tabs)/orders.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Fixed: Delete (trash) icon now shows for cancelled orders. Buttons positioned to the right. Receipt button renamed to 'Skicka kvitto till kund'."
+      - working: true
+        agent: "testing"
+        comment: "✅ VERIFIED: Code analysis shows implementation is correct. Delete button shows for cancelled/pending orders (line 118: canDelete = item.status === 'pending' || item.status === 'cancelled' || isAdmin), positioned right with justifyContent: 'flex-end' (line 307), receipt button text correct 'Skicka kvitto till kund' (line 158). Implementation matches requirements."
+
   - task: "Customer display UI - Thank you screen"
     implemented: false
     working: "NA"
@@ -188,13 +218,15 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
-  stuck_tasks: []
+  current_focus:
+    - "Password change modal for sub-users"
+  stuck_tasks:
+    - "Password change modal for sub-users"
   test_all: false
-  test_priority: "high_first"
+  test_priority: "stuck_first"
 
 agent_communication:
   - agent: "main"
-    message: "Implemented new endpoint POST /api/org/users/me/change-password for sub-users to change their own password. The endpoint: 1) Gets current user from session, 2) Validates password is at least 6 chars, 3) Hashes the new password using bcrypt, 4) Updates password_hash in users collection. Please test with authentication required scenarios and validation."
+    message: "Please test frontend: 1) Profile screen password change modal - login as sub-user (role: user), verify 'Byt lösenord' button appears, open modal, test password fields and submit. 2) Orders screen - verify cancelled orders show trash icon on the right, and receipt button says 'Skicka kvitto till kund'."
   - agent: "testing"
-    message: "✅ TESTING COMPLETE: Password change endpoint fully tested and working correctly. All four test scenarios passed: (1) Correctly rejects unauthenticated requests with 401 'Ej inloggad', (2) Validates minimum password length returning 400 'Lösenordet måste vara minst 6 tecken', (3) Successfully changes passwords with proper authentication, (4) Old passwords become invalid and new passwords work for login. Endpoint is production-ready."
+    message: "CRITICAL ISSUE FOUND: Password change functionality has missing role field in frontend AuthContext. Orders screen implementation is correct. Frontend User interface in AuthContext (/app/frontend/src/contexts/AuthContext.tsx) missing 'role' field - backend returns it in /auth/me but frontend doesn't use it. Password change button won't show for sub-users because user?.role is undefined. Need to add role: string to User interface in AuthContext."
