@@ -53,8 +53,11 @@ export default function ParkedCartsScreen() {
       });
       setShowSave(false);
       setCartName('');
-      loadCarts();
-      Alert.alert('Sparat', 'Varukorgen har parkerats');
+      // Navigate back to POS and clear cart by passing empty cart
+      router.replace({
+        pathname: '/(tabs)/pos',
+        params: { clearCart: 'true' },
+      });
     } catch (e: any) {
       Alert.alert('Fel', e.message);
     } finally { setSaving(false); }
