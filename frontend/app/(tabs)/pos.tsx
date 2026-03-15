@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, Image,
-  ActivityIndicator, Alert, Modal, ScrollView, SafeAreaView,
+  ActivityIndicator, Alert, Modal, ScrollView, SafeAreaView, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/utils/colors';
@@ -30,6 +30,8 @@ interface CartItem {
 export default function POSScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768; // iPad/tablet breakpoint
   const params = useLocalSearchParams<{ restoreCart?: string; restoreTotal?: string; restoreCartId?: string }>();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -238,109 +240,131 @@ export default function POSScreen() {
         </View>
       </View>
 
-      {/* Product Grid */}
-      <FlatList
-        data={products}
-        renderItem={renderProduct}
-        keyExtractor={item => item.id}
-        numColumns={3}
-        contentContainerStyle={styles.productGrid}
-        columnWrapperStyle={styles.productRow}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>Inga produkter</Text>
-            <Text style={styles.emptySubtext}>Lägg till produkter i Admin-panelen</Text>
-          </View>
-        }
-      />
-
-      {/* Cart */}
-      {cart.length > 0 && (
-        <View style={styles.cartSection}>
-          <View style={styles.cartHeader}>
-            <Text style={styles.cartTitle}>Varukorg ({cart.reduce((s, i) => s + i.quantity, 0)})</Text>
-            <View style={styles.cartHeaderActions}>
-              <TouchableOpacity
-                testID="park-cart-btn"
-                onPress={() => router.push({
-                  pathname: '/parked-carts',
-                  params: { cartItems: JSON.stringify(cart), cartTotal: String(cartTotal) },
-                })}
-                style={styles.parkBtn}
-              >
-                <Ionicons name="bookmark-outline" size={16} color={Colors.warning} />
-                <Text style={styles.parkBtnText}>Parkera</Text>
-              </TouchableOpacity>
-              <TouchableOpacity testID="clear-cart-btn" onPress={() => setCart([])}>
-                <Text style={styles.clearCartText}>Rensa</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <ScrollView style={styles.cartItems} nestedScrollEnabled>
-            {cart.map(item => (
-              <View key={item.product_id} style={styles.cartItem}>
-                <View style={styles.cartItemInfo}>
-                  <Text style={styles.cartItemName}>{item.name}</Text>
-                  <Text style={styles.cartItemPrice}>{(item.price * item.quantity).toFixed(0)} kr</Text>
-                </View>
-                <View style={styles.cartItemControls}>
-                  <TouchableOpacity
-                    testID={`cart-minus-${item.product_id}`}
-                    onPress={() => updateQuantity(item.product_id, -1)}
-                    style={styles.qtyBtn}
-                  >
-                    <Ionicons name="remove" size={16} color={Colors.textPrimary} />
-                  </TouchableOpacity>
-                  <Text style={styles.qtyText}>{item.quantity}</Text>
-                  <TouchableOpacity
-                    testID={`cart-plus-${item.product_id}`}
-                    onPress={() => updateQuantity(item.product_id, 1)}
-                    style={styles.qtyBtn}
-                  >
-                    <Ionicons name="add" size={16} color={Colors.textPrimary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    testID={`cart-remove-${item.product_id}`}
-                    onPress={() => removeFromCart(item.product_id)}
-                    style={styles.removeBtn}
-                  >
-                    <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
-                  </TouchableOpacity>
-                </View>
+      {/* Main Content - Split layout for tablet, stacked for mobile */}
+      <View style={[styles.mainContent, isTablet && styles.mainContentTablet]}>
+        {/* Product Grid */}
+        <View style={[styles.productSection, isTablet && styles.productSectionTablet]}>
+          <FlatList
+            data={products}
+            renderItem={renderProduct}
+            keyExtractor={item => item.id}
+            numColumns={isTablet ? 2 : 3}
+            key={isTablet ? 'tablet' : 'mobile'}
+            contentContainerStyle={styles.productGrid}
+            columnWrapperStyle={styles.productRow}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>Inga produkter</Text>
+                <Text style={styles.emptySubtext}>Lägg till produkter i Admin-panelen</Text>
               </View>
-            ))}
-          </ScrollView>
-
-          <View style={styles.cartTotal}>
-            <Text style={styles.totalLabel}>Totalt</Text>
-            <Text style={styles.totalAmount}>{cartTotal.toFixed(0)} kr</Text>
-          </View>
-
-          <View style={styles.paymentButtons}>
-            <TouchableOpacity
-              testID="swish-pay-btn"
-              style={styles.swishButton}
-              onPress={handleCheckout}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="qr-code" size={20} color={Colors.white} />
-              <Text style={styles.swishButtonText}>Swish QR</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="cash-pay-btn"
-              style={styles.cashButton}
-              onPress={handleCashPayment}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="cash-outline" size={20} color={Colors.textPrimary} />
-              <Text style={styles.cashButtonText}>Kontant</Text>
-            </TouchableOpacity>
-          </View>
+            }
+          />
         </View>
-      )}
+
+        {/* Cart Panel - Always visible on tablet, shown at bottom on mobile */}
+        {(isTablet || cart.length > 0) && (
+          <View style={[styles.cartSection, isTablet && styles.cartSectionTablet]}>
+            <View style={styles.cartHeader}>
+              <Text style={styles.cartTitle}>Kundkorg</Text>
+              <View style={styles.cartHeaderActions}>
+                {cart.length > 0 && (
+                  <>
+                    <TouchableOpacity
+                      testID="park-cart-btn"
+                      onPress={() => router.push({
+                        pathname: '/parked-carts',
+                        params: { cartItems: JSON.stringify(cart), cartTotal: String(cartTotal) },
+                      })}
+                      style={styles.parkBtn}
+                    >
+                      <Ionicons name="bookmark-outline" size={16} color={Colors.warning} />
+                      <Text style={styles.parkBtnText}>Parkera</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity testID="clear-cart-btn" onPress={() => setCart([])}>
+                      <Text style={styles.clearCartText}>Rensa</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {cart.length > 0 ? (
+              <>
+                <ScrollView style={styles.cartItems} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  {cart.map(item => (
+                    <View key={item.product_id} style={styles.cartItem}>
+                      <View style={styles.cartItemInfo}>
+                        <Text style={styles.cartItemName}>{item.name}</Text>
+                        <Text style={styles.cartItemPrice}>{(item.price * item.quantity).toFixed(0)} kr</Text>
+                      </View>
+                      <View style={styles.cartItemControls}>
+                        <TouchableOpacity
+                          testID={`cart-minus-${item.product_id}`}
+                          onPress={() => updateQuantity(item.product_id, -1)}
+                          style={styles.qtyBtn}
+                        >
+                          <Ionicons name="remove" size={16} color={Colors.textPrimary} />
+                        </TouchableOpacity>
+                        <Text style={styles.qtyText}>{item.quantity}</Text>
+                        <TouchableOpacity
+                          testID={`cart-plus-${item.product_id}`}
+                          onPress={() => updateQuantity(item.product_id, 1)}
+                          style={styles.qtyBtn}
+                        >
+                          <Ionicons name="add" size={16} color={Colors.textPrimary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          testID={`cart-remove-${item.product_id}`}
+                          onPress={() => removeFromCart(item.product_id)}
+                          style={styles.removeBtn}
+                        >
+                          <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+
+                <View style={styles.cartFooter}>
+                  <View style={styles.cartTotal}>
+                    <Text style={styles.totalLabel}>Totalt</Text>
+                    <Text style={styles.totalAmount}>{cartTotal.toFixed(0)} kr</Text>
+                  </View>
+
+                  <View style={styles.paymentButtons}>
+                    <TouchableOpacity
+                      testID="swish-pay-btn"
+                      style={styles.swishButton}
+                      onPress={handleCheckout}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="qr-code" size={20} color={Colors.white} />
+                      <Text style={styles.swishButtonText}>Swish QR</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      testID="cash-pay-btn"
+                      style={styles.cashButton}
+                      onPress={handleCashPayment}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="cash-outline" size={20} color={Colors.textPrimary} />
+                      <Text style={styles.cashButtonText}>Kontant</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.emptyCart}>
+                <Ionicons name="cart-outline" size={48} color={Colors.textMuted} />
+                <Text style={styles.emptyCartText}>Varukorgen är tom</Text>
+                <Text style={styles.emptyCartSubtext}>Tryck på en produkt för att lägga till</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
 
       {/* QR Payment Modal */}
       <Modal visible={showQR} animationType="slide" transparent>
@@ -421,11 +445,16 @@ const styles = StyleSheet.create({
     borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)',
   },
   displayBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '500' },
+  // Main content layout
+  mainContent: { flex: 1 },
+  mainContentTablet: { flexDirection: 'row' },
+  productSection: { flex: 1 },
+  productSectionTablet: { flex: 3 },
   productGrid: { padding: 8 },
   productRow: { gap: 8, paddingHorizontal: 8 },
   productCard: {
     flex: 1, backgroundColor: Colors.surface, borderRadius: 12,
-    borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', marginBottom: 8, maxWidth: '32%',
+    borderWidth: 1, borderColor: Colors.border, overflow: 'hidden', marginBottom: 8,
   },
   productImage: { width: '100%', aspectRatio: 1, backgroundColor: Colors.surfaceHighlight },
   productInfo: { padding: 8 },
@@ -434,12 +463,17 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 18, fontWeight: '600', color: Colors.textPrimary, marginTop: 12 },
   emptySubtext: { fontSize: 14, color: Colors.textMuted, marginTop: 4 },
+  // Cart section
   cartSection: {
     backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border,
     paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, maxHeight: 320,
   },
+  cartSectionTablet: {
+    flex: 2, maxWidth: 380, maxHeight: 'auto', height: '100%',
+    borderTopWidth: 0, borderLeftWidth: 1, borderLeftColor: Colors.border,
+  },
   cartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cartTitle: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
+  cartTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
   cartHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   parkBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -447,10 +481,10 @@ const styles = StyleSheet.create({
   },
   parkBtnText: { color: Colors.warning, fontSize: 13, fontWeight: '500' },
   clearCartText: { fontSize: 14, color: Colors.destructive },
-  cartItems: { maxHeight: 120 },
+  cartItems: { flex: 1 },
   cartItem: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   cartItemInfo: { flex: 1 },
   cartItemName: { fontSize: 14, color: Colors.textPrimary },
@@ -462,6 +496,7 @@ const styles = StyleSheet.create({
   },
   qtyText: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, minWidth: 20, textAlign: 'center' },
   removeBtn: { padding: 4, marginLeft: 4 },
+  cartFooter: { marginTop: 'auto' },
   cartTotal: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.border, marginTop: 8,
@@ -480,6 +515,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border,
   },
   cashButtonText: { color: Colors.textPrimary, fontSize: 14, fontWeight: '500' },
+  // Empty cart state
+  emptyCart: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  emptyCartText: { fontSize: 16, color: Colors.textMuted, marginTop: 12 },
+  emptyCartSubtext: { fontSize: 13, color: Colors.textMuted, marginTop: 4 },
   modalOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center',
   },
