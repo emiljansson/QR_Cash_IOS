@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     borderRadius: 10, padding: 14, fontSize: 16, color: Colors.textPrimary,
   },
   button: {
-    backgroundColor: Colors.textPrimary, borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 8,
+    backgroundColor: Colors.primary, borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 8,
   },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
