@@ -68,9 +68,24 @@ export default function App() {
     ScreenOrientation.unlockAsync();
   }, []);
 
-  // Load saved pairing on mount
+  // Refs for intervals to prevent duplicates
+  const pairingPollRef = useRef<NodeJS.Timeout | null>(null);
+  const dataPollRef = useRef<NodeJS.Timeout | null>(null);
+  const validationPollRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitializedRef = useRef(false);
+
+  // Load saved pairing on mount - only once
   useEffect(() => {
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
     loadSavedPairing();
+    
+    return () => {
+      // Cleanup all intervals on unmount
+      if (pairingPollRef.current) clearInterval(pairingPollRef.current);
+      if (dataPollRef.current) clearInterval(dataPollRef.current);
+      if (validationPollRef.current) clearInterval(validationPollRef.current);
+    };
   }, []);
 
   const playPling = () => {
@@ -94,26 +109,20 @@ export default function App() {
               setDisplayId(savedDisplayId);
               setStoreName(status.store_name || savedStoreName || '');
               setIsPaired(true);
-            } else {
-              // Pairing no longer valid, generate new code
-              await AsyncStorage.removeItem('display_pairing');
-              generateNewCode();
+              setLoading(false);
+              return;
             }
           } catch {
-            // Can't verify, generate new code
-            await AsyncStorage.removeItem('display_pairing');
-            generateNewCode();
+            // Can't verify - continue to generate new code
           }
-        } else {
-          // Old format without displayId, regenerate
-          await AsyncStorage.removeItem('display_pairing');
-          generateNewCode();
         }
-      } else {
-        generateNewCode();
+        // Clear invalid pairing
+        await AsyncStorage.removeItem('display_pairing');
       }
+      // No valid pairing found, generate new code
+      await generateNewCode();
     } catch (e) {
-      generateNewCode();
+      await generateNewCode();
     } finally {
       setLoading(false);
     }
@@ -121,13 +130,19 @@ export default function App() {
 
   // Generate a new 4-digit pairing code
   const generateNewCode = async () => {
+    // Clear any existing pairing poll
+    if (pairingPollRef.current) {
+      clearInterval(pairingPollRef.current);
+      pairingPollRef.current = null;
+    }
+    
     setGeneratingCode(true);
     try {
       const res = await api.post('/api/customer-display/generate-code', {});
       setGeneratedCode(res.code);
       setDisplayId(res.display_id || null);
       // Start polling for when POS pairs with this code
-      pollForPairing(res.code, res.display_id);
+      startPairingPoll(res.code, res.display_id);
     } catch (e) {
       // Generate local fallback code
       const code = String(Math.floor(1000 + Math.random() * 9000));
@@ -138,11 +153,23 @@ export default function App() {
   };
 
   // Poll to check if POS has paired with our code
-  const pollForPairing = (code: string, newDisplayId: string | null) => {
+  const startPairingPoll = (code: string, newDisplayId: string | null) => {
+    // Clear any existing poll first
+    if (pairingPollRef.current) {
+      clearInterval(pairingPollRef.current);
+      pairingPollRef.current = null;
+    }
+    
     const checkPairing = async () => {
       try {
         const res = await api.get(`/api/customer-display/check-pairing?code=${code}`);
         if (res.paired && res.user_id) {
+          // Stop polling
+          if (pairingPollRef.current) {
+            clearInterval(pairingPollRef.current);
+            pairingPollRef.current = null;
+          }
+          
           await AsyncStorage.setItem('display_pairing', JSON.stringify({
             userId: res.user_id,
             displayId: newDisplayId || code,
@@ -158,16 +185,16 @@ export default function App() {
       return false;
     };
 
-    const interval = setInterval(async () => {
-      const paired = await checkPairing();
-      if (paired) {
-        clearInterval(interval);
-      }
-    }, 2000);
+    // Poll every 2 seconds
+    pairingPollRef.current = setInterval(checkPairing, 2000);
 
     // Stop polling after 10 minutes and generate new code
     setTimeout(() => {
-      clearInterval(interval);
+      if (pairingPollRef.current) {
+        clearInterval(pairingPollRef.current);
+        pairingPollRef.current = null;
+      }
+      // Only regenerate if not paired yet
       if (!isPaired) {
         generateNewCode();
       }
@@ -176,6 +203,12 @@ export default function App() {
 
   // Unpair and generate new code
   const handleUnpair = async () => {
+    // Stop all polls
+    if (dataPollRef.current) clearInterval(dataPollRef.current);
+    if (validationPollRef.current) clearInterval(validationPollRef.current);
+    dataPollRef.current = null;
+    validationPollRef.current = null;
+    
     // Notify backend
     try {
       if (userId) {
@@ -241,15 +274,15 @@ export default function App() {
     };
 
     fetchDisplayData();
-    // Poll for display data every 3 seconds (less aggressive)
-    const dataInterval = setInterval(fetchDisplayData, 3000);
+    // Poll for display data every 3 seconds
+    dataPollRef.current = setInterval(fetchDisplayData, 3000);
     
-    // Validate pairing every 10 seconds (not too often)
-    const validationInterval = setInterval(validatePairing, 10000);
+    // Validate pairing every 10 seconds
+    validationPollRef.current = setInterval(validatePairing, 10000);
 
     return () => {
-      clearInterval(dataInterval);
-      clearInterval(validationInterval);
+      if (dataPollRef.current) clearInterval(dataPollRef.current);
+      if (validationPollRef.current) clearInterval(validationPollRef.current);
     };
   }, [isPaired, userId, displayId]);
 
