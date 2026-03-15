@@ -57,6 +57,10 @@ export default function AdminScreen() {
   // Image upload state
   const [uploadingImage, setUploadingImage] = useState(false);
   const [productImage, setProductImage] = useState<string | null>(null);
+  
+  // Logo upload state
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   // Web-compatible alert helpers
   const showAlert = (title: string, message: string) => {
