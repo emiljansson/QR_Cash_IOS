@@ -8,7 +8,7 @@ import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import QRCode from 'react-native-qrcode-svg';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 
 interface Product {
   id: string;
@@ -34,7 +34,7 @@ export default function POSScreen() {
   const isTablet = width >= 768; // iPad/tablet breakpoint
   const isDesktop = width >= 1024; // Desktop breakpoint
   const numColumns = isDesktop ? 4 : (isTablet ? 2 : 3); // 4 cols desktop, 2 cols tablet, 3 cols mobile
-  const params = useLocalSearchParams<{ restoreCart?: string; restoreTotal?: string; restoreCartId?: string }>();
+  const params = useLocalSearchParams<{ restoreCart?: string; restoreTotal?: string; restoreCartId?: string; clearCart?: string }>();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,8 +74,14 @@ export default function POSScreen() {
   useEffect(() => {
     loadProducts();
     loadSettings();
-    loadParkedCount();
   }, []);
+
+  // Reload parked count when screen gets focus
+  useFocusEffect(
+    useCallback(() => {
+      loadParkedCount();
+    }, [loadParkedCount])
+  );
 
   // Handle restoring parked cart
   useEffect(() => {
@@ -90,6 +96,13 @@ export default function POSScreen() {
       } catch {}
     }
   }, [params.restoreCart]);
+
+  // Handle clearing cart after parking
+  useEffect(() => {
+    if (params.clearCart === 'true') {
+      setCart([]);
+    }
+  }, [params.clearCart]);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -265,7 +278,7 @@ export default function POSScreen() {
           />
         </View>
 
-        {/* Cart Panel - Always visible on tablet, shown at bottom on mobile */}
+        {/* Cart Panel - Shows at bottom on mobile, grows upward as items added */}
         {(isTablet || cart.length > 0) && (
           <View style={[styles.cartSection, isTablet && styles.cartSectionTablet]}>
             <View style={styles.cartHeader}>
@@ -351,7 +364,6 @@ export default function POSScreen() {
                       onPress={handleCashPayment}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="cash-outline" size={20} color={Colors.textPrimary} />
                       <Text style={styles.cashButtonText}>Kontant</Text>
                     </TouchableOpacity>
                   </View>
@@ -361,7 +373,7 @@ export default function POSScreen() {
               <View style={styles.emptyCart}>
                 <Ionicons name="cart-outline" size={48} color={Colors.textMuted} />
                 <Text style={styles.emptyCartText}>Varukorgen är tom</Text>
-                <Text style={styles.emptyCartSubtext}>Tryck på en produkt för att lägga till</Text>
+                <Text style={styles.emptyCartSubtext}>Tryck för att lägga till</Text>
               </View>
             )}
           </View>
@@ -468,7 +480,7 @@ const styles = StyleSheet.create({
   // Cart section
   cartSection: {
     backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border,
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, maxHeight: 500,
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, maxHeight: 320,
   },
   cartSectionTablet: {
     flex: 1, maxHeight: 'auto', height: '100%',
@@ -508,16 +520,16 @@ const styles = StyleSheet.create({
   totalAmount: { fontSize: 32, fontWeight: '700', color: Colors.primary },
   paymentButtons: { flexDirection: 'row', gap: 12, marginTop: 12 },
   swishButton: {
-    flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: Colors.swishBrand, height: 56, borderRadius: 12, gap: 8,
   },
-  swishButtonText: { color: Colors.white, fontSize: 18, fontWeight: '600' },
+  swishButtonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
   cashButton: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: Colors.surfaceHighlight, height: 56, borderRadius: 12, gap: 6,
+    paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.surfaceHighlight, height: 56, borderRadius: 12,
     borderWidth: 1, borderColor: Colors.border,
   },
-  cashButtonText: { color: Colors.textPrimary, fontSize: 16, fontWeight: '500' },
+  cashButtonText: { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
   // Empty cart state
   emptyCart: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
   emptyCartText: { fontSize: 16, color: Colors.textMuted, marginTop: 12 },
