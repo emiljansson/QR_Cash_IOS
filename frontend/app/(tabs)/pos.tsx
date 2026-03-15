@@ -365,7 +365,6 @@ export default function POSScreen() {
                       activeOpacity={0.8}
                     >
                       <Text style={styles.cashButtonText}>Kontant</Text>
-                      <Text style={styles.cashButtonText}>Kontant</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
