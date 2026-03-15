@@ -1,5 +1,9 @@
+# Disable frozen lockfile for Railway
+[phases.setup]
+nixPkgs = ["nodejs_20", "yarn"]
+
 [phases.install]
-cmds = ["yarn install"]
+cmds = ["yarn install --no-frozen-lockfile"]
 
 [phases.build]
 cmds = ["yarn build"]
