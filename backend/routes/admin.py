@@ -21,6 +21,11 @@ async def require_user(request: Request) -> dict:
     return user
 
 
+def get_owner_user_id(user: dict) -> str:
+    """Get the owner user_id - either parent_user_id (for sub-users) or user's own id (for admins)"""
+    return user.get("parent_user_id") or user["user_id"]
+
+
 async def get_tenant_settings(user_id: str) -> dict:
     """Get or create tenant-specific settings"""
     db = get_db()
@@ -38,7 +43,8 @@ async def get_tenant_settings(user_id: str) -> dict:
 async def verify_pin(request: Request, data: PinVerify):
     """Verify admin PIN for tenant"""
     user = await require_user(request)
-    settings = await get_tenant_settings(user["user_id"])
+    owner_id = get_owner_user_id(user)
+    settings = await get_tenant_settings(owner_id)
     
     if data.pin == settings.get("admin_pin", "1234"):
         return {"success": True, "message": "PIN verified"}
@@ -47,20 +53,27 @@ async def verify_pin(request: Request, data: PinVerify):
 
 @router.get("/settings", response_model=Settings)
 async def get_admin_settings(request: Request):
-    """Get admin settings for current tenant"""
+    """Get admin settings for current tenant (uses parent account for sub-users)"""
     user = await require_user(request)
-    settings = await get_tenant_settings(user["user_id"])
+    owner_id = get_owner_user_id(user)
+    settings = await get_tenant_settings(owner_id)
     return settings
 
 
 @router.put("/settings", response_model=Settings)
 async def update_settings(request: Request, data: SettingsUpdate):
-    """Update admin settings for current tenant"""
+    """Update admin settings for current tenant (only admins can update)"""
     user = await require_user(request)
     db = get_db()
     
+    # Only admin can update settings
+    if user.get("role") == "user":
+        raise HTTPException(status_code=403, detail="Endast admin kan ändra inställningar")
+    
+    owner_id = get_owner_user_id(user)
+    
     # Ensure settings exist
-    await get_tenant_settings(user["user_id"])
+    await get_tenant_settings(owner_id)
     
     update_data = {}
     for k, v in data.model_dump().items():
@@ -74,25 +87,31 @@ async def update_settings(request: Request, data: SettingsUpdate):
     
     if update_data:
         await db.settings.update_one(
-            {"user_id": user["user_id"]},
+            {"user_id": owner_id},
             {"$set": update_data}
         )
     
-    return await get_tenant_settings(user["user_id"])
+    return await get_tenant_settings(owner_id)
 
 
 @router.post("/upload-logo")
 async def upload_logo(request: Request, file: UploadFile = File(...)):
-    """Upload store logo for tenant"""
+    """Upload store logo for tenant (only admins can upload)"""
     user = await require_user(request)
     db = get_db()
     
-    # Ensure settings exist
-    await get_tenant_settings(user["user_id"])
+    # Only admin can upload logo
+    if user.get("role") == "user":
+        raise HTTPException(status_code=403, detail="Endast admin kan ladda upp logga")
     
-    # Save file with user-specific name
+    owner_id = get_owner_user_id(user)
+    
+    # Ensure settings exist
+    await get_tenant_settings(owner_id)
+    
+    # Save file with owner-specific name
     file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'png'
-    filename = f"logo_{user['user_id']}.{file_ext}"
+    filename = f"logo_{owner_id}.{file_ext}"
     filepath = UPLOADS_DIR / filename
     
     async with aiofiles.open(filepath, 'wb') as out_file:
@@ -102,7 +121,7 @@ async def upload_logo(request: Request, file: UploadFile = File(...)):
     # Update settings with logo URL
     logo_url = f"/api/uploads/{filename}"
     await db.settings.update_one(
-        {"user_id": user["user_id"]},
+        {"user_id": owner_id},
         {"$set": {"logo_url": logo_url}}
     )
     
@@ -111,12 +130,18 @@ async def upload_logo(request: Request, file: UploadFile = File(...)):
 
 @router.delete("/logo")
 async def delete_logo(request: Request):
-    """Remove store logo for tenant"""
+    """Remove store logo for tenant (only admins can delete)"""
     user = await require_user(request)
     db = get_db()
     
+    # Only admin can delete logo
+    if user.get("role") == "user":
+        raise HTTPException(status_code=403, detail="Endast admin kan ta bort logga")
+    
+    owner_id = get_owner_user_id(user)
+    
     await db.settings.update_one(
-        {"user_id": user["user_id"]},
+        {"user_id": owner_id},
         {"$set": {"logo_url": None}}
     )
     return {"success": True, "message": "Logo removed"}
@@ -124,9 +149,13 @@ async def delete_logo(request: Request):
 
 @router.put("/logo")
 async def update_logo_url(request: Request):
-    """Update store logo URL for tenant (after Cloudinary upload)"""
+    """Update store logo URL for tenant (after Cloudinary upload, only admins)"""
     user = await require_user(request)
     db = get_db()
+    
+    # Only admin can update logo
+    if user.get("role") == "user":
+        raise HTTPException(status_code=403, detail="Endast admin kan ändra logga")
     
     data = await request.json()
     logo_url = data.get("logo_url")
@@ -134,11 +163,13 @@ async def update_logo_url(request: Request):
     if not logo_url:
         raise HTTPException(status_code=400, detail="logo_url krävs")
     
+    owner_id = get_owner_user_id(user)
+    
     # Ensure settings exist
-    await get_tenant_settings(user["user_id"])
+    await get_tenant_settings(owner_id)
     
     await db.settings.update_one(
-        {"user_id": user["user_id"]},
+        {"user_id": owner_id},
         {"$set": {"logo_url": logo_url}}
     )
     
@@ -147,15 +178,21 @@ async def update_logo_url(request: Request):
 
 @router.delete("/clear-orders")
 async def clear_orders(request: Request):
-    """Clear all orders and reset statistics for tenant"""
+    """Clear all orders and reset statistics for tenant (only admins)"""
     user = await require_user(request)
     db = get_db()
     
-    result = await db.orders.delete_many({"user_id": user["user_id"]})
+    # Only admin can clear orders
+    if user.get("role") == "user":
+        raise HTTPException(status_code=403, detail="Endast admin kan radera ordrar")
+    
+    owner_id = get_owner_user_id(user)
+    
+    result = await db.orders.delete_many({"user_id": owner_id})
     
     # Reset customer display
     await db.current_display.update_one(
-        {"user_id": user["user_id"]},
+        {"user_id": owner_id},
         {"$set": {"status": "idle", "order_id": None, "qr_data": None, "total": None, "items": []}},
         upsert=True
     )
@@ -165,17 +202,23 @@ async def clear_orders(request: Request):
 
 @router.delete("/clear-pending-orders")
 async def clear_pending_orders(request: Request):
-    """Clear only pending orders for tenant"""
+    """Clear only pending orders for tenant (only admins)"""
     user = await require_user(request)
     db = get_db()
     
-    result = await db.orders.delete_many({"user_id": user["user_id"], "status": "pending"})
+    # Only admin can clear orders
+    if user.get("role") == "user":
+        raise HTTPException(status_code=403, detail="Endast admin kan radera ordrar")
+    
+    owner_id = get_owner_user_id(user)
+    
+    result = await db.orders.delete_many({"user_id": owner_id, "status": "pending"})
     
     # Reset customer display if current order was pending
-    current_display = await db.current_display.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    current_display = await db.current_display.find_one({"user_id": owner_id}, {"_id": 0})
     if current_display and current_display.get("status") == "waiting":
         await db.current_display.update_one(
-            {"user_id": user["user_id"]},
+            {"user_id": owner_id},
             {"$set": {"status": "idle", "order_id": None, "qr_data": None, "total": None, "items": []}}
         )
     
@@ -184,17 +227,19 @@ async def clear_pending_orders(request: Request):
 
 @router.get("/stats")
 async def get_tenant_stats(request: Request):
-    """Get statistics for tenant"""
+    """Get statistics for tenant (uses parent account for sub-users)"""
     user = await require_user(request)
     db = get_db()
     
-    total_orders = await db.orders.count_documents({"user_id": user["user_id"]})
-    paid_orders = await db.orders.count_documents({"user_id": user["user_id"], "status": "paid"})
-    total_products = await db.products.count_documents({"user_id": user["user_id"]})
+    owner_id = get_owner_user_id(user)
+    
+    total_orders = await db.orders.count_documents({"user_id": owner_id})
+    paid_orders = await db.orders.count_documents({"user_id": owner_id, "status": "paid"})
+    total_products = await db.products.count_documents({"user_id": owner_id})
     
     # Calculate total revenue
     pipeline = [
-        {"$match": {"user_id": user["user_id"], "status": "paid"}},
+        {"$match": {"user_id": owner_id, "status": "paid"}},
         {"$group": {"_id": None, "total": {"$sum": "$total"}}}
     ]
     result = await db.orders.aggregate(pipeline).to_list(1)
