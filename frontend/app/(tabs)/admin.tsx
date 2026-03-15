@@ -61,6 +61,9 @@ export default function AdminScreen() {
   // Logo upload state
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  
+  // Default QR-Kassan logo
+  const DEFAULT_LOGO = 'https://res.cloudinary.com/demo/image/upload/v1/qrkassan/logos/default_logo.png';
 
   // Web-compatible alert helpers
   const showAlert = (title: string, message: string) => {
@@ -108,6 +111,10 @@ export default function AdminScreen() {
         swish_message: data.swish_message || '',
         admin_pin: '',
       });
+      // Set logo preview from settings
+      if (data.logo_url) {
+        setLogoPreview(data.logo_url);
+      }
     } catch {}
   }, []);
 
@@ -339,6 +346,147 @@ export default function AdminScreen() {
         ]
       );
     }
+  };
+
+  // Logo upload functions
+  const uploadLogoToCloudinary = async (uri: string): Promise<string | null> => {
+    try {
+      setUploadingLogo(true);
+      
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          try {
+            const base64 = reader.result as string;
+            
+            // Upload to Cloudinary via backend with logos folder
+            const result = await api.fetch('/cloudinary/upload', {
+              method: 'POST',
+              body: JSON.stringify({
+                image: base64,
+                folder: 'logos'
+              })
+            });
+            
+            if (result.success && result.url) {
+              resolve(result.url);
+            } else {
+              reject(new Error('Upload failed'));
+            }
+          } catch (e) {
+            reject(e);
+          }
+        };
+        reader.onerror = () => reject(new Error('Failed to read image'));
+        reader.readAsDataURL(blob);
+      });
+    } catch (e: any) {
+      showAlert('Uppladdningsfel', e.message || 'Kunde inte ladda upp logotypen');
+      return null;
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleChooseLogo = async () => {
+    const hasPermission = await requestImagePermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const localUri = result.assets[0].uri;
+        setLogoPreview(localUri);
+        
+        // Upload to Cloudinary
+        const cloudinaryUrl = await uploadLogoToCloudinary(localUri);
+        if (cloudinaryUrl) {
+          // Save to backend settings
+          await api.fetch('/admin/logo', {
+            method: 'PUT',
+            body: JSON.stringify({ logo_url: cloudinaryUrl })
+          });
+          setLogoPreview(cloudinaryUrl);
+          showAlert('Klart', 'Logotypen har sparats!');
+        }
+      }
+    } catch (e: any) {
+      showAlert('Fel', 'Kunde inte välja bild');
+    }
+  };
+
+  const handleTakeLogoPhoto = async () => {
+    const hasPermission = await requestImagePermissions();
+    if (!hasPermission) return;
+
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const localUri = result.assets[0].uri;
+        setLogoPreview(localUri);
+        
+        // Upload to Cloudinary
+        const cloudinaryUrl = await uploadLogoToCloudinary(localUri);
+        if (cloudinaryUrl) {
+          // Save to backend settings
+          await api.fetch('/admin/logo', {
+            method: 'PUT',
+            body: JSON.stringify({ logo_url: cloudinaryUrl })
+          });
+          setLogoPreview(cloudinaryUrl);
+          showAlert('Klart', 'Logotypen har sparats!');
+        }
+      }
+    } catch (e: any) {
+      showAlert('Fel', 'Kunde inte ta foto');
+    }
+  };
+
+  const showLogoPicker = () => {
+    if (Platform.OS === 'web') {
+      handleChooseLogo();
+    } else {
+      Alert.alert(
+        'Välj logotyp',
+        'Hur vill du lägga till en logotyp?',
+        [
+          { text: 'Avbryt', style: 'cancel' },
+          { text: 'Ta foto', onPress: handleTakeLogoPhoto },
+          { text: 'Välj från galleri', onPress: handleChooseLogo },
+        ]
+      );
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    confirmAction(
+      'Ta bort logotyp',
+      'Vill du ta bort din butikslogotyp?',
+      async () => {
+        try {
+          await api.fetch('/admin/logo', { method: 'DELETE' });
+          setLogoPreview(null);
+          showAlert('Klart', 'Logotypen har tagits bort');
+        } catch (e: any) {
+          showAlert('Fel', e.message || 'Kunde inte ta bort logotypen');
+        }
+      }
+    );
   };
 
   const handleSaveProduct = async () => {
@@ -646,6 +794,68 @@ export default function AdminScreen() {
       {/* Settings Tab */}
       {tab === 'settings' && (
         <ScrollView style={styles.tabContent} contentContainerStyle={styles.settingsContent}>
+          {/* Logo upload section */}
+          <View style={styles.logoSection}>
+            <Text style={styles.settingLabel}>Butikslogotyp</Text>
+            <View style={styles.logoContainer}>
+              {logoPreview ? (
+                <View style={styles.logoPreviewContainer}>
+                  <Image 
+                    source={{ uri: logoPreview }} 
+                    style={styles.logoPreview}
+                  />
+                  <View style={styles.logoActions}>
+                    <TouchableOpacity 
+                      style={styles.logoChangeBtn}
+                      onPress={showLogoPicker}
+                      disabled={uploadingLogo}
+                    >
+                      {uploadingLogo ? (
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                      ) : (
+                        <>
+                          <Ionicons name="camera-outline" size={16} color={Colors.primary} />
+                          <Text style={styles.logoChangeBtnText}>Byt</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.logoRemoveBtn}
+                      onPress={handleRemoveLogo}
+                      disabled={uploadingLogo}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
+                      <Text style={styles.logoRemoveBtnText}>Ta bort</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.logoPickerBtn}
+                  onPress={showLogoPicker}
+                  disabled={uploadingLogo}
+                >
+                  {uploadingLogo ? (
+                    <ActivityIndicator color={Colors.primary} />
+                  ) : (
+                    <>
+                      <Ionicons name="image-outline" size={40} color={Colors.textMuted} />
+                      <Text style={styles.logoPickerText}>
+                        {Platform.OS === 'web' ? 'Välj logotyp' : 'Ta foto eller välj från galleri'}
+                      </Text>
+                      <Text style={styles.logoPickerHint}>
+                        Rekommenderad storlek: 200x200px
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.settingsDivider} />
+
           {[
             { key: 'store_name', label: 'Butiksnamn', icon: 'storefront-outline' as const },
             { key: 'swish_phone', label: 'Swish-nummer', icon: 'call-outline' as const, keyboard: 'phone-pad' as const },
@@ -992,4 +1202,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6, backgroundColor: Colors.surfaceHighlight, borderRadius: 8,
   },
   changeImageText: { color: Colors.primary, fontSize: 13, fontWeight: '500' },
+  // Logo upload styles
+  logoSection: { marginBottom: 16 },
+  logoContainer: { alignItems: 'center', marginTop: 8 },
+  logoPreviewContainer: { alignItems: 'center' },
+  logoPreview: { 
+    width: 120, height: 120, borderRadius: 16, 
+    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+  },
+  logoActions: { flexDirection: 'row', gap: 12, marginTop: 12 },
+  logoChangeBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: Colors.surfaceHighlight, borderRadius: 8,
+  },
+  logoChangeBtnText: { color: Colors.primary, fontSize: 14, fontWeight: '500' },
+  logoRemoveBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: Colors.surfaceHighlight, borderRadius: 8,
+  },
+  logoRemoveBtnText: { color: Colors.destructive, fontSize: 14, fontWeight: '500' },
+  logoPickerBtn: {
+    width: 160, height: 160, borderRadius: 16, borderWidth: 2, borderColor: Colors.border,
+    borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  logoPickerText: { color: Colors.textMuted, fontSize: 13, textAlign: 'center', marginTop: 8, paddingHorizontal: 12 },
+  logoPickerHint: { color: Colors.textMuted, fontSize: 11, textAlign: 'center', marginTop: 4, opacity: 0.7 },
+  settingsDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 16 },
 });

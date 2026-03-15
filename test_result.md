@@ -101,3 +101,80 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Implement store logo upload functionality in Admin -> Settings tab"
+
+backend:
+  - task: "PUT /api/admin/logo - Update store logo URL"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/admin.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added PUT /api/admin/logo endpoint to update logo_url in settings after Cloudinary upload"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: PUT /api/admin/logo works correctly. Accepts JSON body with logo_url, requires Bearer token authentication, validates input (rejects empty/missing logo_url with 400), updates settings.logo_url in database, returns {success: true, logo_url: 'provided_url'}. Tested with Cloudinary URLs successfully."
+
+  - task: "DELETE /api/admin/logo - Remove store logo"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/admin.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Endpoint already existed, verified it works with the new logo workflow"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: DELETE /api/admin/logo works correctly. Requires Bearer token authentication, sets logo_url to null in settings database, returns {success: true, message: 'Logo removed'}. Tested logo removal and verified logo_url becomes null."
+
+  - task: "GET /api/admin/settings - Verify logo_url storage"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/admin.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: GET /api/admin/settings correctly includes logo_url field. Requires Bearer token authentication, returns tenant-specific settings including logo_url (null when no logo set, URL when logo is set). Confirmed logo persistence across PUT and DELETE operations."
+
+frontend:
+  - task: "Logo upload UI in Admin Settings tab"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/app/(tabs)/admin.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Added logo section with image picker, preview, change and remove buttons"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Logo upload UI in Admin Settings tab"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Implemented store logo upload feature. Added PUT /api/admin/logo endpoint to update logo URL after Cloudinary upload. Frontend UI added with image picker supporting both gallery and camera. Please test the backend endpoints first."
+  - agent: "testing"
+    message: "✅ Backend logo upload endpoints are working perfectly! All 3 endpoints tested successfully: PUT /api/admin/logo (updates logo URL with validation), DELETE /api/admin/logo (removes logo), GET /api/admin/settings (includes logo_url field). Authentication is properly enforced. Input validation works correctly. Logo persistence verified in database. Backend implementation is solid and ready for production."

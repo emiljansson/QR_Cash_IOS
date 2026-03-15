@@ -121,6 +121,29 @@ async def delete_logo(request: Request):
     return {"success": True, "message": "Logo removed"}
 
 
+@router.put("/logo")
+async def update_logo_url(request: Request):
+    """Update store logo URL for tenant (after Cloudinary upload)"""
+    user = await require_user(request)
+    db = get_db()
+    
+    data = await request.json()
+    logo_url = data.get("logo_url")
+    
+    if not logo_url:
+        raise HTTPException(status_code=400, detail="logo_url krävs")
+    
+    # Ensure settings exist
+    await get_tenant_settings(user["user_id"])
+    
+    await db.settings.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"logo_url": logo_url}}
+    )
+    
+    return {"success": True, "logo_url": logo_url}
+
+
 @router.delete("/clear-orders")
 async def clear_orders(request: Request):
     """Clear all orders and reset statistics for tenant"""
