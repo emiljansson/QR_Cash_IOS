@@ -30,10 +30,11 @@ interface CartItem {
 export default function POSScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const isTablet = width >= 768; // iPad/tablet breakpoint
   const isDesktop = width >= 1024; // Desktop breakpoint
   const numColumns = isDesktop ? 4 : (isTablet ? 2 : 3); // 4 cols desktop, 2 cols tablet, 3 cols mobile
+  const cartMaxHeight = isTablet ? undefined : height * 0.5; // 50% av höjden på mobil
   const params = useLocalSearchParams<{ restoreCart?: string; restoreTotal?: string; restoreCartId?: string; clearCart?: string }>();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -280,7 +281,7 @@ export default function POSScreen() {
 
         {/* Cart Panel - Shows at bottom on mobile, grows upward as items added */}
         {(isTablet || cart.length > 0) && (
-          <View style={[styles.cartSection, isTablet && styles.cartSectionTablet]}>
+          <View style={[styles.cartSection, isTablet && styles.cartSectionTablet, !isTablet && { maxHeight: cartMaxHeight }]}>
             <View style={styles.cartHeader}>
               <Text style={styles.cartTitle}>Kundkorg</Text>
               <View style={styles.cartHeaderActions}>
@@ -480,7 +481,7 @@ const styles = StyleSheet.create({
   // Cart section
   cartSection: {
     backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border,
-    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, maxHeight: '50%',
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16,
   },
   cartSectionTablet: {
     flex: 1, maxHeight: 'auto', height: '100%',
