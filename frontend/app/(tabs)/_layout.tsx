@@ -9,6 +9,9 @@ import { ActivityIndicator, View } from 'react-native';
 export default function TabLayout() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  
+  // Check if user is admin (hide admin tab for regular users)
+  const isAdmin = user?.role === 'admin' || user?.role === 'superadmin' || !user?.role;
 
   useEffect(() => {
     if (!loading && !user) {
@@ -60,6 +63,7 @@ export default function TabLayout() {
         options={{
           title: 'Admin',
           tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
+          href: isAdmin ? '/admin' : null, // Hide tab for non-admin users
         }}
       />
       <Tabs.Screen
