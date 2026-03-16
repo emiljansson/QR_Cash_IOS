@@ -467,6 +467,19 @@ async def send_display_receipt(request: Request):
     
     # Generate receipt HTML
     store_name = settings.get("store_name", "Min Butik")
+    
+    # Format order date
+    order_date = order.get('created_at', '')
+    if isinstance(order_date, str):
+        try:
+            from datetime import datetime
+            order_date = datetime.fromisoformat(order_date.replace('Z', '+00:00')).strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            pass
+    
+    order_status = "Betald" if order.get('status') == 'paid' else "Väntande"
+    order_id_short = order.get('id', '')[:8]
+    
     items_html = ""
     for item in order.get('items', []):
         items_html += f"""
@@ -474,6 +487,7 @@ async def send_display_receipt(request: Request):
             <td style="padding: 10px; border-bottom: 1px solid #eee;">{item['name']}</td>
             <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">{item['quantity']}</td>
             <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">{item['price']:.2f} kr</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">{item['price'] * item['quantity']:.2f} kr</td>
         </tr>
         """
     
@@ -486,12 +500,20 @@ async def send_display_receipt(request: Request):
             <h1 style="color: #1a1a1a; margin-bottom: 5px;">{store_name}</h1>
             <p style="color: #666; margin: 0;">Kvitto</p>
         </div>
+        
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <p style="margin: 5px 0;"><strong>Order ID:</strong> {order_id_short}</p>
+            <p style="margin: 5px 0;"><strong>Datum och tid:</strong> {order_date}</p>
+            <p style="margin: 5px 0;"><strong>Status:</strong> {order_status}</p>
+        </div>
+        
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
             <thead>
                 <tr style="background: #22c55e; color: white;">
                     <th style="padding: 12px; text-align: left;">Produkt</th>
                     <th style="padding: 12px; text-align: center;">Antal</th>
                     <th style="padding: 12px; text-align: right;">Pris</th>
+                    <th style="padding: 12px; text-align: right;">Summa</th>
                 </tr>
             </thead>
             <tbody>{items_html}</tbody>
