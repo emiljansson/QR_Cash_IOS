@@ -957,11 +957,11 @@ const styles = StyleSheet.create({
   },
   qrBoxLandscape: {
     backgroundColor: C.white,
-    padding: 16,
-    borderRadius: 20,
+    padding: 20,
+    borderRadius: 24,
     marginVertical: 16,
-    width: 280,
-    height: 280,
+    width: 400,
+    height: 400,
   },
   qrImageLandscape: {
     width: '100%',
