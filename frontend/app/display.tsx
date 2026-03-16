@@ -63,11 +63,14 @@ const C = {
   green: '#22c55e',
   greenDark: '#16a34a',
   red: '#ef4444',
+  orange: '#f97316',
   white: '#ffffff',
   swish: '#D41420',
 };
 
-type DisplayState = 'loading' | 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired';
+type DisplayState = 'loading' | 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired' | 'reconnecting';
+
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function CustomerDisplayScreen() {
   const { width, height } = useWindowDimensions();
@@ -101,6 +104,14 @@ export default function CustomerDisplayScreen() {
   
   // Cache last data hash to avoid unnecessary re-renders
   const lastDataHashRef = useRef<string>('');
+  
+  // Inactivity timeout refs
+  const inactivityTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSuccessfulPollRef = useRef<number>(Date.now());
+  
+  // Track current and confirmed orders
+  const currentOrderIdRef = useRef<string | null>(null);
+  const confirmedOrderIdRef = useRef<string | null>(null);
 
   // Check for saved pairing on startup
   const checkSavedPairing = useCallback(async () => {
@@ -159,6 +170,30 @@ export default function CustomerDisplayScreen() {
     storage.set(STORAGE_KEYS.USER_ID, newUserId);
     storage.set(STORAGE_KEYS.DISPLAY_ID, newDisplayId);
     storage.set(STORAGE_KEYS.STORE_NAME, newStoreName);
+  }, []);
+
+  // Reset inactivity timeout - called on each successful poll
+  const resetInactivityTimeout = useCallback(() => {
+    if (inactivityTimeoutRef.current) {
+      clearTimeout(inactivityTimeoutRef.current);
+    }
+    
+    inactivityTimeoutRef.current = setTimeout(async () => {
+      // 5 minutes of no successful communication - show reconnecting screen
+      // BUT keep the existing pairing so we can auto-reconnect if POS comes back
+      console.log('Inactivity timeout - showing reconnecting screen');
+      setState('reconnecting');
+      
+      // Generate a new pairing code (for new connections) but keep old userId
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/customer-display/generate-code`, { method: 'POST' });
+        const data = await res.json();
+        setPairingCode(data.code);
+        // Keep the old displayId and userId for potential reconnection
+      } catch (e) {
+        console.log('Failed to generate reconnection code:', e);
+      }
+    }, INACTIVITY_TIMEOUT_MS);
   }, []);
 
   // Clear pairing and generate new code
@@ -224,6 +259,7 @@ export default function CustomerDisplayScreen() {
       if (pollRef.current) clearInterval(pollRef.current);
       if (dataPollRef.current) clearInterval(dataPollRef.current);
       if (pairingValidationRef.current) clearInterval(pairingValidationRef.current);
+      if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
     };
   }, []);
 
@@ -257,9 +293,9 @@ export default function CustomerDisplayScreen() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [state, pairingCode, displayId, savePairing, generateCode]);
 
-  // Step 3: Poll display data once paired (optimized)
+  // Step 3: Poll display data once paired or reconnecting (optimized)
   useEffect(() => {
-    if (!userId || (state !== 'paired_idle' && state !== 'paired_waiting' && state !== 'paired_paid')) return;
+    if (!userId || (state !== 'paired_idle' && state !== 'paired_waiting' && state !== 'paired_paid' && state !== 'reconnecting')) return;
 
     const fetchDisplay = async () => {
       try {
@@ -270,6 +306,23 @@ export default function CustomerDisplayScreen() {
           storage.clearPairing();
           setState('unpaired');
           return;
+        }
+
+        // Successful poll - reset inactivity timer
+        lastSuccessfulPollRef.current = Date.now();
+        resetInactivityTimeout();
+        
+        // If we were in reconnecting state, we're back online!
+        if (state === 'reconnecting') {
+          console.log('Reconnected to POS!');
+          // Go to appropriate state based on backend status
+          if (data.status === 'waiting') {
+            setState('paired_waiting');
+          } else if (data.status === 'paid') {
+            setState('paired_paid');
+          } else {
+            setState('paired_idle');
+          }
         }
 
         // Create hash to check if data actually changed
@@ -291,44 +344,76 @@ export default function CustomerDisplayScreen() {
           }
         }
 
-        // Handle state transitions - but NEVER leave paid state from polling
-        if (data.status === 'paid' && state !== 'paired_paid') {
-          setState('paired_paid');
-          setPaidAnimation(true);
-          // Save the paid amount so it doesn't get reset
-          setPaidAmount(data.total || 0);
-          
-          // Only start countdown once
-          if (!countdownStartedRef.current) {
-            countdownStartedRef.current = true;
-            setThankYouCountdown(20);
+        const incomingOrderId = data.order_id || null;
+        const backendStatus = data.status;
+
+        // CASE 1: Backend says PAID
+        if (backendStatus === 'paid') {
+          if (incomingOrderId && incomingOrderId !== confirmedOrderIdRef.current) {
+            // New payment confirmation!
+            confirmedOrderIdRef.current = incomingOrderId;
+            currentOrderIdRef.current = incomingOrderId;
+            setState('paired_paid');
+            setPaidAnimation(true);
+            setPaidAmount(data.total || 0);
             
-            // Start countdown timer
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            countdownRef.current = setInterval(() => {
-              setThankYouCountdown(prev => {
-                if (prev <= 1) {
-                  if (countdownRef.current) clearInterval(countdownRef.current);
-                  countdownRef.current = null;
-                  // Reset state after countdown - but DON'T close modal
-                  countdownStartedRef.current = false;
-                  setState('paired_idle');
-                  // Don't reset email modal here - let user finish
-                  setPaidAnimation(false);
-                  return 0;
-                }
-                return prev - 1;
-              });
-            }, 1000);
+            // Start countdown
+            if (!countdownStartedRef.current) {
+              countdownStartedRef.current = true;
+              setThankYouCountdown(20);
+              
+              if (countdownRef.current) clearInterval(countdownRef.current);
+              countdownRef.current = setInterval(() => {
+                setThankYouCountdown(prev => {
+                  if (prev <= 1) {
+                    if (countdownRef.current) clearInterval(countdownRef.current);
+                    countdownRef.current = null;
+                    countdownStartedRef.current = false;
+                    setState('paired_idle');
+                    setPaidAnimation(false);
+                    setEmailSent(false);
+                    return 0;
+                  }
+                  return prev - 1;
+                });
+              }, 1000);
+            }
           }
-        } else if (state === 'paired_paid') {
-          // IMPORTANT: Stay on thank you screen - ignore ALL backend status changes
-          // The countdown timer handles the transition back to idle
           return;
-        } else if (data.status === 'waiting' && state !== 'paired_waiting') {
-          setState('paired_waiting');
-        } else if (data.status === 'idle' && state !== 'paired_idle') {
-          setState('paired_idle');
+        }
+
+        // CASE 2: Backend says WAITING (new order to display)
+        if (backendStatus === 'waiting') {
+          if (incomingOrderId && incomingOrderId !== currentOrderIdRef.current) {
+            currentOrderIdRef.current = incomingOrderId;
+            setDisplayData(data);
+            
+            if (state === 'paired_paid') {
+              if (countdownRef.current) {
+                clearInterval(countdownRef.current);
+                countdownRef.current = null;
+              }
+              countdownStartedRef.current = false;
+              setPaidAnimation(false);
+              setEmailSent(false);
+            }
+            
+            setState('paired_waiting');
+          } else if (state !== 'paired_waiting' && state !== 'paired_paid') {
+            setDisplayData(data);
+            setState('paired_waiting');
+          }
+          return;
+        }
+
+        // CASE 3: Backend says IDLE
+        if (backendStatus === 'idle') {
+          if (state !== 'paired_paid') {
+            currentOrderIdRef.current = null;
+            setDisplayData(data);
+            setState('paired_idle');
+          }
+          return;
         }
       } catch {}
     };
@@ -339,7 +424,7 @@ export default function CustomerDisplayScreen() {
     return () => { 
       if (dataPollRef.current) clearInterval(dataPollRef.current);
     };
-  }, [userId, state]); // Removed thankYouCountdown from dependencies
+  }, [userId, state, resetInactivityTimeout]);
 
   // SCREEN: Loading saved pairing
   if (state === 'loading') {
@@ -420,6 +505,42 @@ export default function CustomerDisplayScreen() {
           <View style={styles.waitingRow}>
             <ActivityIndicator size="small" color={C.green} />
             <Text style={styles.waitingText}>Väntar på koppling...</Text>
+          </View>
+
+          <TouchableOpacity testID="regenerate-code-btn" style={styles.newCodeBtn} onPress={generateCode}>
+            <Ionicons name="refresh" size={16} color={C.textSec} />
+            <Text style={styles.newCodeBtnText}>Generera ny kod</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // SCREEN: Reconnecting - showing pairing code but still trying to reconnect
+  if (state === 'reconnecting') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.center}>
+          <View style={styles.reconnectIconContainer}>
+            <Ionicons name="sync-outline" size={48} color={C.orange} />
+          </View>
+          <Text style={styles.reconnectTitle}>Återansluter...</Text>
+          <Text style={styles.reconnectSubtitle}>
+            Försöker återansluta till kassan.{'\n'}
+            Eller koppla med ny kod nedan.
+          </Text>
+
+          <View style={styles.codeContainer}>
+            {pairingCode.split('').map((digit, idx) => (
+              <View key={idx} style={styles.codeDigit}>
+                <Text style={styles.codeDigitText}>{digit}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.waitingRow}>
+            <ActivityIndicator size="small" color={C.orange} />
+            <Text style={styles.waitingText}>Söker anslutning...</Text>
           </View>
 
           <TouchableOpacity testID="regenerate-code-btn" style={styles.newCodeBtn} onPress={generateCode}>
@@ -851,6 +972,15 @@ const styles = StyleSheet.create({
   },
   pairTitle: { fontSize: 28, fontWeight: '700', color: C.text },
   pairSubtitle: { fontSize: 16, color: C.textSec, marginTop: 8, textAlign: 'center', maxWidth: 300 },
+  
+  // Reconnecting screen
+  reconnectIconContainer: {
+    width: 96, height: 96, borderRadius: 24, backgroundColor: 'rgba(249,115,22,0.1)',
+    justifyContent: 'center', alignItems: 'center', marginBottom: 24,
+  },
+  reconnectTitle: { fontSize: 28, fontWeight: '700', color: C.orange, marginBottom: 8 },
+  reconnectSubtitle: { color: C.textSec, fontSize: 14, textAlign: 'center', marginBottom: 24, paddingHorizontal: 32, lineHeight: 22 },
+  
   codeContainer: { flexDirection: 'row', gap: 16, marginTop: 32 },
   codeDigit: {
     width: 72, height: 88, backgroundColor: C.surface, borderRadius: 16,
