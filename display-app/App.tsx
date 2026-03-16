@@ -957,9 +957,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 20,
     marginVertical: 16,
-    width: '80%',
-    maxWidth: 300,
-    aspectRatio: 1,
+    width: 280,
+    height: 280,
   },
   qrImageLandscape: {
     width: '100%',
@@ -984,9 +983,8 @@ const styles = StyleSheet.create({
     backgroundColor: C.white,
     padding: 12,
     borderRadius: 16,
-    width: '60%',
-    maxWidth: 220,
-    aspectRatio: 1,
+    width: 200,
+    height: 200,
     marginVertical: 8,
   },
   qrImagePortrait: {
