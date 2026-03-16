@@ -278,6 +278,12 @@ export default function App() {
 
         if (data.status === 'unpaired') {
           await AsyncStorage.removeItem('display_pairing');
+          setUserId(null);
+          setDisplayId('');
+          if (inactivityTimeoutRef.current) {
+            clearTimeout(inactivityTimeoutRef.current);
+            inactivityTimeoutRef.current = null;
+          }
           setState('unpaired');
           return;
         }
