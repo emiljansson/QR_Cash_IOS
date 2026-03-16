@@ -390,7 +390,7 @@ export default function POSScreen() {
             {paymentConfirmed ? (
               <View style={styles.paymentSuccess}>
                 <Ionicons name="checkmark-circle" size={80} color={Colors.primary} />
-                <Text style={styles.successTitle}>Betalning mottagen!</Text>
+                <Text style={styles.successTitle}>Betalningen är{'\n'}mottagen!</Text>
                 <Text style={styles.successAmount}>{cartTotal.toFixed(0)} kr</Text>
               </View>
             ) : (
@@ -560,6 +560,6 @@ const styles = StyleSheet.create({
   cancelBtn: { marginTop: 12, padding: 12 },
   cancelBtnText: { color: Colors.textMuted, fontSize: 15 },
   paymentSuccess: { alignItems: 'center', paddingVertical: 20 },
-  successTitle: { fontSize: 24, fontWeight: '700', color: Colors.primary, marginTop: 16 },
+  successTitle: { fontSize: 24, fontWeight: '700', color: Colors.primary, marginTop: 16, textAlign: 'center' },
   successAmount: { fontSize: 36, fontWeight: '700', color: Colors.textPrimary, marginTop: 8 },
 });
