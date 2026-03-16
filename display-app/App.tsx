@@ -55,9 +55,10 @@ export default function App() {
   const pairingValidationRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const countdownStartedRef = useRef(false);
-  const openedDuringCountdownRef = useRef(false);
   const lastDataHashRef = useRef<string>('');
   const isInitializedRef = useRef(false);
+  const currentOrderIdRef = useRef<string | null>(null);
+  const confirmedOrderIdRef = useRef<string | null>(null);
 
   // Sound
   const player = useAudioPlayer(require('./assets/pling.mp3'));
@@ -245,35 +246,31 @@ export default function App() {
           return;
         }
 
-        // Create hash to check if data changed
-        const dataHash = JSON.stringify({
-          status: data.status,
-          items: data.items,
-          total: data.total,
-          qr_data: data.qr_data
-        });
-        
-        if (dataHash !== lastDataHashRef.current) {
-          lastDataHashRef.current = dataHash;
-          setDisplayData(data);
-          
-          if (data.store_name) setStoreName(data.store_name);
-          if (data.logo_url) setLogoUrl(data.logo_url);
-        }
+        // Update store info
+        if (data.store_name) setStoreName(data.store_name);
+        if (data.logo_url) setLogoUrl(data.logo_url);
 
-        // Handle state transitions
-        if (data.status === 'paid' && state !== 'paired_paid') {
-          setState('paired_paid');
-          setPaidAnimation(true);
-          setPaidAmount(data.total || 0);
-          playPling();
-          
-          // Only start countdown once
-          if (!countdownStartedRef.current) {
+        const incomingOrderId = data.order_id || null;
+        const backendStatus = data.status; // 'idle', 'waiting', 'paid'
+
+        // CASE 1: Backend says PAID
+        if (backendStatus === 'paid') {
+          // Only trigger paid state if this is a NEW confirmation (not already confirmed)
+          if (incomingOrderId && incomingOrderId !== confirmedOrderIdRef.current) {
+            // New payment confirmation!
+            confirmedOrderIdRef.current = incomingOrderId;
+            currentOrderIdRef.current = incomingOrderId;
+            setDisplayData(data);
+            setState('paired_paid');
+            setPaidAnimation(true);
+            setPaidAmount(data.total || 0);
+            playPling();
+            
+            // Start countdown
+            if (countdownRef.current) clearInterval(countdownRef.current);
             countdownStartedRef.current = true;
             setThankYouCountdown(20);
             
-            if (countdownRef.current) clearInterval(countdownRef.current);
             countdownRef.current = setInterval(() => {
               setThankYouCountdown(prev => {
                 if (prev <= 1) {
@@ -282,33 +279,59 @@ export default function App() {
                   countdownStartedRef.current = false;
                   setState('paired_idle');
                   setPaidAnimation(false);
+                  setEmailSent(false);
                   return 0;
                 }
                 return prev - 1;
               });
             }, 1000);
           }
-        } else if (state === 'paired_paid') {
-          // Check if a NEW order came in (waiting status with new order_id)
-          if (data.status === 'waiting' && data.order_id && data.order_id !== displayData?.order_id) {
-            // New order! Stop countdown and show new order
-            if (countdownRef.current) {
-              clearInterval(countdownRef.current);
-              countdownRef.current = null;
+          // If already confirmed this order, stay on thank you screen (do nothing)
+          return;
+        }
+
+        // CASE 2: Backend says WAITING (new order to display)
+        if (backendStatus === 'waiting') {
+          // Check if this is a new/different order than what we're showing
+          if (incomingOrderId && incomingOrderId !== currentOrderIdRef.current) {
+            // New order! Show it
+            currentOrderIdRef.current = incomingOrderId;
+            setDisplayData(data);
+            
+            // If we were on paid screen, stop countdown
+            if (state === 'paired_paid') {
+              if (countdownRef.current) {
+                clearInterval(countdownRef.current);
+                countdownRef.current = null;
+              }
+              countdownStartedRef.current = false;
+              setPaidAnimation(false);
+              setEmailSent(false);
             }
-            countdownStartedRef.current = false;
-            setPaidAnimation(false);
+            
+            setState('paired_waiting');
+          } else if (state !== 'paired_waiting' && state !== 'paired_paid') {
+            // Same order but we're not showing it yet
             setDisplayData(data);
             setState('paired_waiting');
           }
-          // Otherwise stay on thank you screen
           return;
-        } else if (data.status === 'waiting' && state !== 'paired_waiting') {
-          setState('paired_waiting');
-        } else if (data.status === 'idle' && state !== 'paired_idle') {
-          setState('paired_idle');
         }
-      } catch {}
+
+        // CASE 3: Backend says IDLE
+        if (backendStatus === 'idle') {
+          // Only go to idle if we're not in the middle of a paid countdown
+          if (state !== 'paired_paid') {
+            currentOrderIdRef.current = null;
+            setDisplayData(data);
+            setState('paired_idle');
+          }
+          return;
+        }
+
+      } catch (e) {
+        console.log('Display poll error:', e);
+      }
     };
 
     fetchDisplay();
