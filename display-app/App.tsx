@@ -54,11 +54,15 @@ export default function App() {
   const dataPollRef = useRef<NodeJS.Timeout | null>(null);
   const pairingValidationRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownStartedRef = useRef(false);
   const lastDataHashRef = useRef<string>('');
   const isInitializedRef = useRef(false);
   const currentOrderIdRef = useRef<string | null>(null);
   const confirmedOrderIdRef = useRef<string | null>(null);
+  const lastSuccessfulPollRef = useRef<number>(Date.now());
+  
+  const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
   // Sound
   const player = useAudioPlayer(require('./assets/pling.mp3'));
@@ -92,6 +96,7 @@ export default function App() {
       if (dataPollRef.current) clearInterval(dataPollRef.current);
       if (pairingValidationRef.current) clearInterval(pairingValidationRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
     };
   }, []);
 
@@ -129,6 +134,10 @@ export default function App() {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
+    if (inactivityTimeoutRef.current) {
+      clearTimeout(inactivityTimeoutRef.current);
+      inactivityTimeoutRef.current = null;
+    }
     
     try {
       const res = await api.post('/api/customer-display/generate-code', {});
@@ -148,6 +157,25 @@ export default function App() {
       displayId: newDisplayId,
       storeName: newStoreName,
     }));
+  };
+
+  // Reset inactivity timeout - called on each successful poll
+  const resetInactivityTimeout = () => {
+    if (inactivityTimeoutRef.current) {
+      clearTimeout(inactivityTimeoutRef.current);
+    }
+    
+    inactivityTimeoutRef.current = setTimeout(async () => {
+      // 5 minutes of no successful communication - unpair and show pairing screen
+      console.log('Inactivity timeout - disconnecting and showing pairing code');
+      await AsyncStorage.removeItem('display_pairing');
+      setUserId(null);
+      setDisplayId('');
+      setDisplayData(null);
+      currentOrderIdRef.current = null;
+      confirmedOrderIdRef.current = null;
+      generateCode();
+    }, INACTIVITY_TIMEOUT_MS);
   };
 
   // Unpair
@@ -222,6 +250,10 @@ export default function App() {
           
           await savePairing(newUserId, newDisplayId, '');
           setState('paired_idle');
+          
+          // Start inactivity timeout
+          lastSuccessfulPollRef.current = Date.now();
+          resetInactivityTimeout();
         } else if (!res.valid) {
           generateCode();
         }
@@ -245,6 +277,10 @@ export default function App() {
           setState('unpaired');
           return;
         }
+
+        // Successful poll - reset inactivity timer
+        lastSuccessfulPollRef.current = Date.now();
+        resetInactivityTimeout();
 
         // Update store info
         if (data.store_name) setStoreName(data.store_name);
