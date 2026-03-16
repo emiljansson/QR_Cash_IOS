@@ -261,7 +261,7 @@ export default function App() {
           if (data.logo_url) setLogoUrl(data.logo_url);
         }
 
-        // Handle state transitions - NEVER leave paid state from polling
+        // Handle state transitions
         if (data.status === 'paid' && state !== 'paired_paid') {
           setState('paired_paid');
           setPaidAnimation(true);
@@ -289,7 +289,19 @@ export default function App() {
             }, 1000);
           }
         } else if (state === 'paired_paid') {
-          // Stay on thank you screen - ignore backend status changes
+          // Check if a NEW order came in (waiting status with new order_id)
+          if (data.status === 'waiting' && data.order_id && data.order_id !== displayData?.order_id) {
+            // New order! Stop countdown and show new order
+            if (countdownRef.current) {
+              clearInterval(countdownRef.current);
+              countdownRef.current = null;
+            }
+            countdownStartedRef.current = false;
+            setPaidAnimation(false);
+            setDisplayData(data);
+            setState('paired_waiting');
+          }
+          // Otherwise stay on thank you screen
           return;
         } else if (data.status === 'waiting' && state !== 'paired_waiting') {
           setState('paired_waiting');
