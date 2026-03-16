@@ -456,6 +456,7 @@ export default function App() {
   const isPaid = state === 'paired_paid';
   const isWaiting = state === 'paired_waiting';
   const showQR = isWaiting && qrData;
+  const hasItems = items.length > 0;
 
   // SCREEN: Payment complete - Thank you
   if (isPaid) {
@@ -558,6 +559,32 @@ export default function App() {
     );
   }
 
+  // SCREEN: Idle - Just logo and store name centered (no order/items)
+  if (!showQR && !hasItems) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        
+        {/* Small unpair button in corner */}
+        <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtnCorner}>
+          <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
+        </TouchableOpacity>
+
+        {/* Centered logo and store name */}
+        <View style={styles.idleFullScreen}>
+          {logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={styles.idleLogo} resizeMode="contain" />
+          ) : (
+            <View style={styles.idleLogoPlaceholder}>
+              <Ionicons name="storefront" size={80} color={C.green} />
+            </View>
+          )}
+          <Text style={styles.idleStoreName}>{storeName || 'Välkommen!'}</Text>
+        </View>
+      </View>
+    );
+  }
+
   // SCREEN: Paired display (idle or waiting)
   return (
     <View style={styles.container}>
@@ -565,13 +592,20 @@ export default function App() {
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
+        <View style={styles.headerLeft}>
+          {logoUrl && (
+            <Image source={{ uri: logoUrl }} style={styles.headerLogo} resizeMode="contain" />
+          )}
+          <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
+        </View>
         <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtn}>
           <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
         </TouchableOpacity>
       </View>
 
       {/* Main Content - Responsive layout */}
+      {/* Portrait: QR on top, Cart on bottom */}
+      {/* Landscape: Cart on left, QR on right */}
       <View style={[styles.mainContent, isLandscape && styles.mainContentLandscape]}>
         
         {/* Cart Section */}
@@ -579,66 +613,51 @@ export default function App() {
           styles.cartSection, 
           isLandscape ? styles.cartSectionLandscape : styles.cartSectionPortrait
         ]}>
-          {items.length > 0 ? (
-            <>
-              <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
-                <Text style={styles.cartTitle}>Din order</Text>
-                {items.map((item, idx) => (
-                  <View key={idx} style={styles.cartItem}>
-                    <View style={styles.itemLeft}>
-                      <Text style={styles.itemQty}>{item.quantity}x</Text>
-                      <Text style={styles.itemName}>{item.name}</Text>
-                    </View>
-                    <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
-                  </View>
-                ))}
-              </ScrollView>
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Totalt att betala</Text>
-                <Text style={styles.totalValue}>{total} kr</Text>
+          <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
+            <Text style={styles.cartTitle}>Din order</Text>
+            {items.map((item, idx) => (
+              <View key={idx} style={styles.cartItem}>
+                <View style={styles.itemLeft}>
+                  <Text style={styles.itemQty}>{item.quantity}x</Text>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                </View>
+                <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
               </View>
-            </>
-          ) : (
-            <View style={styles.emptyCart}>
-              <Ionicons name="basket-outline" size={40} color={C.textMut} />
-              <Text style={styles.emptyCartText}>Varukorgen är tom</Text>
-            </View>
-          )}
+            ))}
+          </ScrollView>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Totalt att betala</Text>
+            <Text style={styles.totalValue}>{total} kr</Text>
+          </View>
         </View>
 
-        {/* QR/Status Section */}
+        {/* QR Section */}
         <View style={[
           styles.qrSection, 
           isLandscape ? styles.qrSectionLandscape : styles.qrSectionPortrait
         ]}>
-          {showQR ? (
-            <View style={styles.qrContainer}>
-              <Text style={styles.qrTitle}>Betala med Swish</Text>
-              <View style={styles.qrBox}>
-                {displayData?.qr_code_url ? (
-                  <Image 
-                    source={{ uri: displayData.qr_code_url }} 
-                    style={styles.qrImage}
-                    resizeMode="contain"
-                  />
-                ) : (
-                  <Ionicons name="qr-code" size={150} color={C.green} />
-                )}
-              </View>
-              <Text style={styles.qrAmount}>{total} kr</Text>
-              <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
-            </View>
-          ) : (
-            <View style={styles.idleContainer}>
-              {logoUrl ? (
-                <Image source={{ uri: logoUrl }} style={styles.centerLogo} resizeMode="contain" />
+          <View style={styles.qrContainer}>
+            <Text style={styles.qrTitle}>Betala med Swish</Text>
+            <View style={styles.qrBox}>
+              {displayData?.qr_code_url ? (
+                <Image 
+                  source={{ uri: displayData.qr_code_url }} 
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
+              ) : qrData ? (
+                <Image 
+                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}` }} 
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
               ) : (
-                <Ionicons name="storefront" size={80} color={C.green} />
+                <ActivityIndicator size="large" color={C.green} />
               )}
-              <Text style={styles.idleTitle}>{storeName || 'Välkommen!'}</Text>
-              <Text style={styles.idleSubtitle}>Skanna QR-koden för att betala med Swish</Text>
             </View>
-          )}
+            <Text style={styles.qrAmount}>{total} kr</Text>
+            <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
+          </View>
         </View>
       </View>
     </View>
@@ -792,6 +811,16 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 12,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
   storeNameText: {
     fontSize: 18,
     fontWeight: '600',
@@ -799,6 +828,42 @@ const styles = StyleSheet.create({
   },
   unpairBtn: {
     padding: 8,
+  },
+  unpairBtnCorner: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    padding: 8,
+    zIndex: 10,
+  },
+
+  // Idle full screen (no order)
+  idleFullScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  idleLogo: {
+    width: 200,
+    height: 200,
+    borderRadius: 24,
+    marginBottom: 24,
+  },
+  idleLogoPlaceholder: {
+    width: 160,
+    height: 160,
+    borderRadius: 24,
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  idleStoreName: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: C.text,
+    textAlign: 'center',
   },
 
   // Main content
