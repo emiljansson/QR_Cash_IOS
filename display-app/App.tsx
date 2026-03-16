@@ -12,7 +12,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Colors } from './src/utils/colors';
 import { api } from './src/utils/api';
 
-type DisplayState = 'loading' | 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired';
+type DisplayState = 'loading' | 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired' | 'reconnecting';
 
 interface DisplayData {
   status: string;
@@ -166,15 +166,19 @@ export default function App() {
     }
     
     inactivityTimeoutRef.current = setTimeout(async () => {
-      // 5 minutes of no successful communication - unpair and show pairing screen
-      console.log('Inactivity timeout - disconnecting and showing pairing code');
-      await AsyncStorage.removeItem('display_pairing');
-      setUserId(null);
-      setDisplayId('');
-      setDisplayData(null);
-      currentOrderIdRef.current = null;
-      confirmedOrderIdRef.current = null;
-      generateCode();
+      // 5 minutes of no successful communication - show reconnecting screen with pairing code
+      // BUT keep the existing pairing so we can auto-reconnect if POS comes back
+      console.log('Inactivity timeout - showing reconnecting screen');
+      setState('reconnecting');
+      
+      // Generate a new pairing code (for new connections) but keep old userId
+      try {
+        const res = await api.post('/api/customer-display/generate-code', {});
+        setPairingCode(res.code);
+        // Keep the old displayId and userId for potential reconnection
+      } catch (e) {
+        console.log('Failed to generate reconnection code:', e);
+      }
     }, INACTIVITY_TIMEOUT_MS);
   };
 
@@ -264,9 +268,9 @@ export default function App() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [state, pairingCode, displayId]);
 
-  // Poll display data once paired
+  // Poll display data once paired (or reconnecting)
   useEffect(() => {
-    if (!userId || (state !== 'paired_idle' && state !== 'paired_waiting' && state !== 'paired_paid')) return;
+    if (!userId || (state !== 'paired_idle' && state !== 'paired_waiting' && state !== 'paired_paid' && state !== 'reconnecting')) return;
 
     const fetchDisplay = async () => {
       try {
@@ -281,6 +285,19 @@ export default function App() {
         // Successful poll - reset inactivity timer
         lastSuccessfulPollRef.current = Date.now();
         resetInactivityTimeout();
+        
+        // If we were in reconnecting state, we're back online!
+        if (state === 'reconnecting') {
+          console.log('Reconnected to POS!');
+          // Go to appropriate state based on backend status
+          if (data.status === 'waiting') {
+            setState('paired_waiting');
+          } else if (data.status === 'paid') {
+            setState('paired_paid');
+          } else {
+            setState('paired_idle');
+          }
+        }
 
         // Update store info
         if (data.store_name) setStoreName(data.store_name);
@@ -509,6 +526,43 @@ export default function App() {
           <View style={styles.waitingRow}>
             <ActivityIndicator size="small" color={C.green} />
             <Text style={styles.waitingText}>Väntar på koppling...</Text>
+          </View>
+
+          <TouchableOpacity style={styles.newCodeBtn} onPress={generateCode}>
+            <Ionicons name="refresh" size={16} color={C.textSec} />
+            <Text style={styles.newCodeBtnText}>Generera ny kod</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // SCREEN: Reconnecting - showing pairing code but still trying to reconnect
+  if (state === 'reconnecting') {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <View style={styles.center}>
+          <View style={styles.reconnectIconContainer}>
+            <Ionicons name="sync-outline" size={48} color={C.orange} />
+          </View>
+          <Text style={styles.reconnectTitle}>Återansluter...</Text>
+          <Text style={styles.reconnectSubtitle}>
+            Försöker återansluta till kassan.{'\n'}
+            Eller koppla med ny kod nedan.
+          </Text>
+
+          <View style={styles.codeContainer}>
+            {pairingCode.split('').map((digit, idx) => (
+              <View key={idx} style={styles.codeDigit}>
+                <Text style={styles.codeDigitText}>{digit}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.waitingRow}>
+            <ActivityIndicator size="small" color={C.orange} />
+            <Text style={styles.waitingText}>Söker anslutning...</Text>
           </View>
 
           <TouchableOpacity style={styles.newCodeBtn} onPress={generateCode}>
@@ -808,6 +862,7 @@ const C = {
   green: '#22c55e',
   greenDark: '#16a34a',
   red: '#ef4444',
+  orange: '#f97316',
   white: '#ffffff',
 };
 
@@ -881,6 +936,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
+  
+  // Reconnecting screen
+  reconnectIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    backgroundColor: 'rgba(249,115,22,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  reconnectTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: C.orange,
+    marginBottom: 8,
+  },
+  reconnectSubtitle: {
+    color: C.textSec,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 32,
+    lineHeight: 22,
+  },
+  
   pairTitle: {
     fontSize: 28,
     fontWeight: '700',
