@@ -166,7 +166,7 @@ export default function POSScreen() {
         setPaymentConfirmed(false);
         setCurrentOrder(null);
         setCart([]);
-        api.resetCustomerDisplay().catch(() => {});
+        // Don't reset display here - let the display app handle its own countdown
       }, 2000);
     } catch (e: any) {
       Alert.alert('Fel', e.message);
@@ -193,7 +193,7 @@ export default function POSScreen() {
       await api.confirmOrder(order.id);
       setCart([]);
       Alert.alert('Betalning mottagen', `${cartTotal.toFixed(2)} kr kontant`);
-      setTimeout(() => api.resetCustomerDisplay().catch(() => {}), 3000);
+      // Don't reset display here - let the display app handle its own countdown
     } catch (e: any) {
       Alert.alert('Fel', e.message);
     }
