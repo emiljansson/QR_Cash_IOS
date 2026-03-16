@@ -224,8 +224,14 @@ export default function CustomerDisplayScreen() {
         const data = await res.json();
         
         if (!data.paired) {
-          // Pairing has been removed from POS - disconnect
+          // Pairing has been removed from POS - disconnect completely
           storage.clearPairing();
+          setUserId('');
+          setDisplayId('');
+          if (inactivityTimeoutRef.current) {
+            clearTimeout(inactivityTimeoutRef.current);
+            inactivityTimeoutRef.current = null;
+          }
           setState('unpaired');
         }
       } catch {
@@ -304,6 +310,12 @@ export default function CustomerDisplayScreen() {
 
         if (data.status === 'unpaired') {
           storage.clearPairing();
+          setUserId('');
+          setDisplayId('');
+          if (inactivityTimeoutRef.current) {
+            clearTimeout(inactivityTimeoutRef.current);
+            inactivityTimeoutRef.current = null;
+          }
           setState('unpaired');
           return;
         }
