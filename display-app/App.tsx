@@ -586,12 +586,85 @@ export default function App() {
   }
 
   // SCREEN: Paired display (idle or waiting)
+  // Portrait: Header -> QR -> Cart (top to bottom)
+  // Landscape: Header on top, then Cart left | QR right
+  
+  if (isLandscape) {
+    // LANDSCAPE LAYOUT
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            {logoUrl && (
+              <Image source={{ uri: logoUrl }} style={styles.headerLogo} resizeMode="contain" />
+            )}
+            <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
+          </View>
+          <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtn}>
+            <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Main Content - Cart left, QR right */}
+        <View style={styles.landscapeContent}>
+          {/* Cart Section - LEFT */}
+          <View style={styles.landscapeCart}>
+            <Text style={styles.cartTitle}>Din order</Text>
+            <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
+              {items.map((item, idx) => (
+                <View key={idx} style={styles.cartItem}>
+                  <View style={styles.itemLeft}>
+                    <Text style={styles.itemQty}>{item.quantity}x</Text>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                  </View>
+                  <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Totalt att betala</Text>
+              <Text style={styles.totalValue}>{total} kr</Text>
+            </View>
+          </View>
+
+          {/* QR Section - RIGHT */}
+          <View style={styles.landscapeQR}>
+            <Text style={styles.qrTitle}>Betala med Swish</Text>
+            <View style={styles.qrBoxLandscape}>
+              {displayData?.qr_code_url ? (
+                <Image 
+                  source={{ uri: displayData.qr_code_url }} 
+                  style={styles.qrImageLandscape}
+                  resizeMode="contain"
+                />
+              ) : qrData ? (
+                <Image 
+                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrData)}` }} 
+                  style={styles.qrImageLandscape}
+                  resizeMode="contain"
+                />
+              ) : (
+                <ActivityIndicator size="large" color={C.green} />
+              )}
+            </View>
+            <Text style={styles.qrAmount}>{total} kr</Text>
+            <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // PORTRAIT LAYOUT
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={styles.headerPortrait}>
         <View style={styles.headerLeft}>
           {logoUrl && (
             <Image source={{ uri: logoUrl }} style={styles.headerLogo} resizeMode="contain" />
@@ -603,61 +676,47 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Main Content - Responsive layout */}
-      {/* Portrait: QR on top, Cart on bottom */}
-      {/* Landscape: Cart on left, QR on right */}
-      <View style={[styles.mainContent, isLandscape && styles.mainContentLandscape]}>
-        
-        {/* Cart Section */}
-        <View style={[
-          styles.cartSection, 
-          isLandscape ? styles.cartSectionLandscape : styles.cartSectionPortrait
-        ]}>
-          <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
-            <Text style={styles.cartTitle}>Din order</Text>
-            {items.map((item, idx) => (
-              <View key={idx} style={styles.cartItem}>
-                <View style={styles.itemLeft}>
-                  <Text style={styles.itemQty}>{item.quantity}x</Text>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                </View>
-                <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
-              </View>
-            ))}
-          </ScrollView>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Totalt att betala</Text>
-            <Text style={styles.totalValue}>{total} kr</Text>
-          </View>
+      {/* QR Section - TOP */}
+      <View style={styles.portraitQR}>
+        <Text style={styles.qrTitleSmall}>Betala med Swish</Text>
+        <View style={styles.qrBoxPortrait}>
+          {displayData?.qr_code_url ? (
+            <Image 
+              source={{ uri: displayData.qr_code_url }} 
+              style={styles.qrImagePortrait}
+              resizeMode="contain"
+            />
+          ) : qrData ? (
+            <Image 
+              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrData)}` }} 
+              style={styles.qrImagePortrait}
+              resizeMode="contain"
+            />
+          ) : (
+            <ActivityIndicator size="large" color={C.green} />
+          )}
         </View>
+        <Text style={styles.qrAmountSmall}>{total} kr</Text>
+        <Text style={styles.qrHintSmall}>Skanna med Swish-appen</Text>
+      </View>
 
-        {/* QR Section */}
-        <View style={[
-          styles.qrSection, 
-          isLandscape ? styles.qrSectionLandscape : styles.qrSectionPortrait
-        ]}>
-          <View style={styles.qrContainer}>
-            <Text style={styles.qrTitle}>Betala med Swish</Text>
-            <View style={styles.qrBox}>
-              {displayData?.qr_code_url ? (
-                <Image 
-                  source={{ uri: displayData.qr_code_url }} 
-                  style={styles.qrImage}
-                  resizeMode="contain"
-                />
-              ) : qrData ? (
-                <Image 
-                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrData)}` }} 
-                  style={styles.qrImage}
-                  resizeMode="contain"
-                />
-              ) : (
-                <ActivityIndicator size="large" color={C.green} />
-              )}
+      {/* Cart Section - BOTTOM */}
+      <View style={styles.portraitCart}>
+        <Text style={styles.cartTitle}>Din order</Text>
+        <ScrollView style={styles.cartScrollPortrait} showsVerticalScrollIndicator={false}>
+          {items.map((item, idx) => (
+            <View key={idx} style={styles.cartItem}>
+              <View style={styles.itemLeft}>
+                <Text style={styles.itemQty}>{item.quantity}x</Text>
+                <Text style={styles.itemName}>{item.name}</Text>
+              </View>
+              <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
             </View>
-            <Text style={styles.qrAmount}>{total} kr</Text>
-            <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
-          </View>
+          ))}
+        </ScrollView>
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>Totalt att betala</Text>
+          <Text style={styles.totalValue}>{total} kr</Text>
         </View>
       </View>
     </View>
@@ -875,7 +934,91 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
 
-  // Cart section
+  // LANDSCAPE LAYOUT
+  landscapeContent: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  landscapeCart: {
+    flex: 1,
+    backgroundColor: C.surface,
+    padding: 20,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(255,255,255,0.1)',
+  },
+  landscapeQR: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  qrBoxLandscape: {
+    backgroundColor: C.white,
+    padding: 16,
+    borderRadius: 20,
+    marginVertical: 16,
+    width: '80%',
+    maxWidth: 300,
+    aspectRatio: 1,
+  },
+  qrImageLandscape: {
+    width: '100%',
+    height: '100%',
+  },
+
+  // PORTRAIT LAYOUT
+  headerPortrait: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 8,
+  },
+  portraitQR: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  qrBoxPortrait: {
+    backgroundColor: C.white,
+    padding: 12,
+    borderRadius: 16,
+    width: '60%',
+    maxWidth: 220,
+    aspectRatio: 1,
+    marginVertical: 8,
+  },
+  qrImagePortrait: {
+    width: '100%',
+    height: '100%',
+  },
+  qrTitleSmall: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: C.text,
+  },
+  qrAmountSmall: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: C.green,
+  },
+  qrHintSmall: {
+    fontSize: 12,
+    color: C.textMut,
+  },
+  portraitCart: {
+    flex: 1,
+    backgroundColor: C.surface,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  cartScrollPortrait: {
+    flex: 1,
+  },
+
+  // Cart section (shared)
   cartSection: {
     backgroundColor: C.surface,
     padding: 16,
