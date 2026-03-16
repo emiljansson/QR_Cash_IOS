@@ -88,6 +88,25 @@ export default function ParkedCartsScreen() {
     });
   };
 
+  const handleMergeItems = async (cart: ParkedCart) => {
+    // Add current cart items to this parked cart
+    try {
+      await api.mergeParkedCart(cart.id, {
+        name: cart.name,
+        items: currentCartItems,
+        total: currentCartTotal,
+      });
+      Alert.alert('Tillagt!', `Varorna har lagts till i "${cart.name}"`);
+      // Clear current cart and go back to POS
+      router.replace({
+        pathname: '/(tabs)/pos',
+        params: { clearCart: 'true' },
+      });
+    } catch (e: any) {
+      Alert.alert('Fel', e.message);
+    }
+  };
+
   const formatDate = (d: string) => {
     try {
       const date = new Date(d);
@@ -166,11 +185,14 @@ export default function ParkedCartsScreen() {
                   ))}
 
                   <View style={styles.cartActions}>
+                    {hasCurrentCart && (
+                      <TouchableOpacity testID={`merge-cart-${item.id}`} style={styles.mergeBtn} onPress={() => handleMergeItems(item)}>
+                        <Ionicons name="add-circle-outline" size={16} color={Colors.info} />
+                        <Text style={styles.mergeBtnText}>Lägg till varor</Text>
+                      </TouchableOpacity>
+                    )}
                     <TouchableOpacity testID={`restore-cart-${item.id}`} style={styles.restoreBtn} onPress={() => handleRestore(item)}>
-                      <Ionicons name="arrow-undo" size={16} color={Colors.primary} />
-                      <Text style={styles.restoreBtnText}>
-                        {isPhone ? 'Skicka tillbaka till kassan' : 'Återställ - skickar varukorgen tillbaka till kassan'}
-                      </Text>
+                      <Text style={styles.restoreBtnText}>Till kassan →</Text>
                     </TouchableOpacity>
                     <TouchableOpacity testID={`delete-cart-${item.id}`} style={styles.deleteBtn} onPress={() => handleDelete(item)}>
                       <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
@@ -266,12 +288,19 @@ const styles = StyleSheet.create({
   },
   cartItemName: { fontSize: 14, color: Colors.textSecondary },
   cartItemPrice: { fontSize: 14, color: Colors.textMuted },
-  cartActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  cartActions: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' },
+  mergeBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, backgroundColor: 'rgba(59,130,246,0.1)', paddingVertical: 10, borderRadius: 8,
+    minWidth: 120,
+  },
+  mergeBtnText: { color: Colors.info, fontSize: 13, fontWeight: '500' },
   restoreBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, backgroundColor: 'rgba(34,197,94,0.1)', paddingVertical: 10, borderRadius: 8,
+    minWidth: 100,
   },
-  restoreBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '500' },
+  restoreBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '600' },
   sendDisplayBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, backgroundColor: 'rgba(59,130,246,0.1)', paddingVertical: 10, borderRadius: 8,

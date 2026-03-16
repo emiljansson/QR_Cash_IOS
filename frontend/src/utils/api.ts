@@ -207,6 +207,13 @@ class ApiClient {
     return this.request(`/parked-carts/${id}`, { method: 'DELETE' });
   }
 
+  async mergeParkedCart(id: string, data: { name: string; items: any[]; total: number }) {
+    return this.request(`/parked-carts/${id}/merge`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async sendParkedCartToDisplay(id: string) {
     return this.request(`/parked-carts/${id}/send-to-display`, { method: 'POST' });
   }
