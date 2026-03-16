@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from typing import List, Optional
 from datetime import datetime, timezone
 
@@ -23,6 +23,28 @@ def get_owner_user_id(user: dict) -> str:
     return user.get("parent_user_id") or user["user_id"]
 
 
+async def update_display_background(owner_id: str, order_id: str, qr_data: str, total: float, items: list):
+    """Background task to update display - doesn't block the main request"""
+    try:
+        db = get_db()
+        await db.current_display.update_one(
+            {"user_id": owner_id},
+            {"$set": {
+                "user_id": owner_id,
+                "order_id": order_id,
+                "qr_data": qr_data,
+                "total": total,
+                "status": "waiting",
+                "items": items,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }},
+            upsert=True
+        )
+    except Exception as e:
+        # Log but don't fail - display update is not critical for order creation
+        print(f"Display update error: {e}")
+
+
 async def get_tenant_settings(user_id: str) -> dict:
     """Get tenant-specific settings"""
     db = get_db()
@@ -38,7 +60,7 @@ async def get_tenant_settings(user_id: str) -> dict:
 
 
 @router.post("", response_model=Order)
-async def create_order(request: Request, data: OrderCreate):
+async def create_order(request: Request, data: OrderCreate, background_tasks: BackgroundTasks):
     """Create a new order and generate QR code"""
     user = await require_user(request)
     db = get_db()
@@ -76,19 +98,14 @@ async def create_order(request: Request, data: OrderCreate):
     doc['created_at'] = doc['created_at'].isoformat()
     await db.orders.insert_one(doc)
     
-    # Update current display for the organization
-    await db.current_display.update_one(
-        {"user_id": owner_id},
-        {"$set": {
-            "user_id": owner_id,
-            "order_id": order.id,
-            "qr_data": qr_data,
-            "total": order.total,
-            "status": "waiting",
-            "items": [item.model_dump() for item in order.items],
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }},
-        upsert=True
+    # Update display in background - don't block POS response
+    background_tasks.add_task(
+        update_display_background,
+        owner_id,
+        order.id,
+        qr_data,
+        order.total,
+        [item.model_dump() for item in order.items]
     )
     
     return order
