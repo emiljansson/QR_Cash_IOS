@@ -559,8 +559,11 @@ export default function App() {
     );
   }
 
-  // SCREEN: Idle - Just logo and store name centered (no order/items)
-  if (!showQR && !hasItems) {
+  // SCREEN: Idle - Just logo and store name centered (no active order)
+  // Show idle screen when state is idle OR when there's no QR and no items
+  const isIdle = state === 'paired_idle' || (!showQR && !hasItems);
+  
+  if (isIdle && !showQR) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" />

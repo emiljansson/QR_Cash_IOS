@@ -295,10 +295,10 @@ async def cancel_order(request: Request, order_id: str):
         {"$set": {"status": "cancelled"}}
     )
     
-    # Reset display
+    # Reset display completely
     await db.current_display.update_one(
         {"user_id": owner_id},
-        {"$set": {"status": "idle", "order_id": None, "qr_data": None, "total": None}}
+        {"$set": {"status": "idle", "order_id": None, "qr_data": None, "total": None, "items": []}}
     )
     
     return {"success": True, "message": "Order cancelled"}
