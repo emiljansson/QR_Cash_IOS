@@ -131,7 +131,7 @@ export default function PairDisplayScreen() {
         <View style={styles.pairSection}>
           <Text style={styles.sectionTitle}>Koppla ny skärm</Text>
           <Text style={styles.sectionSubtitle}>
-            Öppna kundskärmen på en annan enhet och ange den 4-siffriga koden som visas
+            Ladda ner appen QR-Display och koppla ihop med koden som visas.
           </Text>
 
           <View style={styles.codeInputRow}>
