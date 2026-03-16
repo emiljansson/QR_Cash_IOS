@@ -647,7 +647,7 @@ export default function App() {
                 />
               ) : qrData ? (
                 <Image 
-                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}` }} 
+                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrData)}` }} 
                   style={styles.qrImage}
                   resizeMode="contain"
                 />
@@ -981,13 +981,16 @@ const styles = StyleSheet.create({
   },
   qrBox: {
     backgroundColor: C.white,
-    padding: 20,
+    padding: 16,
     borderRadius: 20,
     marginBottom: 16,
+    width: '90%',
+    maxWidth: 350,
+    aspectRatio: 1,
   },
   qrImage: {
-    width: 200,
-    height: 200,
+    width: '100%',
+    height: '100%',
   },
   qrAmount: {
     fontSize: 42,
