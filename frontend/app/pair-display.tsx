@@ -211,14 +211,6 @@ export default function PairDisplayScreen() {
             />
           )}
         </View>
-
-        {/* Help text */}
-        <View style={styles.helpSection}>
-          <Ionicons name="information-circle-outline" size={16} color={Colors.textMuted} />
-          <Text style={styles.helpText}>
-            Öppna kundvisningen genom att navigera till /display på valfri enhet
-          </Text>
-        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
