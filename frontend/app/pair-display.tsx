@@ -107,15 +107,24 @@ export default function PairDisplayScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity testID="back-btn" onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Koppla kundskärm</Text>
-          <View style={{ width: 40 }} />
-        </View>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView 
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity testID="back-btn" onPress={() => router.back()} style={styles.backBtn}>
+              <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Koppla kundskärm</Text>
+            <View style={{ width: 40 }} />
+          </View>
 
         {/* Connection Status */}
         <View style={styles.statusCard}>
