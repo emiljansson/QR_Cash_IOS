@@ -44,12 +44,15 @@ Authorization: Bearer <token>
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
 | GET | `/products` | Hämta alla produkter | Ja |
+| GET | `/products?active_only=true` | Hämta endast aktiva produkter (för POS) | Ja |
 | POST | `/products` | Skapa ny produkt | Ja |
 | GET | `/products/{product_id}` | Hämta specifik produkt | Ja |
-| PUT | `/products/{product_id}` | Uppdatera produkt | Ja |
+| PUT | `/products/{product_id}` | Uppdatera produkt (inkl. active=true/false) | Ja |
 | DELETE | `/products/{product_id}` | Ta bort produkt | Ja |
 | POST | `/products/{product_id}/upload-image` | Ladda upp produktbild | Ja |
 | POST | `/products/reorder` | Ändra produktordning | Ja |
+
+**Gömma produkter:** Använd `PUT /products/{id}` med `{ "active": false }` för att gömma en produkt från POS-vyn. Produkten syns fortfarande i Admin.
 
 ---
 

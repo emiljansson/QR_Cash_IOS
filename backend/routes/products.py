@@ -119,18 +119,22 @@ async def update_product(request: Request, product_id: str, data: ProductUpdate)
     """Update a product"""
     user = await require_user(request)
     db = get_db()
-    product = await db.products.find_one({"id": product_id, "user_id": user["user_id"]}, {"_id": 0})
+    
+    # Sub-users can edit parent's products
+    owner_id = get_owner_user_id(user)
+    
+    product = await db.products.find_one({"id": product_id, "user_id": owner_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
     update_data = {k: v for k, v in data.model_dump().items() if v is not None}
     if update_data:
         await db.products.update_one(
-            {"id": product_id, "user_id": user["user_id"]},
+            {"id": product_id, "user_id": owner_id},
             {"$set": update_data}
         )
     
-    updated = await db.products.find_one({"id": product_id, "user_id": user["user_id"]}, {"_id": 0})
+    updated = await db.products.find_one({"id": product_id, "user_id": owner_id}, {"_id": 0})
     if isinstance(updated.get('created_at'), str):
         updated['created_at'] = datetime.fromisoformat(updated['created_at'])
     return updated
@@ -141,7 +145,11 @@ async def delete_product(request: Request, product_id: str):
     """Delete a product"""
     user = await require_user(request)
     db = get_db()
-    result = await db.products.delete_one({"id": product_id, "user_id": user["user_id"]})
+    
+    # Sub-users can delete parent's products
+    owner_id = get_owner_user_id(user)
+    
+    result = await db.products.delete_one({"id": product_id, "user_id": owner_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"success": True, "message": "Product deleted"}

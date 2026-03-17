@@ -919,6 +919,16 @@ export default function AdminScreen() {
     ]);
   };
 
+  const handleToggleProductVisibility = async (product: Product) => {
+    try {
+      const newActive = product.active === false ? true : false;
+      await api.updateProduct(product.id, { active: newActive });
+      loadProducts();
+    } catch (e: any) {
+      showAlert('Fel', e.message || 'Kunde inte ändra synlighet');
+    }
+  };
+
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
@@ -1025,17 +1035,37 @@ export default function AdminScreen() {
                     <TouchableOpacity
                       onLongPress={drag}
                       disabled={isActive}
-                      style={[styles.productRow, isActive && styles.productRowDragging]}
+                      style={[
+                        styles.productRow, 
+                        isActive && styles.productRowDragging,
+                        item.active === false && styles.productRowHidden
+                      ]}
                     >
                       <View style={styles.dragHandle}>
                         <Ionicons name="menu" size={20} color={Colors.textMuted} />
                       </View>
                       <View style={styles.productRowInfo}>
-                        <Text style={styles.productRowName}>{item.name}</Text>
+                        <Text style={[styles.productRowName, item.active === false && styles.productRowNameHidden]}>
+                          {item.name}
+                        </Text>
                         <Text style={styles.productRowPrice}>{item.price.toFixed(0)} kr</Text>
                         {item.category ? <Text style={styles.productRowCategory}>{item.category}</Text> : null}
+                        {item.active === false && (
+                          <Text style={styles.hiddenBadge}>Dold i kassan</Text>
+                        )}
                       </View>
                       <View style={styles.productRowActions}>
+                        <TouchableOpacity
+                          testID={`toggle-product-${item.id}`}
+                          style={styles.actionBtn}
+                          onPress={() => handleToggleProductVisibility(item)}
+                        >
+                          <Ionicons 
+                            name={item.active === false ? "eye-off-outline" : "eye-outline"} 
+                            size={18} 
+                            color={item.active === false ? Colors.textMuted : Colors.primary} 
+                          />
+                        </TouchableOpacity>
                         <TouchableOpacity
                           testID={`edit-product-${item.id}`}
                           style={styles.actionBtn}
@@ -1495,8 +1525,19 @@ const styles = StyleSheet.create({
   },
   productRowInfo: { flex: 1 },
   productRowName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
+  productRowNameHidden: { color: Colors.textMuted },
   productRowPrice: { fontSize: 14, color: Colors.primary, fontWeight: '600' },
   productRowCategory: { fontSize: 12, color: Colors.textMuted },
+  productRowHidden: { 
+    backgroundColor: Colors.surfaceHighlight,
+    opacity: 0.7,
+  },
+  hiddenBadge: { 
+    fontSize: 11, 
+    color: Colors.warning || '#f59e0b', 
+    fontWeight: '500',
+    marginTop: 2,
+  },
   productRowActions: { flexDirection: 'row', gap: 12 },
   actionBtn: { padding: 6 },
   emptyState: { alignItems: 'center', paddingVertical: 40 },
