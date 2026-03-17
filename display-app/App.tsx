@@ -40,6 +40,7 @@ export default function App() {
   const [storeName, setStoreName] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [qrLoadError, setQrLoadError] = useState(false);
   
   // Email receipt state
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -335,6 +336,7 @@ export default function App() {
             // New order! Show it
             currentOrderIdRef.current = incomingOrderId;
             setDisplayData(data);
+            setQrLoadError(false); // Reset QR error state for new order
             
             // If we were on paid screen, stop countdown
             if (state === 'paired_paid') {
@@ -747,17 +749,27 @@ export default function App() {
           <View style={styles.landscapeQR}>
             <Text style={styles.qrTitle}>Betala med Swish</Text>
             <View style={[styles.qrBoxLandscape, { width: Math.min(height * 0.5, 350), height: Math.min(height * 0.5, 350) }]}>
-              {displayData?.qr_code_url ? (
+              {qrLoadError ? (
+                <View style={styles.qrErrorContainer}>
+                  <Ionicons name="qr-code-outline" size={80} color={C.green} />
+                  <Text style={styles.qrErrorText}>QR-kod kunde inte laddas</Text>
+                  <TouchableOpacity onPress={() => setQrLoadError(false)} style={styles.qrRetryBtn}>
+                    <Text style={styles.qrRetryText}>Försök igen</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : displayData?.qr_code_url ? (
                 <Image 
                   source={{ uri: displayData.qr_code_url }} 
                   style={styles.qrImageLandscape}
                   resizeMode="contain"
+                  onError={() => setQrLoadError(true)}
                 />
               ) : qrData ? (
                 <Image 
                   source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrData)}` }} 
                   style={styles.qrImageLandscape}
                   resizeMode="contain"
+                  onError={() => setQrLoadError(true)}
                 />
               ) : (
                 <ActivityIndicator size="large" color={C.green} />
@@ -793,17 +805,27 @@ export default function App() {
       <View style={styles.portraitQR}>
         <Text style={styles.qrTitleSmall}>Betala med Swish</Text>
         <View style={[styles.qrBoxPortrait, { width: Math.min(width * 0.5, 220), height: Math.min(width * 0.5, 220) }]}>
-          {displayData?.qr_code_url ? (
+          {qrLoadError ? (
+            <View style={styles.qrErrorContainer}>
+              <Ionicons name="qr-code-outline" size={60} color={C.green} />
+              <Text style={styles.qrErrorTextSmall}>QR-kod kunde inte laddas</Text>
+              <TouchableOpacity onPress={() => setQrLoadError(false)} style={styles.qrRetryBtnSmall}>
+                <Text style={styles.qrRetryText}>Försök igen</Text>
+              </TouchableOpacity>
+            </View>
+          ) : displayData?.qr_code_url ? (
             <Image 
               source={{ uri: displayData.qr_code_url }} 
               style={styles.qrImagePortrait}
               resizeMode="contain"
+              onError={() => setQrLoadError(true)}
             />
           ) : qrData ? (
             <Image 
               source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrData)}` }} 
               style={styles.qrImagePortrait}
               resizeMode="contain"
+              onError={() => setQrLoadError(true)}
             />
           ) : (
             <ActivityIndicator size="large" color={C.green} />
@@ -1063,6 +1085,45 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: C.text,
     textAlign: 'center',
+  },
+
+  // QR Error handling
+  qrErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  qrErrorText: {
+    color: C.textSec,
+    fontSize: 14,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  qrErrorTextSmall: {
+    color: C.textSec,
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  qrRetryBtn: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: C.green,
+    borderRadius: 8,
+  },
+  qrRetryBtnSmall: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: C.green,
+    borderRadius: 6,
+  },
+  qrRetryText: {
+    color: C.white,
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   // Main content
