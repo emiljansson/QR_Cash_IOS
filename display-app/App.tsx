@@ -261,7 +261,8 @@ export default function App() {
             clearTimeout(inactivityTimeoutRef.current);
             inactivityTimeoutRef.current = null;
           }
-          setState('unpaired');
+          // Go directly to generate new code
+          generateCode();
           return;
         }
 
