@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, TextInput,
-  Alert, Modal, ActivityIndicator, FlatList, SafeAreaView,
-  KeyboardAvoidingView, Platform,
+  Alert, ActivityIndicator, SafeAreaView,
+  KeyboardAvoidingView, Platform, ScrollView, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/utils/colors';
@@ -105,6 +105,9 @@ export default function PairDisplayScreen() {
     } catch { return dateStr; }
   };
 
+  const { height } = useWindowDimensions();
+  const isTablet = height > 800;
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
@@ -112,93 +115,90 @@ export default function PairDisplayScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
+        {/* Header - fixed at top */}
+        <View style={styles.header}>
+          <TouchableOpacity testID="back-btn" onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Koppla kundskärm</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
         <ScrollView 
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity testID="back-btn" onPress={() => router.back()} style={styles.backBtn}>
-              <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>Koppla kundskärm</Text>
-            <View style={{ width: 40 }} />
+          {/* Connection Status */}
+          <View style={styles.statusCard}>
+            <View style={[styles.statusDot, connectionStatus.connected ? styles.statusOnline : styles.statusOffline]} />
+            <Text style={styles.statusText}>
+              {connectionStatus.connected
+                ? `${connectionStatus.count} skärm${connectionStatus.count > 1 ? 'ar' : ''} ansluten`
+                : 'Ingen skärm ansluten'}
+            </Text>
           </View>
 
-        {/* Connection Status */}
-        <View style={styles.statusCard}>
-          <View style={[styles.statusDot, connectionStatus.connected ? styles.statusOnline : styles.statusOffline]} />
-          <Text style={styles.statusText}>
-            {connectionStatus.connected
-              ? `${connectionStatus.count} skärm${connectionStatus.count > 1 ? 'ar' : ''} ansluten`
-              : 'Ingen skärm ansluten'}
-          </Text>
-        </View>
+          {/* Pair new display */}
+          <View style={styles.pairSection}>
+            <Text style={styles.sectionTitle}>Koppla ny skärm</Text>
+            <Text style={styles.sectionSubtitle}>
+              Ladda ner appen QR-Display och koppla ihop med koden som visas.
+            </Text>
 
-        {/* Pair new display */}
-        <View style={styles.pairSection}>
-          <Text style={styles.sectionTitle}>Koppla ny skärm</Text>
-          <Text style={styles.sectionSubtitle}>
-            Ladda ner appen QR-Display och koppla ihop med koden som visas.
-          </Text>
-
-          <View style={styles.codeInputRow}>
-            <TextInput
-              testID="pair-code-input"
-              style={styles.codeInput}
-              value={code}
-              onChangeText={(t) => setCode(t.replace(/[^0-9]/g, '').slice(0, 4))}
-              placeholder="0000"
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="number-pad"
-              maxLength={4}
-            />
-            <TouchableOpacity
-              testID="pair-submit-btn"
-              style={[styles.pairBtn, (code.length !== 4 || pairing) && styles.pairBtnDisabled]}
-              onPress={handlePair}
-              disabled={code.length !== 4 || pairing}
-            >
-              {pairing ? <ActivityIndicator color={Colors.white} /> : (
-                <>
-                  <Ionicons name="link" size={18} color={Colors.white} />
-                  <Text style={styles.pairBtnText}>Koppla</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.nameRow}>
-            <Text style={styles.nameLabel}>Enhetens namn</Text>
-            <TextInput
-              testID="device-name-input"
-              style={styles.nameInput}
-              value={deviceName}
-              onChangeText={setDeviceName}
-              placeholder="Kundskärm"
-              placeholderTextColor={Colors.textMuted}
-            />
-          </View>
-        </View>
-
-        {/* Paired displays */}
-        <View style={styles.displaysSection}>
-          <Text style={styles.sectionTitle}>Kopplade skärmar</Text>
-
-          {loading ? (
-            <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />
-          ) : displays.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="tv-outline" size={36} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>Inga kopplade skärmar</Text>
+            <View style={styles.codeInputRow}>
+              <TextInput
+                testID="pair-code-input"
+                style={styles.codeInput}
+                value={code}
+                onChangeText={(t) => setCode(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                placeholder="0000"
+                placeholderTextColor={Colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={4}
+              />
+              <TouchableOpacity
+                testID="pair-submit-btn"
+                style={[styles.pairBtn, (code.length !== 4 || pairing) && styles.pairBtnDisabled]}
+                onPress={handlePair}
+                disabled={code.length !== 4 || pairing}
+              >
+                {pairing ? <ActivityIndicator color={Colors.white} /> : (
+                  <>
+                    <Ionicons name="link" size={18} color={Colors.white} />
+                    <Text style={styles.pairBtnText}>Koppla</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
-          ) : (
-            <FlatList
-              data={displays}
-              keyExtractor={(item) => item.display_id}
-              renderItem={({ item }) => (
-                <View testID={`display-row-${item.display_id}`} style={styles.displayRow}>
+
+            <View style={styles.nameRow}>
+              <Text style={styles.nameLabel}>Enhetens namn</Text>
+              <TextInput
+                testID="device-name-input"
+                style={styles.nameInput}
+                value={deviceName}
+                onChangeText={setDeviceName}
+                placeholder="Kundskärm"
+                placeholderTextColor={Colors.textMuted}
+              />
+            </View>
+          </View>
+
+          {/* Paired displays */}
+          <View style={styles.displaysSection}>
+            <Text style={styles.sectionTitle}>Kopplade skärmar</Text>
+
+            {loading ? (
+              <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />
+            ) : displays.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="tv-outline" size={36} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>Inga kopplade skärmar</Text>
+              </View>
+            ) : (
+              displays.map((item) => (
+                <View key={item.display_id} testID={`display-row-${item.display_id}`} style={styles.displayRow}>
                   <View style={styles.displayInfo}>
                     <View style={styles.displayIconWrap}>
                       <Ionicons name="tv-outline" size={20} color={Colors.primary} />
@@ -216,10 +216,13 @@ export default function PairDisplayScreen() {
                     <Ionicons name="unlink-outline" size={18} color={Colors.destructive} />
                   </TouchableOpacity>
                 </View>
-              )}
-            />
-          )}
-        </View>
+              ))
+            )}
+          </View>
+
+          {/* Extra padding at bottom for keyboard */}
+          <View style={{ height: isTablet ? 100 : 40 }} />
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -227,6 +230,7 @@ export default function PairDisplayScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  scrollContent: { flexGrow: 1, paddingBottom: 20 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border,
