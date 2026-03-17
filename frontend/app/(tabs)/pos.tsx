@@ -34,7 +34,7 @@ export default function POSScreen() {
   const isTablet = width >= 768; // iPad/tablet breakpoint
   const isDesktop = width >= 1024; // Desktop breakpoint
   const numColumns = isDesktop ? 4 : (isTablet ? 2 : 3); // 4 cols desktop, 2 cols tablet, 3 cols mobile
-  const cartMaxHeight = isTablet ? undefined : height * 0.5; // 50% av höjden på mobil
+  const cartMaxHeight = isTablet ? undefined : height * 0.4; // 40% av höjden på mobil (minskad från 50%)
   const params = useLocalSearchParams<{ restoreCart?: string; restoreTotal?: string; restoreCartId?: string; clearCart?: string }>();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -308,9 +308,9 @@ export default function POSScreen() {
 
             {cart.length > 0 ? (
               <>
-                <View style={isTablet ? { flex: 1 } : { minHeight: Math.min(cart.length * 44, 200), maxHeight: 200 }}>
+                <View style={isTablet ? { flex: 1 } : { minHeight: Math.min(cart.length * 44, 160), maxHeight: 160 }}>
                   <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                    {cart.map(item => (
+                    {[...cart].reverse().map(item => (
                       <View key={item.product_id} style={styles.cartItem}>
                         <View style={styles.cartItemInfo}>
                           <Text style={styles.cartItemName}>{item.name}</Text>
