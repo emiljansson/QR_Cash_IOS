@@ -56,6 +56,7 @@ export default function App() {
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownStartedRef = useRef(false);
+  const openedDuringCountdownRef = useRef(false);
   const lastDataHashRef = useRef<string>('');
   const isInitializedRef = useRef(false);
   const currentOrderIdRef = useRef<string | null>(null);
