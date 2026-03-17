@@ -766,7 +766,7 @@ export default function App() {
                 />
               ) : qrData ? (
                 <Image 
-                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrData)}` }} 
+                  source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=H&data=${encodeURIComponent(qrData)}` }} 
                   style={styles.qrImageLandscape}
                   resizeMode="contain"
                   onError={() => setQrLoadError(true)}

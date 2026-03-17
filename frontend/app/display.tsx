@@ -894,7 +894,8 @@ export default function CustomerDisplayScreen() {
                         value={qrData} 
                         size={Math.min(height * 0.6, width * 0.5, 450)} 
                         backgroundColor="white" 
-                        color="black" 
+                        color="black"
+                        ecl="H"
                       />
                     </View>
                     <View style={styles.swishBranding}>
@@ -917,7 +918,8 @@ export default function CustomerDisplayScreen() {
                         value={qrData} 
                         size={Math.min(width * 0.55, height * 0.3, 280)} 
                         backgroundColor="white" 
-                        color="black" 
+                        color="black"
+                        ecl="H"
                       />
                     </View>
                     <View style={styles.totalRowPortrait}>
