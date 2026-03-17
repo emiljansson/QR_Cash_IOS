@@ -286,7 +286,7 @@ async def get_paired_displays(request: Request):
 
 
 @router.delete("/paired-displays/{display_id}")
-async def unpair_display(request: Request, display_id: str):
+async def delete_paired_display(request: Request, display_id: str):
     """Unpair/disconnect a display"""
     user = await get_current_user(request)
     if not user:
@@ -413,7 +413,7 @@ async def get_customer_display(request: Request, user_id: Optional[str] = Query(
                     }}
                 )
                 return {"status": "idle", "order_id": None, "qr_data": None, "total": None}
-        except:
+        except Exception:
             pass  # If parsing fails, continue with the data
     
     # Also get tenant settings for logo/store name

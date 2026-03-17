@@ -864,7 +864,7 @@ async def login_with_code(request: Request, response: Response):
     
     try:
         data = await request.json()
-    except:
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid request body")
     
     code = data.get("code", "").strip().upper()
@@ -928,7 +928,7 @@ async def request_password_reset(request: Request):
     
     try:
         body = await request.json()
-    except:
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
     
     email = body.get("email", "").strip().lower()
@@ -991,44 +991,3 @@ async def request_password_reset(request: Request):
         logger.error(f"Failed to send password reset email: {e}")
     
     return {"success": True, "message": "Om e-postadressen finns skickas ett återställningsmail."}
-
-
-@router.post("/reset-password")
-async def reset_password(request: Request):
-    """Reset password using token"""
-    try:
-        body = await request.json()
-    except:
-        raise HTTPException(status_code=400, detail="Invalid JSON")
-    
-    token = body.get("token", "").strip()
-    new_password = body.get("password", "").strip()
-    
-    if not token:
-        raise HTTPException(status_code=400, detail="Token krävs")
-    if not new_password or len(new_password) < 4:
-        raise HTTPException(status_code=400, detail="Lösenord måste vara minst 4 tecken")
-    
-    db = get_db()
-    user = await db.users.find_one({
-        "password_reset_token": token,
-        "password_reset_expires": {"$gt": datetime.now(timezone.utc)}
-    }, {"_id": 0})
-    
-    if not user:
-        raise HTTPException(status_code=400, detail="Ogiltig eller utgången länk. Begär en ny.")
-    
-    # Hash new password and clear reset token
-    password_hash = hash_password(new_password)
-    
-    await db.users.update_one(
-        {"user_id": user["user_id"]},
-        {
-            "$set": {"password_hash": password_hash},
-            "$unset": {"password_reset_token": "", "password_reset_expires": ""}
-        }
-    )
-    
-    logger.info(f"Password reset successful for {user['email']}")
-    
-    return {"success": True, "message": "Lösenordet har återställts. Du kan nu logga in."}

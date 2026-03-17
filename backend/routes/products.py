@@ -181,7 +181,7 @@ async def upload_product_image(request: Request, product_id: str, file: UploadFi
             resource_type="image"
         )
         image_url = result["secure_url"]
-    except Exception as e:
+    except Exception:
         # Fallback to local storage if Cloudinary fails
         file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
         filename = f"{product_id}.{file_ext}"
