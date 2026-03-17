@@ -305,7 +305,7 @@ export default function CustomerDisplayScreen() {
 
     const fetchDisplay = async () => {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/customer-display?user_id=${userId}`);
+        const res = await fetch(`${BACKEND_URL}/api/customer-display?user_id=${userId}&display_id=${displayId}`);
         const data = await res.json();
 
         if (data.status === 'unpaired') {

@@ -324,12 +324,12 @@ async def get_connection_status(request: Request):
 
 
 @router.get("")
-async def get_customer_display(request: Request, user_id: Optional[str] = Query(None)):
+async def get_customer_display(request: Request, user_id: Optional[str] = Query(None), display_id: Optional[str] = Query(None)):
     """Get current display data for customer screen.
     
     Can be accessed either:
     1. By authenticated user (gets their own display)
-    2. By user_id query param (for customer display screen)
+    2. By user_id + display_id query params (for customer display screen)
     3. By display_user_id cookie (for paired displays)
     
     Display data older than 5 minutes is automatically cleared.
@@ -339,19 +339,31 @@ async def get_customer_display(request: Request, user_id: Optional[str] = Query(
     # Try to get user from auth first
     user = await get_current_user(request)
     
-    # Check for display cookies
+    # Check for display cookies as fallback
     display_cookie_user_id = request.cookies.get("display_user_id")
-    display_id = request.cookies.get("display_id")
+    display_cookie_id = request.cookies.get("display_id")
     
     if user:
         target_user_id = user["user_id"]
-    elif user_id:
-        # Allow unauthenticated access with user_id (for customer display)
-        target_user_id = user_id
-    elif display_cookie_user_id and display_id:
+    elif user_id and display_id:
         # Check if this display is still paired in database
         paired_display = await db.paired_displays.find_one({
             "display_id": display_id,
+            "user_id": user_id
+        })
+        
+        if not paired_display:
+            # Display has been unpaired - return unpaired status
+            return {"status": "unpaired", "order_id": None, "qr_data": None, "total": None}
+        
+        target_user_id = user_id
+    elif user_id:
+        # Allow unauthenticated access with user_id only (legacy support)
+        target_user_id = user_id
+    elif display_cookie_user_id and display_cookie_id:
+        # Check if this display is still paired in database
+        paired_display = await db.paired_displays.find_one({
+            "display_id": display_cookie_id,
             "user_id": display_cookie_user_id
         })
         
@@ -364,9 +376,10 @@ async def get_customer_display(request: Request, user_id: Optional[str] = Query(
         return {"status": "unpaired", "order_id": None, "qr_data": None, "total": None}
     
     # Update last_active for paired display
-    if display_id:
+    active_display_id = display_id or display_cookie_id
+    if active_display_id:
         await db.paired_displays.update_one(
-            {"display_id": display_id},
+            {"display_id": active_display_id},
             {"$set": {"last_active": datetime.now(timezone.utc).isoformat()}}
         )
     

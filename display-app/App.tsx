@@ -251,7 +251,7 @@ export default function App() {
 
     const fetchDisplay = async () => {
       try {
-        const data = await api.get(`/api/customer-display?user_id=${userId}`);
+        const data = await api.get(`/api/customer-display?user_id=${userId}&display_id=${displayId}`);
 
         if (data.status === 'unpaired') {
           await AsyncStorage.removeItem('display_pairing');
