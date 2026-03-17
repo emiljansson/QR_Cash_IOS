@@ -4,6 +4,7 @@ import {
   TextInput, Modal, ScrollView, Dimensions, StatusBar, Image,
   KeyboardAvoidingView, Platform, useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer } from 'expo-audio';
@@ -704,7 +705,7 @@ export default function App() {
   if (isLandscape) {
     // LANDSCAPE LAYOUT
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         
         {/* Header */}
@@ -745,7 +746,7 @@ export default function App() {
           {/* QR Section - RIGHT */}
           <View style={styles.landscapeQR}>
             <Text style={styles.qrTitle}>Betala med Swish</Text>
-            <View style={styles.qrBoxLandscape}>
+            <View style={[styles.qrBoxLandscape, { width: Math.min(height * 0.5, 350), height: Math.min(height * 0.5, 350) }]}>
               {displayData?.qr_code_url ? (
                 <Image 
                   source={{ uri: displayData.qr_code_url }} 
@@ -766,13 +767,13 @@ export default function App() {
             <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
           </View>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // PORTRAIT LAYOUT
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       {/* Header */}
@@ -791,7 +792,7 @@ export default function App() {
       {/* QR Section - TOP */}
       <View style={styles.portraitQR}>
         <Text style={styles.qrTitleSmall}>Betala med Swish</Text>
-        <View style={styles.qrBoxPortrait}>
+        <View style={[styles.qrBoxPortrait, { width: Math.min(width * 0.5, 220), height: Math.min(width * 0.5, 220) }]}>
           {displayData?.qr_code_url ? (
             <Image 
               source={{ uri: displayData.qr_code_url }} 
@@ -831,7 +832,7 @@ export default function App() {
           <Text style={styles.totalValue}>{total} kr</Text>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -1096,8 +1097,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 24,
     marginVertical: 16,
-    width: 400,
-    height: 400,
+    // Size set dynamically in component
   },
   qrImageLandscape: {
     width: '100%',
@@ -1110,21 +1110,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 8,
+    paddingVertical: 8,
   },
   portraitQR: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 20,
   },
   qrBoxPortrait: {
     backgroundColor: C.white,
     padding: 12,
     borderRadius: 16,
-    width: 200,
-    height: 200,
     marginVertical: 8,
+    // Size set dynamically in component
   },
   qrImagePortrait: {
     width: '100%',
