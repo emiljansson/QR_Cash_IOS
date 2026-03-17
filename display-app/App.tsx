@@ -52,7 +52,6 @@ export default function App() {
   // Refs
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const dataPollRef = useRef<NodeJS.Timeout | null>(null);
-  const pairingValidationRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const inactivityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownStartedRef = useRef(false);
@@ -95,7 +94,6 @@ export default function App() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       if (dataPollRef.current) clearInterval(dataPollRef.current);
-      if (pairingValidationRef.current) clearInterval(pairingValidationRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
     };
@@ -185,19 +183,24 @@ export default function App() {
 
   // Unpair
   const handleUnpair = async () => {
+    // Stop all polling
     if (dataPollRef.current) clearInterval(dataPollRef.current);
-    if (pairingValidationRef.current) clearInterval(pairingValidationRef.current);
+    if (pollRef.current) clearInterval(pollRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
+    if (inactivityTimeoutRef.current) clearTimeout(inactivityTimeoutRef.current);
     dataPollRef.current = null;
-    pairingValidationRef.current = null;
+    pollRef.current = null;
     countdownRef.current = null;
+    inactivityTimeoutRef.current = null;
     
+    // Notify backend
     try {
       if (userId) {
         await api.post('/api/customer-display/unpair', { user_id: userId });
       }
     } catch {}
     
+    // Clear all state
     await AsyncStorage.removeItem('display_pairing');
     setUserId('');
     setDisplayId('');
@@ -205,41 +208,14 @@ export default function App() {
     setLogoUrl(null);
     setDisplayData(null);
     countdownStartedRef.current = false;
+    currentOrderIdRef.current = null;
+    confirmedOrderIdRef.current = null;
+    
+    // Generate new code
     generateCode();
   };
 
-  // Background validation of pairing
-  useEffect(() => {
-    if (!displayId || state === 'waiting_pair' || state === 'generating' || state === 'error' || state === 'unpaired' || state === 'loading') {
-      if (pairingValidationRef.current) {
-        clearInterval(pairingValidationRef.current);
-        pairingValidationRef.current = null;
-      }
-      return;
-    }
-
-    const validatePairing = async () => {
-      try {
-        const res = await api.get(`/api/customer-display/pairing-status?display_code=${displayId}`);
-        if (!res.paired) {
-          await AsyncStorage.removeItem('display_pairing');
-          setState('unpaired');
-        }
-      } catch {}
-    };
-
-    validatePairing();
-    pairingValidationRef.current = setInterval(validatePairing, 10000);
-    
-    return () => {
-      if (pairingValidationRef.current) {
-        clearInterval(pairingValidationRef.current);
-        pairingValidationRef.current = null;
-      }
-    };
-  }, [displayId, state]);
-
-  // Poll for pairing
+  // Poll for pairing (when waiting for code entry)
   useEffect(() => {
     if (state !== 'waiting_pair' || !pairingCode) return;
 
