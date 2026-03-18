@@ -45,6 +45,17 @@ export default function App() {
   const [error, setError] = useState('');
   const [qrLoadError, setQrLoadError] = useState(false);
   
+  // Track previous orientation to detect changes
+  const prevIsLandscapeRef = useRef(isLandscape);
+  
+  // Reset QR error when orientation changes
+  useEffect(() => {
+    if (prevIsLandscapeRef.current !== isLandscape) {
+      setQrLoadError(false);
+      prevIsLandscapeRef.current = isLandscape;
+    }
+  }, [isLandscape]);
+  
   // Email receipt state
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [email, setEmail] = useState('');
@@ -737,13 +748,14 @@ export default function App() {
     
     // iPhone: Simplified layout (only order + QR)
     if (isPhone) {
-      const qrSize = Math.min(height * 0.7, 280);
+      // QR should be roughly 50% of screen height minus some padding
+      const qrSize = Math.min(height * 0.85, width * 0.45);
       
       return (
         <SafeAreaView style={styles.container}>
           <StatusBar barStyle="light-content" />
 
-          {/* Main Content - Cart left, QR right */}
+          {/* Main Content - Cart left (50%), QR right (50%) */}
           <View style={styles.landscapeContentSimple}>
             {/* Cart Section - LEFT */}
             <View style={styles.landscapeCartSimple}>
@@ -765,7 +777,7 @@ export default function App() {
               </View>
             </View>
 
-            {/* QR Section - RIGHT */}
+            {/* QR Section - RIGHT (no amount text for phones) */}
             <View style={styles.landscapeQRSimple}>
               <View style={[styles.qrBoxLandscape, { width: qrSize, height: qrSize }]}>
                 {qrLoadError ? (
@@ -793,7 +805,7 @@ export default function App() {
                   <ActivityIndicator size="large" color={C.green} />
                 )}
               </View>
-              <Text style={styles.qrAmountLandscape}>{total} kr</Text>
+              {/* No amount text for phones - removed */}
             </View>
           </View>
         </SafeAreaView>
@@ -881,6 +893,84 @@ export default function App() {
   }
 
   // PORTRAIT LAYOUT
+  
+  // Phone portrait - simplified without amount text below QR
+  if (isPhone) {
+    const phoneQrSize = Math.min(width * 0.55, 240);
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={styles.headerPortrait}>
+          <View style={styles.headerLeft}>
+            {logoUrl && (
+              <Image source={{ uri: logoUrl }} style={styles.headerLogo} resizeMode="contain" />
+            )}
+            <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
+          </View>
+          <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtn}>
+            <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
+          </TouchableOpacity>
+        </View>
+
+        {/* QR Section - TOP (no amount text for phones) */}
+        <View style={styles.portraitQR}>
+          <Text style={styles.qrTitleSmall}>Betala med Swish</Text>
+          <View style={[styles.qrBoxPortrait, { width: phoneQrSize, height: phoneQrSize }]}>
+            {qrLoadError ? (
+              <View style={styles.qrErrorContainer}>
+                <Ionicons name="qr-code-outline" size={60} color={C.green} />
+                <TouchableOpacity onPress={() => setQrLoadError(false)} style={styles.qrRetryBtnSmall}>
+                  <Text style={styles.qrRetryText}>Försök igen</Text>
+                </TouchableOpacity>
+              </View>
+            ) : displayData?.qr_code_url ? (
+              <Image 
+                source={{ uri: displayData.qr_code_url }} 
+                style={styles.qrImagePortrait}
+                resizeMode="contain"
+                onError={() => setQrLoadError(true)}
+              />
+            ) : qrData ? (
+              <Image 
+                source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=H&data=${encodeURIComponent(qrData)}` }} 
+                style={styles.qrImagePortrait}
+                resizeMode="contain"
+                onError={() => setQrLoadError(true)}
+              />
+            ) : (
+              <ActivityIndicator size="large" color={C.green} />
+            )}
+          </View>
+          {/* No amount - removed for phones */}
+          <Text style={styles.qrHintSmall}>Skanna med Swish-appen</Text>
+        </View>
+
+        {/* Cart Section - BOTTOM */}
+        <View style={styles.portraitCart}>
+          <Text style={styles.cartTitle}>Din order</Text>
+          <ScrollView style={styles.cartScrollPortrait} showsVerticalScrollIndicator={false}>
+            {items.map((item, idx) => (
+              <View key={idx} style={styles.cartItem}>
+                <View style={styles.itemLeft}>
+                  <Text style={styles.itemQty}>{item.quantity}x</Text>
+                  <Text style={styles.itemName}>{item.name}</Text>
+                </View>
+                <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
+              </View>
+            ))}
+          </ScrollView>
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Totalt</Text>
+            <Text style={styles.totalValue}>{total} kr</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  
+  // Tablet portrait - full layout with amount text
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -901,7 +991,7 @@ export default function App() {
       {/* QR Section - TOP */}
       <View style={styles.portraitQR}>
         <Text style={styles.qrTitleSmall}>Betala med Swish</Text>
-        <View style={[styles.qrBoxPortrait, { width: Math.min(width * 0.5, 220), height: Math.min(width * 0.5, 220) }]}>
+        <View style={[styles.qrBoxPortrait, { width: Math.min(width * 0.5, 280), height: Math.min(width * 0.5, 280) }]}>
           {qrLoadError ? (
             <View style={styles.qrErrorContainer}>
               <Ionicons name="qr-code-outline" size={60} color={C.green} />
@@ -919,7 +1009,7 @@ export default function App() {
             />
           ) : qrData ? (
             <Image 
-              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrData)}` }} 
+              source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=H&data=${encodeURIComponent(qrData)}` }} 
               style={styles.qrImagePortrait}
               resizeMode="contain"
               onError={() => setQrLoadError(true)}
