@@ -726,10 +726,7 @@ export default function App() {
   // SCREEN: Paired display (idle or waiting)
   // Portrait: Header -> QR -> Cart (top to bottom)
   // Landscape: Header on top, then Cart left | QR right
-  
-  // Detect if device is a phone (smaller screen) vs tablet
-  const smallerDimension = Math.min(width, height);
-  const isPhone = smallerDimension < 500;
+  // Note: smallerDimension and isPhone are already defined above for idle screen
   
   if (isLandscape) {
     // LANDSCAPE LAYOUT
