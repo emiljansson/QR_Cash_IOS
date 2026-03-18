@@ -699,10 +699,14 @@ export default function App() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         
-        {/* Small unpair button in corner */}
-        <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtnCornerSafe}>
-          <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
-        </TouchableOpacity>
+        {/* Header row with unpair button */}
+        <View style={styles.idleHeader}>
+          <View style={{ width: 40 }} />
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtnIdle}>
+            <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
+          </TouchableOpacity>
+        </View>
 
         {/* Centered logo and store name */}
         <View style={styles.idleFullScreen}>
@@ -1165,6 +1169,16 @@ const styles = StyleSheet.create({
   },
 
   // Idle full screen (no order)
+  idleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  unpairBtnIdle: {
+    padding: 8,
+  },
   idleFullScreen: {
     flex: 1,
     justifyContent: 'center',
