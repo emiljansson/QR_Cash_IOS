@@ -10,8 +10,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer } from 'expo-audio';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import Constants from 'expo-constants';
 import { Colors } from './src/utils/colors';
 import { api } from './src/utils/api';
+
+const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
 
 type DisplayState = 'loading' | 'generating' | 'waiting_pair' | 'paired_idle' | 'paired_waiting' | 'paired_paid' | 'error' | 'unpaired' | 'reconnecting';
 
@@ -519,6 +522,8 @@ export default function App() {
             <Ionicons name="refresh" size={16} color={C.textSec} />
             <Text style={styles.newCodeBtnText}>Generera ny kod</Text>
           </TouchableOpacity>
+          
+          <Text style={styles.versionText}>QR-Display v{APP_VERSION}</Text>
         </View>
       </View>
     );
@@ -556,6 +561,8 @@ export default function App() {
             <Ionicons name="refresh" size={16} color={C.textSec} />
             <Text style={styles.newCodeBtnText}>Generera ny kod</Text>
           </TouchableOpacity>
+          
+          <Text style={styles.versionText}>QR-Display v{APP_VERSION}</Text>
         </View>
       </View>
     );
@@ -1021,6 +1028,12 @@ const styles = StyleSheet.create({
   newCodeBtnText: {
     color: C.textSec,
     fontSize: 14,
+  },
+  versionText: {
+    color: '#4a4a4a',
+    fontSize: 12,
+    marginTop: 24,
+    textAlign: 'center',
   },
 
   // Header
