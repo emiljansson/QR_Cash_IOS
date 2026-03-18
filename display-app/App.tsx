@@ -435,33 +435,33 @@ export default function App() {
   // SCREEN: Loading
   if (state === 'loading') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={C.green} />
           <Text style={styles.statusText}>Kontrollerar anslutning...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // SCREEN: Generating code
   if (state === 'generating') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={C.green} />
           <Text style={styles.statusText}>Förbereder kundskärm...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // SCREEN: Error
   if (state === 'error') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.center}>
           <Ionicons name="alert-circle" size={64} color={C.red} />
@@ -471,14 +471,14 @@ export default function App() {
             <Text style={styles.retryBtnText}>Försök igen</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // SCREEN: Unpaired
   if (state === 'unpaired') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.center}>
           <Ionicons name="unlink-outline" size={64} color={C.textMut} />
@@ -489,14 +489,14 @@ export default function App() {
             <Text style={styles.retryBtnText}>Koppla igen</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // SCREEN: Waiting for pairing
   if (state === 'waiting_pair') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.center}>
           <View style={styles.pairIconContainer}>
@@ -525,14 +525,14 @@ export default function App() {
           
           <Text style={styles.versionText}>QR-Display v{APP_VERSION}</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // SCREEN: Reconnecting - showing pairing code but still trying to reconnect
   if (state === 'reconnecting') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.center}>
           <View style={styles.reconnectIconContainer}>
@@ -564,7 +564,7 @@ export default function App() {
           
           <Text style={styles.versionText}>QR-Display v{APP_VERSION}</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -580,7 +580,7 @@ export default function App() {
   // SCREEN: Payment complete - Thank you
   if (isPaid) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         <View style={styles.thankYouScreen}>
           <View style={[styles.thankYouCheckCircle, paidAnimation && styles.thankYouCheckCircleAnimated]}>
@@ -674,7 +674,7 @@ export default function App() {
             </View>
           </KeyboardAvoidingView>
         </Modal>
-      </View>
+      </SafeAreaView>
     );
   }
 
