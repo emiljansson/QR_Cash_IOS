@@ -4,7 +4,7 @@ import {
   TextInput, Modal, ScrollView, Dimensions, StatusBar, Image,
   KeyboardAvoidingView, Platform, useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer } from 'expo-audio';
@@ -682,28 +682,37 @@ export default function App() {
   // Show idle screen when state is idle OR when there's no QR and no items
   const isIdle = state === 'paired_idle' || (!showQR && !hasItems);
   
+  // Responsive sizes for different devices
+  const isSmallScreen = Math.min(width, height) < 400;
+  const logoSize = isSmallScreen ? Math.min(width, height) * 0.5 : Math.min(width, height) * 0.4;
+  const storeNameSize = isSmallScreen ? 28 : 36;
+  
   if (isIdle && !showQR) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
         
         {/* Small unpair button in corner */}
-        <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtnCorner}>
+        <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtnCornerSafe}>
           <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
         </TouchableOpacity>
 
         {/* Centered logo and store name */}
         <View style={styles.idleFullScreen}>
           {logoUrl ? (
-            <Image source={{ uri: logoUrl }} style={styles.idleLogo} resizeMode="contain" />
+            <Image 
+              source={{ uri: logoUrl }} 
+              style={[styles.idleLogo, { width: logoSize, height: logoSize }]} 
+              resizeMode="contain" 
+            />
           ) : (
-            <View style={styles.idleLogoPlaceholder}>
-              <Ionicons name="storefront" size={80} color={C.green} />
+            <View style={[styles.idleLogoPlaceholder, { width: logoSize * 0.8, height: logoSize * 0.8 }]}>
+              <Ionicons name="storefront" size={logoSize * 0.4} color={C.green} />
             </View>
           )}
-          <Text style={styles.idleStoreName}>{storeName || 'Välkommen!'}</Text>
+          <Text style={[styles.idleStoreName, { fontSize: storeNameSize }]}>{storeName || 'Välkommen!'}</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -1070,31 +1079,33 @@ const styles = StyleSheet.create({
     padding: 8,
     zIndex: 10,
   },
+  unpairBtnCornerSafe: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 8,
+    zIndex: 10,
+  },
 
   // Idle full screen (no order)
   idleFullScreen: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    paddingHorizontal: 24,
   },
   idleLogo: {
-    width: 200,
-    height: 200,
     borderRadius: 24,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   idleLogoPlaceholder: {
-    width: 160,
-    height: 160,
     borderRadius: 24,
     backgroundColor: 'rgba(34,197,94,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   idleStoreName: {
-    fontSize: 36,
     fontWeight: '700',
     color: C.text,
     textAlign: 'center',
