@@ -1,7 +1,7 @@
 {
   "name": "display-app",
-  "version": "1.0.312",
-  "main": "index.ts",
+  "version": "1.0.313",
+  "main": "index.tsx",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
