@@ -727,18 +727,102 @@ export default function App() {
   // Portrait: Header -> QR -> Cart (top to bottom)
   // Landscape: Header on top, then Cart left | QR right
   
+  // Detect if device is a phone (smaller screen) vs tablet
+  const smallerDimension = Math.min(width, height);
+  const isPhone = smallerDimension < 500;
+  
   if (isLandscape) {
-    // LANDSCAPE LAYOUT - Simplified for iPhone
-    const qrSize = Math.min(height * 0.65, 280);
+    // LANDSCAPE LAYOUT
+    
+    // iPhone: Simplified layout (only order + QR)
+    if (isPhone) {
+      const qrSize = Math.min(height * 0.7, 280);
+      
+      return (
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="light-content" />
+
+          {/* Main Content - Cart left, QR right */}
+          <View style={styles.landscapeContentSimple}>
+            {/* Cart Section - LEFT */}
+            <View style={styles.landscapeCartSimple}>
+              <Text style={styles.cartTitle}>Din order</Text>
+              <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
+                {items.map((item, idx) => (
+                  <View key={idx} style={styles.cartItem}>
+                    <View style={styles.itemLeft}>
+                      <Text style={styles.itemQty}>{item.quantity}x</Text>
+                      <Text style={styles.itemName}>{item.name}</Text>
+                    </View>
+                    <Text style={styles.itemPrice}>{item.price * item.quantity} kr</Text>
+                  </View>
+                ))}
+              </ScrollView>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Totalt</Text>
+                <Text style={styles.totalValue}>{total} kr</Text>
+              </View>
+            </View>
+
+            {/* QR Section - RIGHT */}
+            <View style={styles.landscapeQRSimple}>
+              <View style={[styles.qrBoxLandscape, { width: qrSize, height: qrSize }]}>
+                {qrLoadError ? (
+                  <View style={styles.qrErrorContainer}>
+                    <Ionicons name="qr-code-outline" size={60} color={C.green} />
+                    <TouchableOpacity onPress={() => setQrLoadError(false)} style={styles.qrRetryBtn}>
+                      <Text style={styles.qrRetryText}>Försök igen</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : displayData?.qr_code_url ? (
+                  <Image 
+                    source={{ uri: displayData.qr_code_url }} 
+                    style={styles.qrImageLandscape}
+                    resizeMode="contain"
+                    onError={() => setQrLoadError(true)}
+                  />
+                ) : qrData ? (
+                  <Image 
+                    source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&ecc=H&data=${encodeURIComponent(qrData)}` }} 
+                    style={styles.qrImageLandscape}
+                    resizeMode="contain"
+                    onError={() => setQrLoadError(true)}
+                  />
+                ) : (
+                  <ActivityIndicator size="large" color={C.green} />
+                )}
+              </View>
+              <Text style={styles.qrAmountLandscape}>{total} kr</Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      );
+    }
+    
+    // iPad/Tablet: Full layout with header and all text
+    const qrSizeTablet = Math.min(height * 0.5, 350);
     
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            {logoUrl && (
+              <Image source={{ uri: logoUrl }} style={styles.headerLogo} resizeMode="contain" />
+            )}
+            <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
+          </View>
+          <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtn}>
+            <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
+          </TouchableOpacity>
+        </View>
 
         {/* Main Content - Cart left, QR right */}
-        <View style={styles.landscapeContentSimple}>
+        <View style={styles.landscapeContent}>
           {/* Cart Section - LEFT */}
-          <View style={styles.landscapeCartSimple}>
+          <View style={styles.landscapeCart}>
             <Text style={styles.cartTitle}>Din order</Text>
             <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
               {items.map((item, idx) => (
@@ -752,17 +836,19 @@ export default function App() {
               ))}
             </ScrollView>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Totalt</Text>
+              <Text style={styles.totalLabel}>Totalt att betala</Text>
               <Text style={styles.totalValue}>{total} kr</Text>
             </View>
           </View>
 
           {/* QR Section - RIGHT */}
-          <View style={styles.landscapeQRSimple}>
-            <View style={[styles.qrBoxLandscape, { width: qrSize, height: qrSize }]}>
+          <View style={styles.landscapeQR}>
+            <Text style={styles.qrTitle}>Betala med Swish</Text>
+            <View style={[styles.qrBoxLandscape, { width: qrSizeTablet, height: qrSizeTablet }]}>
               {qrLoadError ? (
                 <View style={styles.qrErrorContainer}>
-                  <Ionicons name="qr-code-outline" size={60} color={C.green} />
+                  <Ionicons name="qr-code-outline" size={80} color={C.green} />
+                  <Text style={styles.qrErrorText}>QR-kod kunde inte laddas</Text>
                   <TouchableOpacity onPress={() => setQrLoadError(false)} style={styles.qrRetryBtn}>
                     <Text style={styles.qrRetryText}>Försök igen</Text>
                   </TouchableOpacity>
@@ -785,7 +871,8 @@ export default function App() {
                 <ActivityIndicator size="large" color={C.green} />
               )}
             </View>
-            <Text style={styles.qrAmountLandscape}>{total} kr</Text>
+            <Text style={styles.qrAmount}>{total} kr</Text>
+            <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
           </View>
         </View>
       </SafeAreaView>
