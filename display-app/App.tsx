@@ -683,9 +683,16 @@ export default function App() {
   const isIdle = state === 'paired_idle' || (!showQR && !hasItems);
   
   // Responsive sizes for different devices
-  const isSmallScreen = Math.min(width, height) < 400;
-  const logoSize = isSmallScreen ? Math.min(width, height) * 0.5 : Math.min(width, height) * 0.4;
-  const storeNameSize = isSmallScreen ? 28 : 36;
+  // iPhone: width ~390, height ~844 (portrait)
+  // iPad: width ~1024, height ~768 (landscape) or ~768x1024 (portrait)
+  const smallerDimension = Math.min(width, height);
+  const isPhone = smallerDimension < 500; // iPhone has smaller dimension < 500
+  
+  // Make logo fill more of the screen on phones
+  const logoSize = isPhone 
+    ? smallerDimension * 0.6  // 60% of width on iPhone
+    : smallerDimension * 0.4; // 40% on iPad
+  const storeNameSize = isPhone ? 32 : 42;
   
   if (isIdle && !showQR) {
     return (
