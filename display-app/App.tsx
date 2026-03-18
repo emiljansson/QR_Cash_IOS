@@ -584,7 +584,7 @@ export default function App() {
         <StatusBar barStyle="light-content" />
         <View style={styles.thankYouScreen}>
           <View style={[styles.thankYouCheckCircle, paidAnimation && styles.thankYouCheckCircleAnimated]}>
-            <Ionicons name="checkmark" size={80} color={C.white} />
+            <Ionicons name="checkmark" size={60} color={C.white} />
           </View>
           
           <Text style={styles.thankYouTitle}>Tack för ditt köp!</Text>
@@ -1400,16 +1400,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    paddingHorizontal: 32,
+    paddingTop: 40,
+    paddingBottom: 32,
   },
   thankYouCheckCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: C.green,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   thankYouCheckCircleAnimated: {
     transform: [{ scale: 1.1 }],
