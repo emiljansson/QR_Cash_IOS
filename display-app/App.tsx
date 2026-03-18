@@ -728,28 +728,17 @@ export default function App() {
   // Landscape: Header on top, then Cart left | QR right
   
   if (isLandscape) {
-    // LANDSCAPE LAYOUT
+    // LANDSCAPE LAYOUT - Simplified for iPhone
+    const qrSize = Math.min(height * 0.65, 280);
+    
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            {logoUrl && (
-              <Image source={{ uri: logoUrl }} style={styles.headerLogo} resizeMode="contain" />
-            )}
-            <Text style={styles.storeNameText}>{storeName || 'QR-Kassan'}</Text>
-          </View>
-          <TouchableOpacity onPress={handleUnpair} style={styles.unpairBtn}>
-            <Ionicons name="close-circle-outline" size={24} color={C.textMut} />
-          </TouchableOpacity>
-        </View>
 
         {/* Main Content - Cart left, QR right */}
-        <View style={styles.landscapeContent}>
+        <View style={styles.landscapeContentSimple}>
           {/* Cart Section - LEFT */}
-          <View style={styles.landscapeCart}>
+          <View style={styles.landscapeCartSimple}>
             <Text style={styles.cartTitle}>Din order</Text>
             <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
               {items.map((item, idx) => (
@@ -763,19 +752,17 @@ export default function App() {
               ))}
             </ScrollView>
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Totalt att betala</Text>
+              <Text style={styles.totalLabel}>Totalt</Text>
               <Text style={styles.totalValue}>{total} kr</Text>
             </View>
           </View>
 
           {/* QR Section - RIGHT */}
-          <View style={styles.landscapeQR}>
-            <Text style={styles.qrTitle}>Betala med Swish</Text>
-            <View style={[styles.qrBoxLandscape, { width: Math.min(height * 0.5, 350), height: Math.min(height * 0.5, 350) }]}>
+          <View style={styles.landscapeQRSimple}>
+            <View style={[styles.qrBoxLandscape, { width: qrSize, height: qrSize }]}>
               {qrLoadError ? (
                 <View style={styles.qrErrorContainer}>
-                  <Ionicons name="qr-code-outline" size={80} color={C.green} />
-                  <Text style={styles.qrErrorText}>QR-kod kunde inte laddas</Text>
+                  <Ionicons name="qr-code-outline" size={60} color={C.green} />
                   <TouchableOpacity onPress={() => setQrLoadError(false)} style={styles.qrRetryBtn}>
                     <Text style={styles.qrRetryText}>Försök igen</Text>
                   </TouchableOpacity>
@@ -798,8 +785,7 @@ export default function App() {
                 <ActivityIndicator size="large" color={C.green} />
               )}
             </View>
-            <Text style={styles.qrAmount}>{total} kr</Text>
-            <Text style={styles.qrHint}>Skanna med Swish-appen</Text>
+            <Text style={styles.qrAmountLandscape}>{total} kr</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -1171,6 +1157,13 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
   },
+  landscapeContentSimple: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 12,
+  },
   landscapeCart: {
     flex: 1,
     backgroundColor: C.surface,
@@ -1178,22 +1171,38 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: 'rgba(255,255,255,0.1)',
   },
+  landscapeCartSimple: {
+    flex: 1,
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    padding: 12,
+  },
   landscapeQR: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
+  landscapeQRSimple: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   qrBoxLandscape: {
     backgroundColor: C.white,
-    padding: 20,
-    borderRadius: 24,
-    marginVertical: 16,
+    padding: 16,
+    borderRadius: 20,
     // Size set dynamically in component
   },
   qrImageLandscape: {
     width: '100%',
     height: '100%',
+  },
+  qrAmountLandscape: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: C.green,
+    marginTop: 8,
   },
 
   // PORTRAIT LAYOUT
