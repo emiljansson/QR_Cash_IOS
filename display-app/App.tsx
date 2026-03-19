@@ -1348,10 +1348,10 @@ const styles = StyleSheet.create({
   landscapeContentSimple: {
     flex: 1,
     flexDirection: 'row',
-    paddingLeft: 0,
-    paddingRight: 12,
-    paddingVertical: 8,
-    gap: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 0,
+    gap: 12,
+    alignItems: 'center',
   },
   landscapeCart: {
     flex: 1,
@@ -1361,7 +1361,7 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(255,255,255,0.1)',
   },
   landscapeCartSimple: {
-    flex: 0.4,
+    flex: 0.5,
     backgroundColor: C.surface,
     borderRadius: 12,
     padding: 12,
@@ -1373,9 +1373,10 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   landscapeQRSimple: {
-    flex: 1,
+    flex: 0.5,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    paddingRight: 8,
   },
   qrBoxLandscape: {
     backgroundColor: C.white,
