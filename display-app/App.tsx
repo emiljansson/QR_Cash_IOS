@@ -1348,7 +1348,8 @@ const styles = StyleSheet.create({
   landscapeContentSimple: {
     flex: 1,
     flexDirection: 'row',
-    paddingHorizontal: 12,
+    paddingLeft: 0,
+    paddingRight: 12,
     paddingVertical: 8,
     gap: 16,
   },
