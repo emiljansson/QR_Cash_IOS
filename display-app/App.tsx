@@ -1348,9 +1348,9 @@ const styles = StyleSheet.create({
   landscapeContentSimple: {
     flex: 1,
     flexDirection: 'row',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    gap: 16,
+    gap: 24,
   },
   landscapeCart: {
     flex: 1,
