@@ -813,7 +813,7 @@ export default function App() {
     }
     
     // iPad/Tablet: Full layout with header and all text
-    const qrSizeTablet = Math.min(height * 0.5, 350);
+    const qrSizeTablet = Math.min(height * 0.55, 400);
     
     return (
       <SafeAreaView style={styles.container}>
@@ -1357,6 +1357,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: C.surface,
     padding: 20,
+    paddingRight: 24,
+    marginRight: 16,
     borderRightWidth: 1,
     borderRightColor: 'rgba(255,255,255,0.1)',
   },
