@@ -1375,10 +1375,10 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   landscapeQRSimple: {
-    flex: 0.5,
+    flex: 0.62,
     justifyContent: 'center',
     alignItems: 'flex-end',
-    paddingRight: 8,
+    paddingRight: 16,
   },
   qrBoxLandscape: {
     backgroundColor: C.white,
