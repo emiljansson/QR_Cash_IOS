@@ -1363,7 +1363,7 @@ const styles = StyleSheet.create({
     borderRightColor: 'rgba(255,255,255,0.1)',
   },
   landscapeCartSimple: {
-    flex: 0.5,
+    flex: 0.38,
     backgroundColor: C.surface,
     borderRadius: 12,
     padding: 12,
