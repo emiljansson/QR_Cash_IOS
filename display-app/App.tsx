@@ -590,16 +590,22 @@ export default function App() {
 
   // SCREEN: Payment complete - Thank you
   if (isPaid) {
+    // Check if iPhone in landscape (hide big checkmark)
+    const isPhoneLandscape = isPhone && isLandscape;
+    
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <View style={styles.thankYouScreen}>
-          <View style={[styles.thankYouCheckCircle, paidAnimation && styles.thankYouCheckCircleAnimated]}>
-            <Ionicons name="checkmark" size={60} color={C.white} />
-          </View>
+        <View style={[styles.thankYouScreen, isPhoneLandscape && styles.thankYouScreenCompact]}>
+          {/* Hide checkmark on iPhone landscape */}
+          {!isPhoneLandscape && (
+            <View style={[styles.thankYouCheckCircle, paidAnimation && styles.thankYouCheckCircleAnimated]}>
+              <Ionicons name="checkmark" size={60} color={C.white} />
+            </View>
+          )}
           
-          <Text style={styles.thankYouTitle}>Tack för ditt köp!</Text>
-          <Text style={styles.thankYouAmount}>{paidAmount.toFixed(0)} kr</Text>
+          <Text style={[styles.thankYouTitle, isPhoneLandscape && styles.thankYouTitleCompact]}>Tack för ditt köp!</Text>
+          <Text style={[styles.thankYouAmount, isPhoneLandscape && styles.thankYouAmountCompact]}>{paidAmount.toFixed(0)} kr</Text>
           <Text style={styles.thankYouSubtitle}>Betalningen är genomförd</Text>
 
           {/* Email receipt button */}
@@ -1605,6 +1611,10 @@ const styles = StyleSheet.create({
     paddingTop: 40,
     paddingBottom: 32,
   },
+  thankYouScreenCompact: {
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
   thankYouCheckCircle: {
     width: 100,
     height: 100,
@@ -1623,11 +1633,19 @@ const styles = StyleSheet.create({
     color: C.text,
     marginBottom: 8,
   },
+  thankYouTitleCompact: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
   thankYouAmount: {
     fontSize: 48,
     fontWeight: '800',
     color: C.green,
     marginBottom: 8,
+  },
+  thankYouAmountCompact: {
+    fontSize: 36,
+    marginBottom: 4,
   },
   thankYouSubtitle: {
     fontSize: 18,
