@@ -305,42 +305,17 @@ class CommHubCollection:
         
         return None
     
-    async def find(self, filter: Dict[str, Any] = None, projection: Dict[str, int] = None, sort: List[tuple] = None, skip: int = 0, limit: int = 100):
-        """Find documents matching filter - returns async generator"""
-        if filter is None:
-            filter = {}
-        
-        # Handle special _id field
-        if "_id" in filter:
-            del filter["_id"]
-        
-        # Convert sort format from MongoDB [(field, 1/-1)] to CommHub {field: 1/-1}
-        sort_dict = None
-        if sort:
-            sort_dict = {field: direction for field, direction in sort}
-        
-        result = await self.client.query_documents(
+    def find(self, filter: Dict[str, Any] = None, projection: Dict[str, int] = None, sort: List[tuple] = None, skip: int = 0, limit: int = 100) -> 'LazyAsyncCursor':
+        """Find documents matching filter - returns a lazy cursor that fetches on to_list()"""
+        return LazyAsyncCursor(
+            self.client, 
             self.name, 
-            filter=filter, 
-            sort=sort_dict, 
-            skip=skip, 
-            limit=limit
+            filter or {}, 
+            projection, 
+            sort, 
+            skip, 
+            limit
         )
-        
-        documents = result.get("documents", [])
-        
-        # Return documents with merged data
-        merged_docs = []
-        for doc in documents:
-            if "data" in doc:
-                merged = {**doc["data"], "_id": doc["id"], "id": doc["id"]}
-                merged["created_at"] = doc.get("created_at")
-                merged["updated_at"] = doc.get("updated_at")
-                merged_docs.append(merged)
-            else:
-                merged_docs.append(doc)
-        
-        return AsyncDocumentCursor(merged_docs)
     
     async def insert_one(self, document: Dict[str, Any]) -> Any:
         """Insert a single document"""
@@ -456,6 +431,130 @@ class CommHubCollection:
     async def create_indexes(self, indexes, **kwargs):
         """Create multiple indexes - no-op for CommHub"""
         pass
+
+
+class LazyAsyncCursor:
+    """
+    Lazy cursor that fetches data when to_list() is called.
+    This allows chaining like: await db.collection.find({}).to_list(100)
+    """
+    
+    def __init__(self, client: CommHubClient, collection_name: str, filter: Dict, projection: Dict, sort_spec: List, skip_count: int, limit_count: int):
+        self.client = client
+        self.collection_name = collection_name
+        self.filter = filter
+        self.projection = projection
+        self._sort_spec = sort_spec
+        self._skip_count = skip_count
+        self._limit_count = limit_count
+        self._fetched = False
+        self._documents = []
+    
+    async def _fetch(self):
+        """Fetch and filter documents"""
+        if self._fetched:
+            return
+        
+        # Remove _id from filter for CommHub
+        filter_clean = {k: v for k, v in self.filter.items() if k not in ("_id", "id")}
+        
+        # List and filter in-memory
+        result = await self.client.list_documents(self.collection_name, skip=0, limit=500)
+        documents = result.get("documents", [])
+        
+        # Filter documents
+        filtered_docs = []
+        for doc in documents:
+            data = doc.get("data", doc)
+            match = True
+            
+            for key, value in filter_clean.items():
+                doc_value = data.get(key)
+                # Handle nested keys
+                if "." in key:
+                    parts = key.split(".")
+                    doc_value = data
+                    for part in parts:
+                        if isinstance(doc_value, dict):
+                            doc_value = doc_value.get(part)
+                        else:
+                            doc_value = None
+                            break
+                
+                # Handle MongoDB operators
+                if isinstance(value, dict):
+                    if "$gt" in value and not (doc_value is not None and doc_value > value["$gt"]):
+                        match = False
+                    if "$gte" in value and not (doc_value is not None and doc_value >= value["$gte"]):
+                        match = False
+                    if "$lt" in value and not (doc_value is not None and doc_value < value["$lt"]):
+                        match = False
+                    if "$lte" in value and not (doc_value is not None and doc_value <= value["$lte"]):
+                        match = False
+                    if "$ne" in value and doc_value == value["$ne"]:
+                        match = False
+                    if "$in" in value and doc_value not in value["$in"]:
+                        match = False
+                elif doc_value != value:
+                    match = False
+                
+                if not match:
+                    break
+            
+            if match:
+                if "data" in doc:
+                    merged = {**doc["data"], "_id": doc["id"], "id": doc["id"]}
+                    merged["created_at"] = doc.get("created_at")
+                    merged["updated_at"] = doc.get("updated_at")
+                    filtered_docs.append(merged)
+                else:
+                    filtered_docs.append(doc)
+        
+        # Apply sort
+        if self._sort_spec:
+            for key, direction in reversed(self._sort_spec):
+                filtered_docs.sort(
+                    key=lambda x: x.get(key, "") or "",
+                    reverse=(direction == -1)
+                )
+        
+        # Apply skip and limit
+        self._documents = filtered_docs[self._skip_count:self._skip_count + self._limit_count]
+        self._fetched = True
+    
+    async def to_list(self, length: int = None) -> List[Dict]:
+        """Fetch and return documents as list"""
+        await self._fetch()
+        if length:
+            return self._documents[:length]
+        return self._documents
+    
+    def sort(self, key_or_list, direction: int = None) -> 'LazyAsyncCursor':
+        """Add sort to cursor (chainable)"""
+        if isinstance(key_or_list, str):
+            self._sort_spec = [(key_or_list, direction or 1)]
+        else:
+            self._sort_spec = key_or_list
+        return self
+    
+    def skip(self, n: int) -> 'LazyAsyncCursor':
+        """Add skip to cursor (chainable)"""
+        self._skip_count = n
+        return self
+    
+    def limit(self, n: int) -> 'LazyAsyncCursor':
+        """Add limit to cursor (chainable)"""
+        self._limit_count = n
+        return self
+    
+    def __aiter__(self):
+        return self
+    
+    async def __anext__(self):
+        await self._fetch()
+        if not self._documents:
+            raise StopAsyncIteration
+        return self._documents.pop(0)
 
 
 class AsyncDocumentCursor:
