@@ -8,6 +8,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/utils/colors';
 import { api } from '../src/utils/api';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useAuth } from '../src/contexts/AuthContext';
+import { localStore } from '../src/utils/localFirstStore';
+import { useRealtimeSync } from '../src/hooks/useRealtimeSync';
 
 interface ParkedCart {
   id: string;
@@ -19,6 +22,7 @@ interface ParkedCart {
 
 export default function ParkedCartsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const params = useLocalSearchParams<{ cartItems?: string; cartTotal?: string }>();
   const { width } = useWindowDimensions();
   const isPhone = width < 768;
@@ -33,14 +37,24 @@ export default function ParkedCartsScreen() {
   const currentCartTotal = params.cartTotal ? parseFloat(params.cartTotal) : 0;
   const hasCurrentCart = currentCartItems.length > 0;
 
+  const userId = user?.user_id || 'anonymous';
+
+  // Listen for real-time updates to parked carts
+  useRealtimeSync('parked_carts', (event) => {
+    console.log('[ParkedCarts] Real-time update:', event.action);
+    // Refresh carts when any change occurs
+    loadCarts();
+  });
+
   const loadCarts = useCallback(async () => {
     try {
-      const data = await api.getParkedCarts();
+      // Use local-first store instead of direct API call
+      const data = await localStore.getParkedCarts(userId);
       setCarts(data);
     } catch {} finally { setLoading(false); }
-  }, []);
+  }, [userId]);
 
-  useEffect(() => { loadCarts(); }, []);
+  useEffect(() => { loadCarts(); }, [loadCarts]);
 
   const handleSaveCart = async () => {
     if (!cartName.trim()) {
@@ -54,6 +68,8 @@ export default function ParkedCartsScreen() {
         items: currentCartItems,
         total: currentCartTotal,
       });
+      // Invalidate local cache to force refresh
+      await localStore.invalidateCache('parked_carts', userId);
       setShowSave(false);
       setCartName('');
       // Navigate back to POS and clear cart by passing empty cart
@@ -73,6 +89,8 @@ export default function ParkedCartsScreen() {
         text: 'Radera', style: 'destructive', onPress: async () => {
           try {
             await api.deleteParkedCart(cart.id);
+            // Invalidate local cache to force refresh
+            await localStore.invalidateCache('parked_carts', userId);
             loadCarts();
           } catch (e: any) { Alert.alert('Fel', e.message); }
         }
@@ -96,6 +114,8 @@ export default function ParkedCartsScreen() {
         items: currentCartItems,
         total: currentCartTotal,
       });
+      // Invalidate local cache to force refresh
+      await localStore.invalidateCache('parked_carts', userId);
       Alert.alert('Tillagt!', `Varorna har lagts till i "${cart.name}"`);
       // Clear current cart and go back to POS
       router.replace({
