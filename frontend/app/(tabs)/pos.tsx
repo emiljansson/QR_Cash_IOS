@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useRealtimeSync } from '../../src/hooks/useRealtimeSync';
+import { commHubWS } from '../../src/services/commHubWebSocket';
 import QRCode from 'react-native-qrcode-svg';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 
@@ -44,6 +46,9 @@ export default function POSScreen() {
   const [currentOrder, setCurrentOrder] = useState<any>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [parkedCount, setParkedCount] = useState(0);
+  
+  // Real-time sync - connect to CommHub WebSocket
+  const { isConnected, connectionStatus } = useRealtimeSync();
 
   const loadProducts = useCallback(async () => {
     try {
@@ -71,6 +76,24 @@ export default function POSScreen() {
       setParkedCount(0);
     }
   }, []);
+
+  useEffect(() => {
+    loadProducts();
+    loadSettings();
+  }, []);
+  
+  // Listen for real-time product updates via WebSocket
+  useEffect(() => {
+    const unsubscribe = commHubWS.onMessage((message) => {
+      if (message.type === 'document_changed' && message.collection === 'qr_products') {
+        console.log('[POS] Real-time product update:', message.operation, message.document_id);
+        // Reload products when any product changes
+        loadProducts();
+      }
+    });
+    
+    return unsubscribe;
+  }, [loadProducts]);
 
   useEffect(() => {
     loadProducts();
@@ -237,7 +260,17 @@ export default function POSScreen() {
           ) : null}
           <View>
             <Text style={styles.headerTitle}>{settings.store_name || 'Kassa'}</Text>
-            <Text style={styles.headerSubtitle}>{products.length} produkter</Text>
+            <View style={styles.headerSubtitleRow}>
+              <Text style={styles.headerSubtitle}>{products.length} produkter</Text>
+              {/* Real-time sync indicator */}
+              <View style={[styles.syncIndicator, { backgroundColor: isConnected ? '#22c55e' : '#f59e0b' }]}>
+                <Ionicons 
+                  name={isConnected ? 'cloud-done' : 'cloud-offline'} 
+                  size={10} 
+                  color="#fff" 
+                />
+              </View>
+            </View>
           </View>
         </View>
         <View style={styles.headerActions}>
@@ -443,6 +476,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
   headerSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  headerSubtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  syncIndicator: { 
+    width: 18, 
+    height: 18, 
+    borderRadius: 9, 
+    alignItems: 'center', 
+    justifyContent: 'center',
+  },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   storeLogo: { width: 40, height: 40, borderRadius: 8 },
