@@ -36,11 +36,11 @@ async def get_products(request: Request, active_only: bool = False):
     owner_id = get_owner_user_id(user)
     
     query = {"user_id": owner_id}
-    if active_only:
-        # Include products where active is True OR active field doesn't exist (defaults to active)
-        query["$or"] = [{"active": True}, {"active": {"$exists": False}}]
+    # Note: $or operator not supported by CommHub, filter active status in-memory instead
     
     products = await db.products.find(query, {"_id": 0}).sort("sort_order", 1).to_list(1000)
+    
+    result = []
     for p in products:
         if isinstance(p.get('created_at'), str):
             p['created_at'] = datetime.fromisoformat(p['created_at'])
@@ -49,7 +49,15 @@ async def get_products(request: Request, active_only: bool = False):
         # Ensure active field exists, default to True
         if 'active' not in p:
             p['active'] = True
-    return products
+        
+        # Filter active products in-memory if active_only is True
+        if active_only:
+            if p.get('active', True):  # Default to True if not set
+                result.append(p)
+        else:
+            result.append(p)
+    
+    return result
 
 
 @router.post("/reorder")
