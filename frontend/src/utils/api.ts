@@ -225,6 +225,29 @@ class ApiClient {
       body: JSON.stringify({ order_id: orderId, recipient_email: email }),
     });
   }
+
+  // Generic HTTP methods for sync service
+  async get(path: string) {
+    return this.request(path, { method: 'GET' });
+  }
+
+  async post(path: string, data: any) {
+    return this.request(path, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async put(path: string, data: any) {
+    return this.request(path, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async delete(path: string) {
+    return this.request(path, { method: 'DELETE' });
+  }
 }
 
 export const api = new ApiClient();
