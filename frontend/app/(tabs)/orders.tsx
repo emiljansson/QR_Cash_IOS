@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { localStore } from '../../src/utils/localFirstStore';
+import { commHubWS } from '../../src/services/commHubWebSocket';
 
 // Cross-platform confirm dialog
 const confirmAction = (title: string, message: string, onConfirm: () => void) => {
@@ -45,14 +47,47 @@ export default function OrdersScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
+    if (!user?.user_id) return;
     try {
-      const data = await api.getOrders(filter || undefined);
-      setOrders(data);
+      // Use local-first store for orders
+      const data = await localStore.getOrders(user.user_id, 100);
+      // Apply local filter if set
+      const filtered = filter 
+        ? data.filter((o: Order) => o.status === filter)
+        : data;
+      setOrders(filtered);
     } catch {} finally { setLoading(false); setRefreshing(false); }
-  }, [filter]);
+  }, [filter, user?.user_id]);
 
-  useEffect(() => { loadOrders(); }, [loadOrders]);
-  const onRefresh = () => { setRefreshing(true); loadOrders(); };
+  useEffect(() => { 
+    if (user?.user_id) {
+      loadOrders();
+      // Start auto-sync
+      localStore.startAutoSync(user.user_id);
+    }
+    return () => { localStore.stopAutoSync(); };
+  }, [user?.user_id, loadOrders]);
+  
+  // Listen for real-time order updates
+  useEffect(() => {
+    const unsubscribe = commHubWS.onMessage((message) => {
+      if (message.type === 'document_changed' && message.collection === 'qr_orders') {
+        console.log('[Orders] Real-time order update:', message.operation);
+        if (user?.user_id) {
+          localStore.invalidateCache('orders', user.user_id);
+          loadOrders();
+        }
+      }
+    });
+    return unsubscribe;
+  }, [loadOrders, user?.user_id]);
+  
+  const onRefresh = () => { 
+    setRefreshing(true); 
+    if (user?.user_id) {
+      localStore.forceSyncAll(user.user_id).then(loadOrders);
+    }
+  };
 
   const statusColor = (status: string) => {
     switch (status) {

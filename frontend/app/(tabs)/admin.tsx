@@ -10,6 +10,9 @@ import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-nativ
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
+import { localStore } from '../../src/utils/localFirstStore';
+import { commHubWS } from '../../src/services/commHubWebSocket';
+import { useAuth } from '../../src/contexts/AuthContext';
 
 interface Product {
   id: string;
@@ -405,6 +408,7 @@ const userStatsStyles = StyleSheet.create({
 });
 
 export default function AdminScreen() {
+  const { user } = useAuth();
   const { width } = useWindowDimensions();
   const isWide = width > 600;
   
@@ -462,13 +466,15 @@ export default function AdminScreen() {
   };
 
   const loadProducts = useCallback(async () => {
+    if (!user?.user_id) return;
     try {
-      const data = await api.getProducts();
+      // Use local-first store for products
+      const data = await localStore.getProducts(user.user_id, false);
       // Sort by sort_order
       data.sort((a: Product, b: Product) => (a.sort_order || 0) - (b.sort_order || 0));
       setProducts(data);
     } catch {} finally { setLoading(false); }
-  }, []);
+  }, [user?.user_id]);
 
   const handleReorderProducts = useCallback(async (data: Product[]) => {
     setProducts(data);
@@ -483,8 +489,10 @@ export default function AdminScreen() {
   }, [loadProducts]);
 
   const loadSettings = useCallback(async () => {
+    if (!user?.user_id) return;
     try {
-      const data = await api.getSettings();
+      // Use local-first store for settings
+      const data = await localStore.getSettings(user.user_id);
       setSettings(data);
       setSettingsForm({
         store_name: data.store_name || '',
@@ -497,7 +505,7 @@ export default function AdminScreen() {
         setLogoPreview(data.logo_url);
       }
     } catch {}
-  }, []);
+  }, [user?.user_id]);
 
   const loadSubUsers = useCallback(async () => {
     setLoadingUsers(true);
@@ -512,12 +520,29 @@ export default function AdminScreen() {
   }, []);
 
   useEffect(() => {
-    if (pinVerified) {
+    if (pinVerified && user?.user_id) {
       loadProducts();
       loadSettings();
       loadSubUsers();
+      // Start auto-sync
+      localStore.startAutoSync(user.user_id);
     }
-  }, [pinVerified]);
+    return () => { localStore.stopAutoSync(); };
+  }, [pinVerified, user?.user_id, loadProducts, loadSettings, loadSubUsers]);
+  
+  // Listen for real-time product updates
+  useEffect(() => {
+    const unsubscribe = commHubWS.onMessage((message) => {
+      if (message.type === 'document_changed' && message.collection === 'qr_products') {
+        console.log('[Admin] Real-time product update:', message.operation);
+        if (user?.user_id) {
+          localStore.invalidateCache('products', user.user_id);
+          loadProducts();
+        }
+      }
+    });
+    return unsubscribe;
+  }, [loadProducts, user?.user_id]);
 
   const handleVerifyPin = async () => {
     try {
