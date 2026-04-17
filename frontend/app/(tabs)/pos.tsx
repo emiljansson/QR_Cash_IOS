@@ -9,6 +9,8 @@ import { api } from '../../src/utils/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRealtimeSync } from '../../src/hooks/useRealtimeSync';
 import { commHubWS } from '../../src/services/commHubWebSocket';
+import { localStore } from '../../src/utils/localFirstStore';
+import { generateOrderQR } from '../../src/utils/swishQR';
 import QRCode from 'react-native-qrcode-svg';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 
@@ -51,54 +53,67 @@ export default function POSScreen() {
   const { isConnected, connectionStatus } = useRealtimeSync();
 
   const loadProducts = useCallback(async () => {
+    if (!user?.user_id) return;
     try {
-      const data = await api.getProducts(true);
+      // Use local-first store - returns cached data instantly, syncs in background
+      const data = await localStore.getProducts(user.user_id, true);
       setProducts(data);
     } catch (e) {
       // Silent fail - will show empty product list
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.user_id]);
 
   const loadSettings = useCallback(async () => {
+    if (!user?.user_id) return;
     try {
-      const data = await api.getSettings();
+      // Use local-first store for settings too
+      const data = await localStore.getSettings(user.user_id);
       setSettings(data);
     } catch {}
-  }, []);
+  }, [user?.user_id]);
 
   const loadParkedCount = useCallback(async () => {
+    if (!user?.user_id) return;
     try {
-      const carts = await api.getParkedCarts();
+      // Use local-first store for parked carts
+      const carts = await localStore.getParkedCarts(user.user_id);
       setParkedCount(Array.isArray(carts) ? carts.length : 0);
     } catch {
       setParkedCount(0);
     }
-  }, []);
+  }, [user?.user_id]);
 
+  // Initial load and auto-sync setup
   useEffect(() => {
-    loadProducts();
-    loadSettings();
-  }, []);
+    if (user?.user_id) {
+      loadProducts();
+      loadSettings();
+      // Start auto-sync every 5 minutes
+      localStore.startAutoSync(user.user_id);
+    }
+    
+    return () => {
+      localStore.stopAutoSync();
+    };
+  }, [user?.user_id, loadProducts, loadSettings]);
   
   // Listen for real-time product updates via WebSocket
   useEffect(() => {
     const unsubscribe = commHubWS.onMessage((message) => {
       if (message.type === 'document_changed' && message.collection === 'qr_products') {
         console.log('[POS] Real-time product update:', message.operation, message.document_id);
-        // Reload products when any product changes
-        loadProducts();
+        // Invalidate cache and reload
+        if (user?.user_id) {
+          localStore.invalidateCache('products_active', user.user_id);
+          loadProducts();
+        }
       }
     });
     
     return unsubscribe;
-  }, [loadProducts]);
-
-  useEffect(() => {
-    loadProducts();
-    loadSettings();
-  }, []);
+  }, [loadProducts, user?.user_id]);
 
   // Reload parked count when screen gets focus
   useFocusEffect(
