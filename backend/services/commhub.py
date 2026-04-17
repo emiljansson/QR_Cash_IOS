@@ -87,7 +87,7 @@ class CommHubClient:
         return response.json()
     
     async def query_documents(self, collection: str, filter: Dict[str, Any] = None, sort: Dict[str, int] = None, skip: int = 0, limit: int = 100) -> Dict[str, Any]:
-        """Query documents with filter and sort"""
+        """Query documents with filter and sort using MongoDB operators"""
         payload = {}
         if filter:
             payload["filter"] = filter
@@ -99,6 +99,14 @@ class CommHubClient:
         response = await self.client.post(f"/data/{collection}/query", json=payload)
         response.raise_for_status()
         return response.json()
+    
+    async def aggregate(self, collection: str, pipeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Run an aggregation pipeline on a collection"""
+        payload = {"pipeline": pipeline}
+        response = await self.client.post(f"/data/{collection}/aggregate", json=payload)
+        response.raise_for_status()
+        result = response.json()
+        return result.get("results", result.get("documents", []))
     
     async def update_document(self, collection: str, document_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Update a document"""
@@ -443,6 +451,34 @@ class CommHubCollection:
     async def create_indexes(self, indexes, **kwargs):
         """Create multiple indexes - no-op for CommHub"""
         pass
+    
+    def aggregate(self, pipeline: List[Dict[str, Any]]):
+        """
+        Run an aggregation pipeline.
+        Returns an AggregationCursor that can be awaited with to_list()
+        """
+        return AggregationCursor(self.client, self.name, pipeline)
+
+
+class AggregationCursor:
+    """
+    Cursor for aggregation pipeline results.
+    Usage: results = await db.collection.aggregate(pipeline).to_list(100)
+    """
+    
+    def __init__(self, client: CommHubClient, collection_name: str, pipeline: List[Dict[str, Any]]):
+        self.client = client
+        self.collection_name = collection_name
+        self.pipeline = pipeline
+        self._fetched = False
+        self._results = []
+    
+    async def to_list(self, length: int = 100) -> List[Dict[str, Any]]:
+        """Execute aggregation and return results"""
+        if not self._fetched:
+            self._results = await self.client.aggregate(self.collection_name, self.pipeline)
+            self._fetched = True
+        return self._results[:length]
 
 
 class LazyAsyncCursor:

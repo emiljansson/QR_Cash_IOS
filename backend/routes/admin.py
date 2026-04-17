@@ -345,45 +345,46 @@ async def get_user_sales_stats(
     for u in sub_users:
         user_info[u["user_id"]] = {"name": u.get("name", u.get("email", "")), "email": u.get("email", "")}
     
-    # Query for stats per user (using created_by_user_id if available, fallback to user_id)
-    pipeline = [
-        {
-            "$match": {
-                "status": "paid",
-                "$or": [
-                    {"created_by_user_id": {"$in": user_ids}},
-                    {"user_id": {"$in": user_ids}}
-                ],
-                "$expr": {
-                    "$and": [
-                        {"$gte": [{"$dateFromString": {"dateString": "$created_at"}}, date_start]},
-                        {"$lt": [{"$dateFromString": {"dateString": "$created_at"}}, date_end]}
-                    ]
-                }
-            }
-        },
-        {
-            "$group": {
-                "_id": {"$ifNull": ["$created_by_user_id", "$user_id"]},
-                "totalSales": {"$sum": "$total"},
-                "orderCount": {"$sum": 1}
-            }
-        },
-        {"$sort": {"totalSales": -1}}
-    ]
+    # Get all orders and filter/aggregate in Python (CommHub doesn't support complex $expr)
+    all_orders = await db.orders.find({"status": "paid"}).to_list(10000)
     
-    results = await db.orders.aggregate(pipeline).to_list(100)
+    # Filter orders by user_ids and date range
+    date_start_str = date_start.strftime("%Y-%m-%dT%H:%M:%S")
+    date_end_str = date_end.strftime("%Y-%m-%dT%H:%M:%S")
+    
+    filtered_orders = []
+    for order in all_orders:
+        # Check if order belongs to one of our users
+        order_user = order.get("created_by_user_id") or order.get("user_id")
+        if order_user not in user_ids:
+            continue
+        
+        # Check date range
+        created_at = order.get("created_at", "")
+        if isinstance(created_at, datetime):
+            created_at = created_at.isoformat()
+        
+        if created_at >= date_start_str and created_at < date_end_str:
+            filtered_orders.append(order)
+    
+    # Aggregate by user
+    user_sales = {}
+    for order in filtered_orders:
+        uid = order.get("created_by_user_id") or order.get("user_id")
+        if uid not in user_sales:
+            user_sales[uid] = {"totalSales": 0, "orderCount": 0}
+        user_sales[uid]["totalSales"] += order.get("total", 0)
+        user_sales[uid]["orderCount"] += 1
     
     # Build response
     user_stats = []
     total_sales = 0
     total_orders = 0
     
-    for r in results:
-        uid = r["_id"]
+    for uid, stats in sorted(user_sales.items(), key=lambda x: x[1]["totalSales"], reverse=True):
         info = user_info.get(uid, {"name": "Okänd", "email": ""})
-        sales = r["totalSales"]
-        orders = r["orderCount"]
+        sales = stats["totalSales"]
+        orders = stats["orderCount"]
         avg = sales / orders if orders > 0 else 0
         
         user_stats.append({
