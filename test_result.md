@@ -122,6 +122,45 @@ backend:
       - working: true
         agent: "testing"
         comment: "✅ COMPREHENSIVE TESTING COMPLETED: Full end-to-end testing of Commhub.cloud integration successful. All 8 test cases passed: 1) API health check, 2) User registration, 3) Manual email verification, 4) User login with session token, 5) Auth /me endpoint, 6) Products CRUD (GET/POST/PUT/DELETE), 7) Orders CRUD with QR generation, 8) Parked Carts CRUD. Backend logs confirm all HTTP requests going to https://commhub.cloud/api/data/ with proper qr_ collection prefixes. Data persistence verified - created order retrieved successfully from Commhub database. LazyAsyncCursor wrapper working perfectly, emulating MongoDB behavior while using Commhub REST API."
+      - working: true
+        agent: "testing"
+        comment: "✅ SORTING BUG FIXED: Fixed TypeError in LazyAsyncCursor sort implementation where string and integer comparison was failing. Updated sort key function to handle mixed data types properly. All CRUD operations now working correctly."
+
+  - task: "CommHub File Storage Integration - Base64 Upload"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/files.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/files/upload-base64 endpoint working correctly. Accepts base64 image data with folder parameter, uploads to CommHub S3 storage, returns CloudFront URL (https://d20xqn30bfw65x.cloudfront.net/...). Authentication required - correctly rejects unauthenticated requests with 401."
+
+  - task: "CommHub File Storage Integration - Multipart Upload"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/files.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/files/upload endpoint working correctly. Accepts multipart file uploads with folder parameter, uploads to CommHub S3 storage, returns CloudFront URL. Authentication required and properly enforced."
+
+  - task: "Product Image Upload via CommHub"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/products.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/products/{product_id}/upload-image endpoint working correctly. Uploads product images to CommHub S3 storage, updates product image_url field with CloudFront URL, falls back to Cloudinary if CommHub fails. Product image URLs properly updated in database."
 
   - task: "Products CRUD via Commhub"
     implemented: true
@@ -168,7 +207,6 @@ backend:
         agent: "testing"
         comment: "✅ VERIFIED: Parked Carts CRUD fully functional with Commhub.cloud. GET /parked-carts returns empty list initially, POST creates parked cart with items, name, and total. Data stored correctly in qr_parked_carts collection. All cart operations working through LazyAsyncCursor wrapper."
 
-  - task: "POST /api/org/users/me/change-password - Change own password"
   - task: "POST /api/org/users/me/change-password - Change own password"
     implemented: true
     working: true
@@ -286,7 +324,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Orders screen - delete button for cancelled orders"
+    - "CommHub File Storage Integration - Base64 Upload"
+    - "CommHub File Storage Integration - Multipart Upload"
+    - "Product Image Upload via CommHub"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -300,3 +340,5 @@ agent_communication:
     message: "✅ ISSUE RESOLVED: Added role field to User interface in AuthContext. Password change modal code is correctly implemented. ❌ LOGIN TESTING BLOCKED: Login code Z67PQYJQ is invalid (returns 'Ogiltig kod' error). Cannot complete UI testing without valid login credentials. Orders screen code analysis shows correct implementation - delete button on right, receipt text 'Skicka kvitto till kund'. Need valid login code to complete UI verification."
   - agent: "testing"
     message: "✅ COMMHUB.CLOUD INTEGRATION TESTING COMPLETE: Comprehensive backend testing successful. All 8 test cases passed including auth flow (register/verify/login), Products CRUD, Orders CRUD, and Parked Carts CRUD. Backend logs confirm all HTTP requests properly routed to https://commhub.cloud/api/data/ with qr_ collection prefixes. LazyAsyncCursor wrapper working perfectly - emulates MongoDB behavior while using Commhub REST API. Data persistence verified. Migration from MongoDB to Commhub.cloud is fully functional."
+  - agent: "testing"
+    message: "✅ COMMHUB FILE STORAGE INTEGRATION COMPLETE: Comprehensive testing of file storage migration from Cloudinary to CommHub S3 successful. All 10 test cases passed: 1) API health check, 2) User authentication, 3) Auth /me endpoint, 4) Base64 file upload to CommHub S3, 5) Multipart file upload to CommHub S3, 6) Product creation, 7) Product image upload via CommHub, 8) Product image URL verification, 9) Existing CRUD operations, 10) Authentication enforcement. Files are correctly uploaded to CommHub S3 storage and return CloudFront URLs (https://d20xqn30bfw65x.cloudfront.net/...). Fixed sorting bug in LazyAsyncCursor. All endpoints properly authenticated. File storage migration is fully functional."

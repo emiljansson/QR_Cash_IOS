@@ -525,8 +525,14 @@ class LazyAsyncCursor:
         # Apply sort
         if self._sort_spec:
             for key, direction in reversed(self._sort_spec):
+                def sort_key(x):
+                    value = x.get(key)
+                    if value is None:
+                        return 0 if isinstance(x.get(key, 0), (int, float)) else ""
+                    return value
+                
                 filtered_docs.sort(
-                    key=lambda x: x.get(key, "") or "",
+                    key=sort_key,
                     reverse=(direction == -1)
                 )
         

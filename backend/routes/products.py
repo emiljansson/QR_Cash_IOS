@@ -157,41 +157,73 @@ async def delete_product(request: Request, product_id: str):
 
 @router.post("/{product_id}/upload-image")
 async def upload_product_image(request: Request, product_id: str, file: UploadFile = File(...)):
-    """Upload product image to Cloudinary"""
-    import cloudinary
-    import cloudinary.uploader
+    """Upload product image to CommHub storage (or Cloudinary as fallback)"""
     import os
     
     user = await require_user(request)
     db = get_db()
-    product = await db.products.find_one({"id": product_id, "user_id": user["user_id"]}, {"_id": 0})
+    
+    # Sub-users can upload to parent's products
+    owner_id = get_owner_user_id(user)
+    
+    product = await db.products.find_one({"id": product_id, "user_id": owner_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
-    # Configure Cloudinary
-    cloudinary.config(
-        cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-        api_key=os.getenv("CLOUDINARY_API_KEY"),
-        api_secret=os.getenv("CLOUDINARY_API_SECRET"),
-        secure=True
-    )
     
     # Read file content
     content = await file.read()
     
-    # Upload to Cloudinary
-    try:
-        result = cloudinary.uploader.upload(
-            content,
-            folder=f"qrkassan/products/{user['user_id']}",
-            public_id=product_id,
-            overwrite=True,
-            resource_type="image"
-        )
-        image_url = result["secure_url"]
-    except Exception:
-        # Fallback to local storage if Cloudinary fails
-        file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    # Determine content type
+    file_ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+    content_type = file.content_type or "image/jpeg"
+    if file_ext.lower() in ('jpg', 'jpeg'):
+        content_type = "image/jpeg"
+    elif file_ext.lower() == 'png':
+        content_type = "image/png"
+    elif file_ext.lower() == 'webp':
+        content_type = "image/webp"
+    
+    image_url = None
+    
+    # Try CommHub first (if enabled)
+    use_commhub = os.getenv("USE_COMMHUB", "false").lower() == "true"
+    if use_commhub:
+        try:
+            from services.commhub import get_commhub_client
+            client = get_commhub_client()
+            filename = f"products/{owner_id}/{product_id}.{file_ext}"
+            result = await client.upload_file(content, filename, content_type)
+            image_url = result.get("url") or result.get("file_url")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"CommHub upload failed, trying Cloudinary: {e}")
+    
+    # Try Cloudinary as fallback
+    if not image_url:
+        try:
+            import cloudinary
+            import cloudinary.uploader
+            
+            cloudinary.config(
+                cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+                api_key=os.getenv("CLOUDINARY_API_KEY"),
+                api_secret=os.getenv("CLOUDINARY_API_SECRET"),
+                secure=True
+            )
+            
+            result = cloudinary.uploader.upload(
+                content,
+                folder=f"qrkassan/products/{owner_id}",
+                public_id=product_id,
+                overwrite=True,
+                resource_type="image"
+            )
+            image_url = result["secure_url"]
+        except Exception:
+            pass
+    
+    # Final fallback to local storage
+    if not image_url:
         filename = f"{product_id}.{file_ext}"
         filepath = UPLOADS_DIR / filename
         
@@ -202,7 +234,7 @@ async def upload_product_image(request: Request, product_id: str, file: UploadFi
     
     # Update product with image URL
     await db.products.update_one(
-        {"id": product_id, "user_id": user["user_id"]},
+        {"id": product_id, "user_id": owner_id},
         {"$set": {"image_url": image_url}}
     )
     

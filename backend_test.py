@@ -1,477 +1,424 @@
 #!/usr/bin/env python3
 """
-Comprehensive Backend Test Suite for Commhub.cloud Integration
-Tests auth flow, products CRUD, orders CRUD, and parked carts functionality.
+CommHub File Storage Integration Test
+Tests the new file upload endpoints and product image upload functionality
 """
 
 import asyncio
 import httpx
+import base64
 import json
-import sys
-from datetime import datetime
-from typing import Dict, Any, Optional
-
-# Backend URL from frontend environment
-BACKEND_URL = "https://github-import-56.preview.emergentagent.com/api"
-
-class BackendTester:
-    def __init__(self):
-        self.client = httpx.AsyncClient(timeout=30.0)
-        self.session_token: Optional[str] = None
-        self.test_user_email = "backendtest@test.com"
-        self.test_user_password = "test123"
-        self.test_user_name = "Backend Test"
-        self.test_org_name = "Test Org"
-        self.test_phone = "0701234567"
-        self.created_product_id: Optional[str] = None
-        self.created_order_id: Optional[str] = None
-        self.created_cart_id: Optional[str] = None
-        
-    async def close(self):
-        await self.client.aclose()
-    
-    def log(self, message: str, level: str = "INFO"):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] {level}: {message}")
-    
-    def log_error(self, message: str):
-        self.log(message, "ERROR")
-    
-    def log_success(self, message: str):
-        self.log(message, "SUCCESS")
-    
-    async def make_request(self, method: str, endpoint: str, data: Dict[Any, Any] = None, 
-                          headers: Dict[str, str] = None, expect_status: int = 200) -> Dict[Any, Any]:
-        """Make HTTP request with error handling"""
-        url = f"{BACKEND_URL}{endpoint}"
-        
-        # Add session token to headers if available
-        if self.session_token and headers is None:
-            headers = {}
-        if self.session_token:
-            headers = headers or {}
-            headers["Authorization"] = f"Bearer {self.session_token}"
-        
-        try:
-            if method.upper() == "GET":
-                response = await self.client.get(url, headers=headers)
-            elif method.upper() == "POST":
-                response = await self.client.post(url, json=data, headers=headers)
-            elif method.upper() == "PUT":
-                response = await self.client.put(url, json=data, headers=headers)
-            elif method.upper() == "DELETE":
-                response = await self.client.delete(url, headers=headers)
-            else:
-                raise ValueError(f"Unsupported method: {method}")
-            
-            self.log(f"{method} {endpoint} -> {response.status_code}")
-            
-            if response.status_code != expect_status:
-                self.log_error(f"Expected {expect_status}, got {response.status_code}")
-                self.log_error(f"Response: {response.text}")
-                return {"error": f"HTTP {response.status_code}", "response": response.text}
-            
-            try:
-                return response.json()
-            except:
-                return {"success": True, "response": response.text}
-                
-        except Exception as e:
-            self.log_error(f"Request failed: {str(e)}")
-            return {"error": str(e)}
-    
-    async def test_health_check(self) -> bool:
-        """Test basic API health"""
-        self.log("Testing API health check...")
-        result = await self.make_request("GET", "/")
-        
-        if "error" in result:
-            self.log_error("Health check failed")
-            return False
-        
-        if result.get("status") == "running":
-            self.log_success("API is running")
-            return True
-        else:
-            self.log_error(f"Unexpected health response: {result}")
-            return False
-    
-    async def test_user_registration(self) -> bool:
-        """Test user registration"""
-        self.log("Testing user registration...")
-        
-        data = {
-            "email": self.test_user_email,
-            "password": self.test_user_password,
-            "name": self.test_user_name,
-            "organization_name": self.test_org_name,
-            "phone": self.test_phone
-        }
-        
-        result = await self.make_request("POST", "/auth/register", data)
-        
-        if "error" in result:
-            # Check if user already exists
-            if "redan registrerad" in result.get("response", ""):
-                self.log("User already exists, continuing with login test")
-                return True
-            self.log_error("Registration failed")
-            return False
-        
-        if result.get("success"):
-            self.log_success("User registration successful")
-            return True
-        else:
-            self.log_error(f"Registration failed: {result}")
-            return False
-    
-    async def manually_verify_user(self) -> bool:
-        """Manually verify user by updating database directly"""
-        self.log("Manually verifying user email...")
-        
-        # We need to use a Python script to update the database
-        # Since we're using Commhub, we'll create a simple script
-        script_content = f'''
-import asyncio
 import os
-import sys
-sys.path.append('/app/backend')
+from pathlib import Path
 
-from utils.database import get_db
+# Test configuration
+BACKEND_URL = "https://github-import-56.preview.emergentagent.com/api"
+TEST_USER_EMAIL = "testuser2@test.com"
+TEST_USER_PASSWORD = "test123"
 
-async def verify_user():
-    db = get_db()
-    result = await db.users.update_one(
-        {{"email": "{self.test_user_email}"}},
-        {{"$set": {{"email_verified": True}}}}
-    )
-    print(f"Updated {{result.modified_count}} user(s)")
+# Test image data (1x1 pixel PNG)
+TEST_IMAGE_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 
-if __name__ == "__main__":
-    asyncio.run(verify_user())
-'''
+class CommHubFileStorageTest:
+    def __init__(self):
+        self.session_token = None
+        self.client = httpx.AsyncClient(timeout=30.0)
+        self.test_results = []
         
-        # Write and execute the script
-        with open("/tmp/verify_user.py", "w") as f:
-            f.write(script_content)
-        
-        import subprocess
+    async def log_result(self, test_name: str, success: bool, details: str = ""):
+        """Log test result"""
+        status = "✅ PASS" if success else "❌ FAIL"
+        result = f"{status}: {test_name}"
+        if details:
+            result += f" - {details}"
+        print(result)
+        self.test_results.append({
+            "test": test_name,
+            "success": success,
+            "details": details
+        })
+    
+    async def test_1_health_check(self):
+        """Test API health check"""
         try:
-            result = subprocess.run([
-                sys.executable, "/tmp/verify_user.py"
-            ], capture_output=True, text=True, cwd="/app/backend")
-            
-            if result.returncode == 0:
-                self.log_success("User email verified manually")
+            response = await self.client.get(f"{BACKEND_URL}/")
+            if response.status_code == 200:
+                data = response.json()
+                await self.log_result("API Health Check", True, f"Status: {data.get('status')}, Version: {data.get('version')}")
                 return True
             else:
-                self.log_error(f"Manual verification failed: {result.stderr}")
+                await self.log_result("API Health Check", False, f"Status code: {response.status_code}")
                 return False
         except Exception as e:
-            self.log_error(f"Manual verification error: {e}")
+            await self.log_result("API Health Check", False, f"Error: {str(e)}")
             return False
     
-    async def test_user_login(self) -> bool:
-        """Test user login"""
-        self.log("Testing user login...")
-        
-        data = {
-            "email": self.test_user_email,
-            "password": self.test_user_password
-        }
-        
-        result = await self.make_request("POST", "/auth/login", data)
-        
-        if "error" in result:
-            self.log_error("Login failed")
-            return False
-        
-        if result.get("success") and result.get("session_token"):
-            self.session_token = result["session_token"]
-            self.log_success("Login successful, session token obtained")
-            return True
-        else:
-            self.log_error(f"Login failed: {result}")
-            return False
-    
-    async def test_auth_me(self) -> bool:
-        """Test getting current user info"""
-        self.log("Testing /auth/me endpoint...")
-        
-        if not self.session_token:
-            self.log_error("No session token available")
-            return False
-        
-        result = await self.make_request("GET", "/auth/me")
-        
-        if "error" in result:
-            self.log_error("Auth me failed")
-            return False
-        
-        if result.get("email") == self.test_user_email:
-            self.log_success("Auth me successful")
-            return True
-        else:
-            self.log_error(f"Auth me failed: {result}")
-            return False
-    
-    async def test_products_crud(self) -> bool:
-        """Test Products CRUD operations"""
-        self.log("Testing Products CRUD...")
-        
-        if not self.session_token:
-            self.log_error("No session token for products test")
-            return False
-        
-        # Test GET products (should be empty initially)
-        self.log("Testing GET /products...")
-        result = await self.make_request("GET", "/products")
-        
-        if "error" in result:
-            self.log_error("GET products failed")
-            return False
-        
-        if isinstance(result, list):
-            self.log_success(f"GET products successful, found {len(result)} products")
-        else:
-            self.log_error(f"GET products unexpected response: {result}")
-            return False
-        
-        # Test POST product
-        self.log("Testing POST /products...")
-        product_data = {
-            "name": "Test Product",
-            "price": 99.0,
-            "category": "Test"
-        }
-        
-        result = await self.make_request("POST", "/products", product_data, expect_status=200)
-        
-        if "error" in result:
-            self.log_error("POST product failed")
-            return False
-        
-        if result.get("id"):
-            self.created_product_id = result["id"]
-            self.log_success(f"POST product successful, ID: {self.created_product_id}")
-        else:
-            self.log_error(f"POST product failed: {result}")
-            return False
-        
-        # Test PUT product
-        self.log("Testing PUT /products...")
-        update_data = {
-            "name": "Updated Product",
-            "price": 150.0
-        }
-        
-        result = await self.make_request("PUT", f"/products/{self.created_product_id}", update_data)
-        
-        if "error" in result:
-            self.log_error("PUT product failed")
-            return False
-        
-        if result.get("name") == "Updated Product" and result.get("price") == 150.0:
-            self.log_success("PUT product successful")
-        else:
-            self.log_error(f"PUT product failed: {result}")
-            return False
-        
-        # Test DELETE product
-        self.log("Testing DELETE /products...")
-        result = await self.make_request("DELETE", f"/products/{self.created_product_id}")
-        
-        if "error" in result:
-            self.log_error("DELETE product failed")
-            return False
-        
-        if result.get("success"):
-            self.log_success("DELETE product successful")
-            return True
-        else:
-            self.log_error(f"DELETE product failed: {result}")
-            return False
-    
-    async def test_orders_crud(self) -> bool:
-        """Test Orders CRUD operations"""
-        self.log("Testing Orders CRUD...")
-        
-        if not self.session_token:
-            self.log_error("No session token for orders test")
-            return False
-        
-        # Test GET orders (should be empty initially)
-        self.log("Testing GET /orders...")
-        result = await self.make_request("GET", "/orders")
-        
-        if "error" in result:
-            self.log_error("GET orders failed")
-            return False
-        
-        if isinstance(result, list):
-            self.log_success(f"GET orders successful, found {len(result)} orders")
-        else:
-            self.log_error(f"GET orders unexpected response: {result}")
-            return False
-        
-        # Test POST order
-        self.log("Testing POST /orders...")
-        order_data = {
-            "items": [
-                {
-                    "product_id": "test",
-                    "name": "Test",
-                    "quantity": 1,
-                    "price": 50.0
-                }
-            ],
-            "total": 50.0,
-            "swish_phone": "0701234567"
-        }
-        
-        result = await self.make_request("POST", "/orders", order_data, expect_status=200)
-        
-        if "error" in result:
-            self.log_error("POST order failed")
-            return False
-        
-        if result.get("id"):
-            self.created_order_id = result["id"]
-            self.log_success(f"POST order successful, ID: {self.created_order_id}")
-            return True
-        else:
-            self.log_error(f"POST order failed: {result}")
-            return False
-    
-    async def test_parked_carts_crud(self) -> bool:
-        """Test Parked Carts CRUD operations"""
-        self.log("Testing Parked Carts CRUD...")
-        
-        if not self.session_token:
-            self.log_error("No session token for parked carts test")
-            return False
-        
-        # Test GET parked carts
-        self.log("Testing GET /parked-carts...")
-        result = await self.make_request("GET", "/parked-carts")
-        
-        if "error" in result:
-            self.log_error("GET parked carts failed")
-            return False
-        
-        if isinstance(result, list):
-            self.log_success(f"GET parked carts successful, found {len(result)} carts")
-        else:
-            self.log_error(f"GET parked carts unexpected response: {result}")
-            return False
-        
-        # Test POST parked cart
-        self.log("Testing POST /parked-carts...")
-        cart_data = {
-            "items": [
-                {
-                    "product_id": "test",
-                    "name": "Test",
-                    "quantity": 1,
-                    "price": 10.0
-                }
-            ],
-            "name": "Test Cart",
-            "total": 10.0
-        }
-        
-        result = await self.make_request("POST", "/parked-carts", cart_data, expect_status=200)
-        
-        if "error" in result:
-            self.log_error("POST parked cart failed")
-            return False
-        
-        if result.get("id"):
-            self.created_cart_id = result["id"]
-            self.log_success(f"POST parked cart successful, ID: {self.created_cart_id}")
-            return True
-        else:
-            self.log_error(f"POST parked cart failed: {result}")
-            return False
-    
-    async def check_backend_logs(self):
-        """Check backend logs for any errors"""
-        self.log("Checking backend logs...")
+    async def test_2_user_login(self):
+        """Test user authentication"""
         try:
-            import subprocess
-            result = subprocess.run([
-                "tail", "-n", "50", "/var/log/supervisor/backend.err.log"
-            ], capture_output=True, text=True)
+            login_data = {
+                "email": TEST_USER_EMAIL,
+                "password": TEST_USER_PASSWORD
+            }
+            response = await self.client.post(f"{BACKEND_URL}/auth/login", json=login_data)
             
-            if result.returncode == 0 and result.stdout.strip():
-                self.log("Recent backend error logs:")
-                print(result.stdout)
+            if response.status_code == 200:
+                data = response.json()
+                self.session_token = data.get("session_token")
+                if self.session_token:
+                    await self.log_result("User Login", True, f"Session token obtained")
+                    return True
+                else:
+                    await self.log_result("User Login", False, "No session token in response")
+                    return False
             else:
-                self.log("No recent backend errors found")
+                await self.log_result("User Login", False, f"Status code: {response.status_code}, Response: {response.text}")
+                return False
         except Exception as e:
-            self.log_error(f"Could not check logs: {e}")
+            await self.log_result("User Login", False, f"Error: {str(e)}")
+            return False
     
-    async def run_all_tests(self) -> bool:
+    async def test_3_auth_me_endpoint(self):
+        """Test authenticated user info endpoint"""
+        if not self.session_token:
+            await self.log_result("Auth Me Endpoint", False, "No session token available")
+            return False
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.session_token}"}
+            response = await self.client.get(f"{BACKEND_URL}/auth/me", headers=headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                user_id = data.get("user_id")
+                email = data.get("email")
+                await self.log_result("Auth Me Endpoint", True, f"User ID: {user_id}, Email: {email}")
+                return True
+            else:
+                await self.log_result("Auth Me Endpoint", False, f"Status code: {response.status_code}")
+                return False
+        except Exception as e:
+            await self.log_result("Auth Me Endpoint", False, f"Error: {str(e)}")
+            return False
+    
+    async def test_4_file_upload_base64(self):
+        """Test base64 file upload endpoint"""
+        if not self.session_token:
+            await self.log_result("File Upload Base64", False, "No session token available")
+            return False
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.session_token}"}
+            upload_data = {
+                "image": f"data:image/png;base64,{TEST_IMAGE_BASE64}",
+                "folder": "test"
+            }
+            
+            response = await self.client.post(
+                f"{BACKEND_URL}/files/upload-base64",
+                headers=headers,
+                json=upload_data
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                success = data.get("success")
+                url = data.get("url")
+                file_id = data.get("file_id")
+                
+                if success and url:
+                    # Check if URL is CloudFront URL
+                    is_cloudfront = "cloudfront.net" in url or "commhub" in url
+                    await self.log_result("File Upload Base64", True, f"URL: {url}, CloudFront: {is_cloudfront}, File ID: {file_id}")
+                    return True
+                else:
+                    await self.log_result("File Upload Base64", False, f"Invalid response: {data}")
+                    return False
+            else:
+                await self.log_result("File Upload Base64", False, f"Status code: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            await self.log_result("File Upload Base64", False, f"Error: {str(e)}")
+            return False
+    
+    async def test_5_file_upload_multipart(self):
+        """Test multipart file upload endpoint"""
+        if not self.session_token:
+            await self.log_result("File Upload Multipart", False, "No session token available")
+            return False
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.session_token}"}
+            
+            # Create test image file
+            image_data = base64.b64decode(TEST_IMAGE_BASE64)
+            files = {
+                "file": ("test.png", image_data, "image/png")
+            }
+            data = {
+                "folder": "test"
+            }
+            
+            response = await self.client.post(
+                f"{BACKEND_URL}/files/upload",
+                headers=headers,
+                files=files,
+                data=data
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                success = data.get("success")
+                url = data.get("url")
+                file_id = data.get("file_id")
+                
+                if success and url:
+                    # Check if URL is CloudFront URL
+                    is_cloudfront = "cloudfront.net" in url or "commhub" in url
+                    await self.log_result("File Upload Multipart", True, f"URL: {url}, CloudFront: {is_cloudfront}, File ID: {file_id}")
+                    return True
+                else:
+                    await self.log_result("File Upload Multipart", False, f"Invalid response: {data}")
+                    return False
+            else:
+                await self.log_result("File Upload Multipart", False, f"Status code: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            await self.log_result("File Upload Multipart", False, f"Error: {str(e)}")
+            return False
+    
+    async def test_6_create_product(self):
+        """Test creating a product for image upload testing"""
+        if not self.session_token:
+            await self.log_result("Create Product", False, "No session token available")
+            return False
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.session_token}"}
+            product_data = {
+                "name": "CommHub Image Test Product",
+                "price": 10.0,
+                "category": "Test"
+            }
+            
+            response = await self.client.post(
+                f"{BACKEND_URL}/products",
+                headers=headers,
+                json=product_data
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                product_id = data.get("id")
+                name = data.get("name")
+                
+                if product_id:
+                    self.test_product_id = product_id
+                    await self.log_result("Create Product", True, f"Product ID: {product_id}, Name: {name}")
+                    return True
+                else:
+                    await self.log_result("Create Product", False, f"No product ID in response: {data}")
+                    return False
+            else:
+                await self.log_result("Create Product", False, f"Status code: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            await self.log_result("Create Product", False, f"Error: {str(e)}")
+            return False
+    
+    async def test_7_product_image_upload(self):
+        """Test product image upload endpoint"""
+        if not self.session_token:
+            await self.log_result("Product Image Upload", False, "No session token available")
+            return False
+        
+        if not hasattr(self, 'test_product_id'):
+            await self.log_result("Product Image Upload", False, "No test product available")
+            return False
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.session_token}"}
+            
+            # Create test image file
+            image_data = base64.b64decode(TEST_IMAGE_BASE64)
+            files = {
+                "file": ("product_test.png", image_data, "image/png")
+            }
+            
+            response = await self.client.post(
+                f"{BACKEND_URL}/products/{self.test_product_id}/upload-image",
+                headers=headers,
+                files=files
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                success = data.get("success")
+                image_url = data.get("image_url")
+                
+                if success and image_url:
+                    # Check if URL is CloudFront URL
+                    is_cloudfront = "cloudfront.net" in image_url or "commhub" in image_url
+                    await self.log_result("Product Image Upload", True, f"Image URL: {image_url}, CloudFront: {is_cloudfront}")
+                    return True
+                else:
+                    await self.log_result("Product Image Upload", False, f"Invalid response: {data}")
+                    return False
+            else:
+                await self.log_result("Product Image Upload", False, f"Status code: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            await self.log_result("Product Image Upload", False, f"Error: {str(e)}")
+            return False
+    
+    async def test_8_verify_product_image_updated(self):
+        """Test that product image URL was updated in database"""
+        if not self.session_token:
+            await self.log_result("Verify Product Image Updated", False, "No session token available")
+            return False
+        
+        if not hasattr(self, 'test_product_id'):
+            await self.log_result("Verify Product Image Updated", False, "No test product available")
+            return False
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.session_token}"}
+            
+            response = await self.client.get(
+                f"{BACKEND_URL}/products/{self.test_product_id}",
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                image_url = data.get("image_url")
+                
+                if image_url and (image_url != "/api/uploads/default-product.png"):
+                    # Check if URL is CloudFront URL
+                    is_cloudfront = "cloudfront.net" in image_url or "commhub" in image_url
+                    await self.log_result("Verify Product Image Updated", True, f"Product image URL updated: {image_url}, CloudFront: {is_cloudfront}")
+                    return True
+                else:
+                    await self.log_result("Verify Product Image Updated", False, f"Product image not updated: {image_url}")
+                    return False
+            else:
+                await self.log_result("Verify Product Image Updated", False, f"Status code: {response.status_code}")
+                return False
+        except Exception as e:
+            await self.log_result("Verify Product Image Updated", False, f"Error: {str(e)}")
+            return False
+    
+    async def test_9_existing_crud_operations(self):
+        """Test that existing CRUD operations still work"""
+        if not self.session_token:
+            await self.log_result("Existing CRUD Operations", False, "No session token available")
+            return False
+        
+        try:
+            headers = {"Authorization": f"Bearer {self.session_token}"}
+            
+            # Test GET /api/products
+            response = await self.client.get(f"{BACKEND_URL}/products", headers=headers)
+            if response.status_code != 200:
+                await self.log_result("Existing CRUD Operations", False, f"GET /products failed: {response.status_code}")
+                return False
+            
+            # Test GET /api/orders
+            response = await self.client.get(f"{BACKEND_URL}/orders", headers=headers)
+            if response.status_code != 200:
+                await self.log_result("Existing CRUD Operations", False, f"GET /orders failed: {response.status_code}")
+                return False
+            
+            # Test GET /api/parked-carts
+            response = await self.client.get(f"{BACKEND_URL}/parked-carts", headers=headers)
+            if response.status_code != 200:
+                await self.log_result("Existing CRUD Operations", False, f"GET /parked-carts failed: {response.status_code}")
+                return False
+            
+            await self.log_result("Existing CRUD Operations", True, "All CRUD endpoints working")
+            return True
+            
+        except Exception as e:
+            await self.log_result("Existing CRUD Operations", False, f"Error: {str(e)}")
+            return False
+    
+    async def test_10_unauthenticated_file_upload(self):
+        """Test that file upload requires authentication"""
+        try:
+            upload_data = {
+                "image": f"data:image/png;base64,{TEST_IMAGE_BASE64}",
+                "folder": "test"
+            }
+            
+            # Use a fresh client without any session data
+            async with httpx.AsyncClient(timeout=30.0) as fresh_client:
+                response = await fresh_client.post(
+                    f"{BACKEND_URL}/files/upload-base64",
+                    json=upload_data
+                )
+            
+            if response.status_code == 401:
+                await self.log_result("Unauthenticated File Upload", True, "Correctly rejected unauthenticated request")
+                return True
+            else:
+                await self.log_result("Unauthenticated File Upload", False, f"Expected 401, got {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            await self.log_result("Unauthenticated File Upload", False, f"Error: {str(e)}")
+            return False
+    
+    async def run_all_tests(self):
         """Run all tests in sequence"""
-        self.log("Starting comprehensive backend test suite...")
-        self.log(f"Testing against: {BACKEND_URL}")
+        print("🚀 Starting CommHub File Storage Integration Tests")
+        print("=" * 60)
         
         tests = [
-            ("Health Check", self.test_health_check),
-            ("User Registration", self.test_user_registration),
-            ("Manual User Verification", self.manually_verify_user),
-            ("User Login", self.test_user_login),
-            ("Auth Me", self.test_auth_me),
-            ("Products CRUD", self.test_products_crud),
-            ("Orders CRUD", self.test_orders_crud),
-            ("Parked Carts CRUD", self.test_parked_carts_crud),
+            self.test_1_health_check,
+            self.test_2_user_login,
+            self.test_3_auth_me_endpoint,
+            self.test_4_file_upload_base64,
+            self.test_5_file_upload_multipart,
+            self.test_6_create_product,
+            self.test_7_product_image_upload,
+            self.test_8_verify_product_image_updated,
+            self.test_9_existing_crud_operations,
+            self.test_10_unauthenticated_file_upload
         ]
         
         passed = 0
         failed = 0
         
-        for test_name, test_func in tests:
-            self.log(f"\n{'='*50}")
-            self.log(f"Running: {test_name}")
-            self.log(f"{'='*50}")
-            
-            try:
-                success = await test_func()
-                if success:
-                    passed += 1
-                    self.log_success(f"✅ {test_name} PASSED")
-                else:
-                    failed += 1
-                    self.log_error(f"❌ {test_name} FAILED")
-            except Exception as e:
+        for test in tests:
+            result = await test()
+            if result:
+                passed += 1
+            else:
                 failed += 1
-                self.log_error(f"❌ {test_name} FAILED with exception: {e}")
+            print()  # Add spacing between tests
         
-        self.log(f"\n{'='*50}")
-        self.log(f"TEST SUMMARY")
-        self.log(f"{'='*50}")
-        self.log(f"Total tests: {passed + failed}")
-        self.log(f"Passed: {passed}")
-        self.log(f"Failed: {failed}")
+        print("=" * 60)
+        print(f"📊 TEST SUMMARY: {passed} passed, {failed} failed")
         
         if failed > 0:
-            self.log_error("Some tests failed. Checking backend logs...")
-            await self.check_backend_logs()
+            print("\n❌ FAILED TESTS:")
+            for result in self.test_results:
+                if not result["success"]:
+                    print(f"  - {result['test']}: {result['details']}")
         
+        await self.client.aclose()
         return failed == 0
-
 
 async def main():
     """Main test runner"""
-    tester = BackendTester()
+    tester = CommHubFileStorageTest()
+    success = await tester.run_all_tests()
     
-    try:
-        success = await tester.run_all_tests()
-        return 0 if success else 1
-    finally:
-        await tester.close()
-
+    if success:
+        print("\n🎉 All tests passed! CommHub file storage integration is working correctly.")
+    else:
+        print("\n💥 Some tests failed. Check the details above.")
+    
+    return success
 
 if __name__ == "__main__":
-    exit_code = asyncio.run(main())
-    sys.exit(exit_code)
+    asyncio.run(main())
