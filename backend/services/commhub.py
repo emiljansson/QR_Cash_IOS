@@ -206,6 +206,9 @@ class CommHubDB:
     Makes migration from MongoDB easier by providing similar interface.
     """
     
+    # Prefix for all collection names to avoid conflicts
+    COLLECTION_PREFIX = "qr_"
+    
     def __init__(self, client: CommHubClient = None):
         self.client = client or CommHubClient()
         self._collections = {}
@@ -214,8 +217,10 @@ class CommHubDB:
         """Access collections like db.users, db.products, etc."""
         if name.startswith('_'):
             raise AttributeError(name)
+        # Add prefix to collection name
+        collection_name = f"{self.COLLECTION_PREFIX}{name}"
         if name not in self._collections:
-            self._collections[name] = CommHubCollection(self.client, name)
+            self._collections[name] = CommHubCollection(self.client, collection_name)
         return self._collections[name]
     
     def __getitem__(self, name: str):
@@ -235,24 +240,70 @@ class CommHubCollection:
         if filter is None:
             filter = {}
         
-        # Handle special _id field
-        if "_id" in filter:
-            del filter["_id"]
+        # Handle special _id/id field - try to get directly by ID
+        doc_id = filter.get("_id") or filter.get("id")
+        if doc_id and len(filter) == 1:
+            doc = await self.client.get_document(self.name, doc_id)
+            if doc and "data" in doc:
+                merged = {**doc["data"], "_id": doc["id"], "id": doc["id"]}
+                merged["created_at"] = doc.get("created_at")
+                merged["updated_at"] = doc.get("updated_at")
+                return merged
+            return doc
         
-        result = await self.client.query_documents(self.name, filter=filter, limit=1)
+        # Remove _id from filter for CommHub
+        filter_clean = {k: v for k, v in filter.items() if k not in ("_id", "id")}
+        
+        # For other queries, list and filter in-memory (CommHub doesn't support complex queries well)
+        result = await self.client.list_documents(self.name, skip=0, limit=500)
         documents = result.get("documents", [])
         
-        if not documents:
-            return None
+        for doc in documents:
+            data = doc.get("data", doc)
+            # Check if all filter conditions match
+            match = True
+            for key, value in filter_clean.items():
+                doc_value = data.get(key)
+                # Handle nested keys like "customer.email"
+                if "." in key:
+                    parts = key.split(".")
+                    doc_value = data
+                    for part in parts:
+                        if isinstance(doc_value, dict):
+                            doc_value = doc_value.get(part)
+                        else:
+                            doc_value = None
+                            break
+                
+                # Handle special MongoDB operators
+                if isinstance(value, dict):
+                    if "$gt" in value and not (doc_value is not None and doc_value > value["$gt"]):
+                        match = False
+                    if "$gte" in value and not (doc_value is not None and doc_value >= value["$gte"]):
+                        match = False
+                    if "$lt" in value and not (doc_value is not None and doc_value < value["$lt"]):
+                        match = False
+                    if "$lte" in value and not (doc_value is not None and doc_value <= value["$lte"]):
+                        match = False
+                    if "$ne" in value and doc_value == value["$ne"]:
+                        match = False
+                    if "$in" in value and doc_value not in value["$in"]:
+                        match = False
+                elif doc_value != value:
+                    match = False
+                
+                if not match:
+                    break
+            
+            if match:
+                if "data" in doc:
+                    merged = {**doc["data"], "_id": doc["id"], "id": doc["id"]}
+                    merged["created_at"] = doc.get("created_at")
+                    merged["updated_at"] = doc.get("updated_at")
+                    return merged
+                return doc
         
-        doc = documents[0]
-        # Merge data into top level for compatibility
-        if "data" in doc:
-            merged = {**doc["data"], "_id": doc["id"], "id": doc["id"]}
-            merged["created_at"] = doc.get("created_at")
-            merged["updated_at"] = doc.get("updated_at")
-            return merged
-        return doc
+        return None
     
     async def find(self, filter: Dict[str, Any] = None, projection: Dict[str, int] = None, sort: List[tuple] = None, skip: int = 0, limit: int = 100):
         """Find documents matching filter - returns async generator"""
@@ -397,6 +448,14 @@ class CommHubCollection:
             filter = {}
         result = await self.client.query_documents(self.name, filter=filter, limit=0)
         return result.get("total", 0)
+    
+    async def create_index(self, keys, **kwargs):
+        """Create index - no-op for CommHub (indexes are automatic)"""
+        pass
+    
+    async def create_indexes(self, indexes, **kwargs):
+        """Create multiple indexes - no-op for CommHub"""
+        pass
 
 
 class AsyncDocumentCursor:
