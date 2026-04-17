@@ -50,9 +50,11 @@ COLLECTIONS_TO_MIGRATE = [
 def get_mongo_db_direct():
     """Get direct MongoDB connection (bypassing USE_COMMHUB flag)"""
     from motor.motor_asyncio import AsyncIOMotorClient
-    mongo_url = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+    # Production MongoDB connection
+    mongo_url = os.getenv("PRODUCTION_MONGO_URL", "mongodb+srv://posadmin:PosSystem2024@mmpro.eiso38h.mongodb.net/?appName=MMPRO")
+    db_name = os.getenv("PRODUCTION_DB_NAME", "pos_production")
     client = AsyncIOMotorClient(mongo_url)
-    return client.qrkassa
+    return client[db_name]
 
 
 async def clear_commhub_test_data():
