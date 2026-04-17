@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { commHubWS, WebSocketMessage, ConnectionStatus } from '../services/commHubWebSocket';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import * as OfflineDB from '../services/offlineDatabase';
 
 // Collections we want to sync in real-time
