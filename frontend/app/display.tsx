@@ -7,12 +7,19 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 
-// Get backend URL - same logic as api.ts
+// Get backend URL - use environment variable or proxy
 const getBackendUrl = () => {
-  if (Platform.OS !== 'web') {
-    return 'https://qrcashios-production.up.railway.app';
+  // Use environment variable if available
+  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+  if (envUrl) return envUrl;
+  
+  // Fallback to relative path (works with proxy in development)
+  if (Platform.OS === 'web') {
+    return '';  // Use relative URLs with proxy
   }
-  return process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+  
+  // For native apps, use production URL
+  return 'https://qrcashios-production.up.railway.app';
 };
 const BACKEND_URL = getBackendUrl();
 

@@ -1,13 +1,18 @@
 import { Platform } from 'react-native';
 
-// Production backend URL - same logic as main app
+// Production backend URL - use environment variable for flexibility
 const getBackendUrl = () => {
-  // For native (iOS/Android), always use production URL
+  // Use environment variable if available
+  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+  if (envUrl) return envUrl;
+  
+  // For native (iOS/Android), use production URL
   if (Platform.OS !== 'web') {
     return 'https://qrcashios-production.up.railway.app';
   }
-  // For web, use env variable with fallback to production
-  return process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+  
+  // For web (development), use relative URLs with proxy
+  return '';
 };
 
 const API_BASE = getBackendUrl();
