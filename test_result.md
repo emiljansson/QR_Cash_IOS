@@ -105,6 +105,36 @@
 user_problem_statement: "Migrating database from MongoDB to Commhub.cloud REST API"
 
 backend:
+  - task: "CommHub S3 File Storage Integration"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/files.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Created new /api/files routes for CommHub S3 uploads. Supports both multipart and base64 uploads. Returns CloudFront URLs."
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: POST /api/files/upload-base64 and POST /api/files/upload both working. Files stored on CommHub S3, returns CloudFront URLs like https://d20xqn30bfw65x.cloudfront.net/..."
+
+  - task: "Product Image Upload via CommHub"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/products.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Updated POST /api/products/{id}/upload-image to use CommHub S3 first, with Cloudinary as fallback"
+      - working: true
+        agent: "testing"
+        comment: "✅ TESTED: Product image upload works with CommHub. Product image_url correctly updated to CloudFront URL"
+
   - task: "Commhub.cloud Database Migration - LazyAsyncCursor fix"
     implemented: true
     working: true
