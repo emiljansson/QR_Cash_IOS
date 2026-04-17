@@ -36,8 +36,8 @@ class CommHubWebSocket {
   private status: ConnectionStatus = 'disconnected';
   private userId: string | null = null;
   private reconnectAttempts = 0;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
-  private reconnectTimer: NodeJS.Timeout | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   
   // Event handlers
   private messageHandlers: Set<MessageHandler> = new Set();
@@ -48,6 +48,7 @@ class CommHubWebSocket {
 
   /**
    * Connect to CommHub WebSocket
+   * URL format: wss://commhub.cloud/api/ws/realtime?api_key={API_KEY}&app_id={APP_ID}
    */
   async connect(userId: string): Promise<void> {
     if (this.status === 'connected' || this.status === 'connecting') {
@@ -60,7 +61,7 @@ class CommHubWebSocket {
     
     try {
       // Build WebSocket URL with auth params
-      const url = `${WS_URL}?api_key=${COMMHUB_API_KEY}&app_id=${COMMHUB_APP_ID}&user_id=${userId}`;
+      const url = `${WS_URL}?api_key=${COMMHUB_API_KEY}&app_id=${COMMHUB_APP_ID}`;
       
       console.log('[CommHubWS] Connecting to CommHub...');
       this.ws = new WebSocket(url);
@@ -96,6 +97,7 @@ class CommHubWebSocket {
 
   /**
    * Subscribe to collection changes
+   * Sends: { "action": "subscribe", "collections": ["qr_products", ...], "user_id": "xxx" }
    */
   subscribe(collections: string[]): void {
     collections.forEach(c => this.subscribedCollections.add(c));
@@ -107,6 +109,7 @@ class CommHubWebSocket {
 
   /**
    * Unsubscribe from collections
+   * Sends: { "action": "unsubscribe", "collections": ["qr_products", ...] }
    */
   unsubscribe(collections: string[]): void {
     collections.forEach(c => this.subscribedCollections.delete(c));
@@ -117,6 +120,22 @@ class CommHubWebSocket {
         collections: collections,
       });
     }
+  }
+
+  /**
+   * Send ping to keep connection alive
+   * Sends: { "action": "ping" }
+   */
+  ping(): void {
+    this.send({ action: 'ping' });
+  }
+
+  /**
+   * Request connection status
+   * Sends: { "action": "status" }
+   */
+  requestStatus(): void {
+    this.send({ action: 'status' });
   }
 
   /**
@@ -168,20 +187,12 @@ class CommHubWebSocket {
     this.setStatus('connected');
     this.reconnectAttempts = 0;
     
-    // Send authentication
-    this.send({
-      action: 'auth',
-      api_key: COMMHUB_API_KEY,
-      app_id: COMMHUB_APP_ID,
-      user_id: this.userId,
-    });
-    
-    // Subscribe to collections
+    // Subscribe to collections immediately after connect
     if (this.subscribedCollections.size > 0) {
       this.sendSubscription();
     }
     
-    // Start heartbeat
+    // Start heartbeat (ping every 30s)
     this.startHeartbeat();
   }
 
@@ -195,22 +206,32 @@ class CommHubWebSocket {
         return; // Heartbeat response
       }
       
-      if (message.type === 'auth_ok') {
-        console.log('[CommHubWS] Authentication successful');
+      if (message.type === 'connected' || message.type === 'welcome') {
+        console.log('[CommHubWS] Connection confirmed');
         return;
       }
       
       if (message.type === 'subscribed') {
-        console.log('[CommHubWS] Subscribed to:', message.collections);
+        console.log('[CommHubWS] Subscribed to:', message.collections || message.collection);
+        return;
+      }
+      
+      if (message.type === 'unsubscribed') {
+        console.log('[CommHubWS] Unsubscribed from:', message.collections || message.collection);
+        return;
+      }
+      
+      if (message.type === 'status') {
+        console.log('[CommHubWS] Status:', message);
         return;
       }
       
       if (message.type === 'error') {
-        console.error('[CommHubWS] Server error:', message.message);
+        console.error('[CommHubWS] Server error:', message.message || message.error);
         return;
       }
       
-      // Forward to handlers
+      // Forward data events to handlers
       this.messageHandlers.forEach(handler => {
         try {
           handler(message);
@@ -247,6 +268,7 @@ class CommHubWebSocket {
   }
 
   private sendSubscription(): void {
+    // Send subscribe message with collections and user_id for filtering
     this.send({
       action: 'subscribe',
       collections: Array.from(this.subscribedCollections),
@@ -258,7 +280,7 @@ class CommHubWebSocket {
     this.clearTimers();
     this.heartbeatTimer = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.send({ action: 'ping' });
+        this.ping();
       }
     }, HEARTBEAT_INTERVAL_MS);
   }
