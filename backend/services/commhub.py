@@ -235,14 +235,14 @@ class CommHubCollection:
         self.client = client
         self.name = name
     
-    async def find_one(self, filter: Dict[str, Any] = None, projection: Dict[str, int] = None) -> Optional[Dict[str, Any]]:
-        """Find a single document matching filter"""
+    async def find_one(self, filter: Dict[str, Any] = None, projection: Dict[str, int] = None, sort: List[tuple] = None) -> Optional[Dict[str, Any]]:
+        """Find a single document matching filter, optionally sorted"""
         if filter is None:
             filter = {}
         
-        # Handle special _id/id field - try to get directly by ID
+        # Handle special _id/id field - try to get directly by ID (only if no sort needed)
         doc_id = filter.get("_id") or filter.get("id")
-        if doc_id and len(filter) == 1:
+        if doc_id and len(filter) == 1 and not sort:
             doc = await self.client.get_document(self.name, doc_id)
             if doc and "data" in doc:
                 merged = {**doc["data"], "_id": doc["id"], "id": doc["id"]}
@@ -258,6 +258,8 @@ class CommHubCollection:
         result = await self.client.list_documents(self.name, skip=0, limit=500)
         documents = result.get("documents", [])
         
+        # Filter documents
+        filtered_docs = []
         for doc in documents:
             data = doc.get("data", doc)
             # Check if all filter conditions match
@@ -300,10 +302,20 @@ class CommHubCollection:
                     merged = {**doc["data"], "_id": doc["id"], "id": doc["id"]}
                     merged["created_at"] = doc.get("created_at")
                     merged["updated_at"] = doc.get("updated_at")
-                    return merged
-                return doc
+                    filtered_docs.append(merged)
+                else:
+                    filtered_docs.append(doc)
         
-        return None
+        # Apply sort if specified
+        if sort and filtered_docs:
+            for key, direction in reversed(sort):
+                filtered_docs.sort(
+                    key=lambda x: x.get(key, "") if x.get(key) is not None else "",
+                    reverse=(direction == -1)
+                )
+        
+        # Return first match or None
+        return filtered_docs[0] if filtered_docs else None
     
     def find(self, filter: Dict[str, Any] = None, projection: Dict[str, int] = None, sort: List[tuple] = None, skip: int = 0, limit: int = 100) -> 'LazyAsyncCursor':
         """Find documents matching filter - returns a lazy cursor that fetches on to_list()"""

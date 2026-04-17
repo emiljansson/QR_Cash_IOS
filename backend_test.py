@@ -1,341 +1,477 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Password Change Endpoint
-Test scenarios for POST /api/org/users/me/change-password
+Comprehensive Backend Test Suite for Commhub.cloud Integration
+Tests auth flow, products CRUD, orders CRUD, and parked carts functionality.
 """
 
-import requests
+import asyncio
+import httpx
 import json
 import sys
-import os
-from typing import Optional
+from datetime import datetime
+from typing import Dict, Any, Optional
 
-# Get backend URL from frontend .env
+# Backend URL from frontend environment
 BACKEND_URL = "https://github-import-56.preview.emergentagent.com/api"
 
-# Test data - create a fresh user for testing
-TEST_EMAIL = "testuser@example.com"
-TEST_PASSWORD = "testpass123"  
-TEST_NEW_PASSWORD_VALID = "newpassword123"
-TEST_NEW_PASSWORD_SHORT = "12345"  # Too short (< 6 chars)
-
-class PasswordChangeTest:
+class BackendTester:
     def __init__(self):
-        self.session = requests.Session()
-        self.auth_token = None
-        self.test_results = []
-
-    def log_result(self, test_name: str, passed: bool, details: str):
-        """Log test result"""
-        status = "✅ PASS" if passed else "❌ FAIL" 
-        print(f"{status} {test_name}: {details}")
-        self.test_results.append({
-            'test': test_name,
-            'passed': passed,
-            'details': details
-        })
-
-    def test_health_check(self) -> bool:
-        """Test if backend API is accessible"""
+        self.client = httpx.AsyncClient(timeout=30.0)
+        self.session_token: Optional[str] = None
+        self.test_user_email = "backendtest@test.com"
+        self.test_user_password = "test123"
+        self.test_user_name = "Backend Test"
+        self.test_org_name = "Test Org"
+        self.test_phone = "0701234567"
+        self.created_product_id: Optional[str] = None
+        self.created_order_id: Optional[str] = None
+        self.created_cart_id: Optional[str] = None
+        
+    async def close(self):
+        await self.client.aclose()
+    
+    def log(self, message: str, level: str = "INFO"):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] {level}: {message}")
+    
+    def log_error(self, message: str):
+        self.log(message, "ERROR")
+    
+    def log_success(self, message: str):
+        self.log(message, "SUCCESS")
+    
+    async def make_request(self, method: str, endpoint: str, data: Dict[Any, Any] = None, 
+                          headers: Dict[str, str] = None, expect_status: int = 200) -> Dict[Any, Any]:
+        """Make HTTP request with error handling"""
+        url = f"{BACKEND_URL}{endpoint}"
+        
+        # Add session token to headers if available
+        if self.session_token and headers is None:
+            headers = {}
+        if self.session_token:
+            headers = headers or {}
+            headers["Authorization"] = f"Bearer {self.session_token}"
+        
         try:
-            response = self.session.get(f"{BACKEND_URL}/")
-            if response.status_code == 200:
-                data = response.json()
-                self.log_result("Health Check", True, f"Backend accessible - {data.get('message', 'OK')}")
-                return True
+            if method.upper() == "GET":
+                response = await self.client.get(url, headers=headers)
+            elif method.upper() == "POST":
+                response = await self.client.post(url, json=data, headers=headers)
+            elif method.upper() == "PUT":
+                response = await self.client.put(url, json=data, headers=headers)
+            elif method.upper() == "DELETE":
+                response = await self.client.delete(url, headers=headers)
             else:
-                self.log_result("Health Check", False, f"Backend returned {response.status_code}")
-                return False
-        except Exception as e:
-            self.log_result("Health Check", False, f"Connection failed: {str(e)}")
-            return False
-
-    def create_test_user(self) -> bool:
-        """Create a test user for authentication"""  
-        try:
-            # Check if user already exists first
-            user_data = {
-                "email": TEST_EMAIL,
-                "password": TEST_PASSWORD,
-                "organization_name": "Test Company AB",
-                "phone": "+46701234567",
-                "name": "Test Admin"
-            }
+                raise ValueError(f"Unsupported method: {method}")
             
-            response = self.session.post(f"{BACKEND_URL}/auth/register", json=user_data)
+            self.log(f"{method} {endpoint} -> {response.status_code}")
             
-            if response.status_code == 200:
-                self.log_result("Test User Creation", True, "Test user created successfully")
-                return True
-            elif response.status_code == 400 and "redan registrerad" in response.text:
-                self.log_result("Test User Creation", True, "Test user already exists")
-                return True
-            else:
-                self.log_result("Test User Creation", False, f"Failed to create user: {response.status_code} - {response.text}")
-                return False
+            if response.status_code != expect_status:
+                self.log_error(f"Expected {expect_status}, got {response.status_code}")
+                self.log_error(f"Response: {response.text}")
+                return {"error": f"HTTP {response.status_code}", "response": response.text}
+            
+            try:
+                return response.json()
+            except:
+                return {"success": True, "response": response.text}
                 
         except Exception as e:
-            self.log_result("Test User Creation", False, f"Error creating user: {str(e)}")
+            self.log_error(f"Request failed: {str(e)}")
+            return {"error": str(e)}
+    
+    async def test_health_check(self) -> bool:
+        """Test basic API health"""
+        self.log("Testing API health check...")
+        result = await self.make_request("GET", "/")
+        
+        if "error" in result:
+            self.log_error("Health check failed")
             return False
+        
+        if result.get("status") == "running":
+            self.log_success("API is running")
+            return True
+        else:
+            self.log_error(f"Unexpected health response: {result}")
+            return False
+    
+    async def test_user_registration(self) -> bool:
+        """Test user registration"""
+        self.log("Testing user registration...")
+        
+        data = {
+            "email": self.test_user_email,
+            "password": self.test_user_password,
+            "name": self.test_user_name,
+            "organization_name": self.test_org_name,
+            "phone": self.test_phone
+        }
+        
+        result = await self.make_request("POST", "/auth/register", data)
+        
+        if "error" in result:
+            # Check if user already exists
+            if "redan registrerad" in result.get("response", ""):
+                self.log("User already exists, continuing with login test")
+                return True
+            self.log_error("Registration failed")
+            return False
+        
+        if result.get("success"):
+            self.log_success("User registration successful")
+            return True
+        else:
+            self.log_error(f"Registration failed: {result}")
+            return False
+    
+    async def manually_verify_user(self) -> bool:
+        """Manually verify user by updating database directly"""
+        self.log("Manually verifying user email...")
+        
+        # We need to use a Python script to update the database
+        # Since we're using Commhub, we'll create a simple script
+        script_content = f'''
+import asyncio
+import os
+import sys
+sys.path.append('/app/backend')
 
-    def verify_user_email(self) -> bool:
-        """Manually verify the test user's email by updating the database"""
+from utils.database import get_db
+
+async def verify_user():
+    db = get_db()
+    result = await db.users.update_one(
+        {{"email": "{self.test_user_email}"}},
+        {{"$set": {{"email_verified": True}}}}
+    )
+    print(f"Updated {{result.modified_count}} user(s)")
+
+if __name__ == "__main__":
+    asyncio.run(verify_user())
+'''
+        
+        # Write and execute the script
+        with open("/tmp/verify_user.py", "w") as f:
+            f.write(script_content)
+        
+        import subprocess
+        try:
+            result = subprocess.run([
+                sys.executable, "/tmp/verify_user.py"
+            ], capture_output=True, text=True, cwd="/app/backend")
+            
+            if result.returncode == 0:
+                self.log_success("User email verified manually")
+                return True
+            else:
+                self.log_error(f"Manual verification failed: {result.stderr}")
+                return False
+        except Exception as e:
+            self.log_error(f"Manual verification error: {e}")
+            return False
+    
+    async def test_user_login(self) -> bool:
+        """Test user login"""
+        self.log("Testing user login...")
+        
+        data = {
+            "email": self.test_user_email,
+            "password": self.test_user_password
+        }
+        
+        result = await self.make_request("POST", "/auth/login", data)
+        
+        if "error" in result:
+            self.log_error("Login failed")
+            return False
+        
+        if result.get("success") and result.get("session_token"):
+            self.session_token = result["session_token"]
+            self.log_success("Login successful, session token obtained")
+            return True
+        else:
+            self.log_error(f"Login failed: {result}")
+            return False
+    
+    async def test_auth_me(self) -> bool:
+        """Test getting current user info"""
+        self.log("Testing /auth/me endpoint...")
+        
+        if not self.session_token:
+            self.log_error("No session token available")
+            return False
+        
+        result = await self.make_request("GET", "/auth/me")
+        
+        if "error" in result:
+            self.log_error("Auth me failed")
+            return False
+        
+        if result.get("email") == self.test_user_email:
+            self.log_success("Auth me successful")
+            return True
+        else:
+            self.log_error(f"Auth me failed: {result}")
+            return False
+    
+    async def test_products_crud(self) -> bool:
+        """Test Products CRUD operations"""
+        self.log("Testing Products CRUD...")
+        
+        if not self.session_token:
+            self.log_error("No session token for products test")
+            return False
+        
+        # Test GET products (should be empty initially)
+        self.log("Testing GET /products...")
+        result = await self.make_request("GET", "/products")
+        
+        if "error" in result:
+            self.log_error("GET products failed")
+            return False
+        
+        if isinstance(result, list):
+            self.log_success(f"GET products successful, found {len(result)} products")
+        else:
+            self.log_error(f"GET products unexpected response: {result}")
+            return False
+        
+        # Test POST product
+        self.log("Testing POST /products...")
+        product_data = {
+            "name": "Test Product",
+            "price": 99.0,
+            "category": "Test"
+        }
+        
+        result = await self.make_request("POST", "/products", product_data, expect_status=200)
+        
+        if "error" in result:
+            self.log_error("POST product failed")
+            return False
+        
+        if result.get("id"):
+            self.created_product_id = result["id"]
+            self.log_success(f"POST product successful, ID: {self.created_product_id}")
+        else:
+            self.log_error(f"POST product failed: {result}")
+            return False
+        
+        # Test PUT product
+        self.log("Testing PUT /products...")
+        update_data = {
+            "name": "Updated Product",
+            "price": 150.0
+        }
+        
+        result = await self.make_request("PUT", f"/products/{self.created_product_id}", update_data)
+        
+        if "error" in result:
+            self.log_error("PUT product failed")
+            return False
+        
+        if result.get("name") == "Updated Product" and result.get("price") == 150.0:
+            self.log_success("PUT product successful")
+        else:
+            self.log_error(f"PUT product failed: {result}")
+            return False
+        
+        # Test DELETE product
+        self.log("Testing DELETE /products...")
+        result = await self.make_request("DELETE", f"/products/{self.created_product_id}")
+        
+        if "error" in result:
+            self.log_error("DELETE product failed")
+            return False
+        
+        if result.get("success"):
+            self.log_success("DELETE product successful")
+            return True
+        else:
+            self.log_error(f"DELETE product failed: {result}")
+            return False
+    
+    async def test_orders_crud(self) -> bool:
+        """Test Orders CRUD operations"""
+        self.log("Testing Orders CRUD...")
+        
+        if not self.session_token:
+            self.log_error("No session token for orders test")
+            return False
+        
+        # Test GET orders (should be empty initially)
+        self.log("Testing GET /orders...")
+        result = await self.make_request("GET", "/orders")
+        
+        if "error" in result:
+            self.log_error("GET orders failed")
+            return False
+        
+        if isinstance(result, list):
+            self.log_success(f"GET orders successful, found {len(result)} orders")
+        else:
+            self.log_error(f"GET orders unexpected response: {result}")
+            return False
+        
+        # Test POST order
+        self.log("Testing POST /orders...")
+        order_data = {
+            "items": [
+                {
+                    "product_id": "test",
+                    "name": "Test",
+                    "quantity": 1,
+                    "price": 50.0
+                }
+            ],
+            "total": 50.0,
+            "swish_phone": "0701234567"
+        }
+        
+        result = await self.make_request("POST", "/orders", order_data, expect_status=200)
+        
+        if "error" in result:
+            self.log_error("POST order failed")
+            return False
+        
+        if result.get("id"):
+            self.created_order_id = result["id"]
+            self.log_success(f"POST order successful, ID: {self.created_order_id}")
+            return True
+        else:
+            self.log_error(f"POST order failed: {result}")
+            return False
+    
+    async def test_parked_carts_crud(self) -> bool:
+        """Test Parked Carts CRUD operations"""
+        self.log("Testing Parked Carts CRUD...")
+        
+        if not self.session_token:
+            self.log_error("No session token for parked carts test")
+            return False
+        
+        # Test GET parked carts
+        self.log("Testing GET /parked-carts...")
+        result = await self.make_request("GET", "/parked-carts")
+        
+        if "error" in result:
+            self.log_error("GET parked carts failed")
+            return False
+        
+        if isinstance(result, list):
+            self.log_success(f"GET parked carts successful, found {len(result)} carts")
+        else:
+            self.log_error(f"GET parked carts unexpected response: {result}")
+            return False
+        
+        # Test POST parked cart
+        self.log("Testing POST /parked-carts...")
+        cart_data = {
+            "items": [
+                {
+                    "product_id": "test",
+                    "name": "Test",
+                    "quantity": 1,
+                    "price": 10.0
+                }
+            ],
+            "name": "Test Cart",
+            "total": 10.0
+        }
+        
+        result = await self.make_request("POST", "/parked-carts", cart_data, expect_status=200)
+        
+        if "error" in result:
+            self.log_error("POST parked cart failed")
+            return False
+        
+        if result.get("id"):
+            self.created_cart_id = result["id"]
+            self.log_success(f"POST parked cart successful, ID: {self.created_cart_id}")
+            return True
+        else:
+            self.log_error(f"POST parked cart failed: {result}")
+            return False
+    
+    async def check_backend_logs(self):
+        """Check backend logs for any errors"""
+        self.log("Checking backend logs...")
         try:
             import subprocess
             result = subprocess.run([
-                'mongosh', 
-                'mongodb://localhost:27017/pos_production',
-                '--eval',
-                f'db.users.updateOne({{"email": "{TEST_EMAIL}"}}, {{"$set": {{"email_verified": true}}}});print("Verified user email");',
-                '--quiet'
-            ], capture_output=True, text=True, timeout=10)
+                "tail", "-n", "50", "/var/log/supervisor/backend.err.log"
+            ], capture_output=True, text=True)
             
-            if result.returncode == 0:
-                self.log_result("Email Verification", True, "User email verified manually for testing")
-                return True
+            if result.returncode == 0 and result.stdout.strip():
+                self.log("Recent backend error logs:")
+                print(result.stdout)
             else:
-                self.log_result("Email Verification", False, f"Failed to verify email: {result.stderr}")
-                return False
+                self.log("No recent backend errors found")
         except Exception as e:
-            self.log_result("Email Verification", False, f"Error verifying email: {str(e)}")
-            return False
-
-    def authenticate_user(self) -> bool:
-        """Login and get authentication token"""
-        try:
-            login_data = {
-                "email": TEST_EMAIL,
-                "password": TEST_PASSWORD
-            }
+            self.log_error(f"Could not check logs: {e}")
+    
+    async def run_all_tests(self) -> bool:
+        """Run all tests in sequence"""
+        self.log("Starting comprehensive backend test suite...")
+        self.log(f"Testing against: {BACKEND_URL}")
+        
+        tests = [
+            ("Health Check", self.test_health_check),
+            ("User Registration", self.test_user_registration),
+            ("Manual User Verification", self.manually_verify_user),
+            ("User Login", self.test_user_login),
+            ("Auth Me", self.test_auth_me),
+            ("Products CRUD", self.test_products_crud),
+            ("Orders CRUD", self.test_orders_crud),
+            ("Parked Carts CRUD", self.test_parked_carts_crud),
+        ]
+        
+        passed = 0
+        failed = 0
+        
+        for test_name, test_func in tests:
+            self.log(f"\n{'='*50}")
+            self.log(f"Running: {test_name}")
+            self.log(f"{'='*50}")
             
-            response = self.session.post(f"{BACKEND_URL}/auth/login", json=login_data)
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.auth_token = data.get("session_token")
-                
-                if self.auth_token:
-                    self.log_result("Authentication", True, f"Successfully logged in, got token: {self.auth_token[:20]}...")
-                    return True
+            try:
+                success = await test_func()
+                if success:
+                    passed += 1
+                    self.log_success(f"✅ {test_name} PASSED")
                 else:
-                    self.log_result("Authentication", False, "No session token in response")
-                    return False
-                    
-            elif response.status_code == 403 and "verifierad" in response.text:
-                # Need to verify email - let's simulate this
-                self.log_result("Authentication", False, "Email not verified - need manual verification")
-                return False
-            else:
-                self.log_result("Authentication", False, f"Login failed: {response.status_code} - {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Authentication", False, f"Login error: {str(e)}")
-            return False
+                    failed += 1
+                    self.log_error(f"❌ {test_name} FAILED")
+            except Exception as e:
+                failed += 1
+                self.log_error(f"❌ {test_name} FAILED with exception: {e}")
+        
+        self.log(f"\n{'='*50}")
+        self.log(f"TEST SUMMARY")
+        self.log(f"{'='*50}")
+        self.log(f"Total tests: {passed + failed}")
+        self.log(f"Passed: {passed}")
+        self.log(f"Failed: {failed}")
+        
+        if failed > 0:
+            self.log_error("Some tests failed. Checking backend logs...")
+            await self.check_backend_logs()
+        
+        return failed == 0
 
-    def test_password_change_without_auth(self) -> bool:
-        """Test 1: Password change without authentication - should return 401"""
-        try:
-            change_data = {"new_password": TEST_NEW_PASSWORD_VALID}
-            
-            # Make request without auth header AND without session cookies
-            # Create a new session to avoid cookies from login
-            no_auth_session = requests.Session()
-            response = no_auth_session.post(
-                f"{BACKEND_URL}/org/users/me/change-password",
-                json=change_data
-            )
-            
-            if response.status_code == 401:
-                response_data = response.json()
-                detail = response_data.get("detail", "")
-                
-                if "inloggad" in detail.lower():
-                    self.log_result("No Auth Test", True, f"Correctly returned 401 with message: {detail}")
-                    return True
-                else:
-                    self.log_result("No Auth Test", False, f"Got 401 but wrong message: {detail}")
-                    return False
-            else:
-                self.log_result("No Auth Test", False, f"Expected 401, got {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("No Auth Test", False, f"Error: {str(e)}")
-            return False
 
-    def test_password_change_short_password(self) -> bool:
-        """Test 2: Password change with too short password - should return 400"""
-        if not self.auth_token:
-            self.log_result("Short Password Test", False, "No auth token available")
-            return False
-            
-        try:
-            change_data = {"new_password": TEST_NEW_PASSWORD_SHORT}
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
-            
-            response = self.session.post(
-                f"{BACKEND_URL}/org/users/me/change-password",
-                json=change_data,
-                headers=headers
-            )
-            
-            if response.status_code == 400:
-                response_data = response.json()
-                detail = response_data.get("detail", "")
-                
-                if "6 tecken" in detail:
-                    self.log_result("Short Password Test", True, f"Correctly returned 400 with message: {detail}")
-                    return True
-                else:
-                    self.log_result("Short Password Test", False, f"Got 400 but wrong message: {detail}")
-                    return False
-            else:
-                self.log_result("Short Password Test", False, f"Expected 400, got {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Short Password Test", False, f"Error: {str(e)}")
-            return False
+async def main():
+    """Main test runner"""
+    tester = BackendTester()
+    
+    try:
+        success = await tester.run_all_tests()
+        return 0 if success else 1
+    finally:
+        await tester.close()
 
-    def test_password_change_valid(self) -> bool:
-        """Test 3: Valid password change - should return success"""
-        if not self.auth_token:
-            self.log_result("Valid Password Change Test", False, "No auth token available")
-            return False
-            
-        try:
-            change_data = {"new_password": TEST_NEW_PASSWORD_VALID}
-            headers = {"Authorization": f"Bearer {self.auth_token}"}
-            
-            response = self.session.post(
-                f"{BACKEND_URL}/org/users/me/change-password",
-                json=change_data,
-                headers=headers
-            )
-            
-            if response.status_code == 200:
-                response_data = response.json()
-                message = response_data.get("message", "")
-                success = response_data.get("success", False)
-                
-                if success and "ändrats" in message:
-                    self.log_result("Valid Password Change Test", True, f"Successfully changed password: {message}")
-                    return True
-                else:
-                    self.log_result("Valid Password Change Test", False, f"Unexpected response format: {response_data}")
-                    return False
-            else:
-                self.log_result("Valid Password Change Test", False, f"Expected 200, got {response.status_code}: {response.text}")
-                return False
-                
-        except Exception as e:
-            self.log_result("Valid Password Change Test", False, f"Error: {str(e)}")
-            return False
-
-    def test_login_with_new_password(self) -> bool:
-        """Test 4: Verify password was actually changed by logging in with new password"""
-        try:
-            # First try with old password - should fail
-            old_login_data = {
-                "email": TEST_EMAIL,
-                "password": TEST_PASSWORD
-            }
-            
-            response = self.session.post(f"{BACKEND_URL}/auth/login", json=old_login_data)
-            
-            if response.status_code == 401:
-                # Good - old password rejected
-                # Now try with new password
-                new_login_data = {
-                    "email": TEST_EMAIL,
-                    "password": TEST_NEW_PASSWORD_VALID
-                }
-                
-                response = self.session.post(f"{BACKEND_URL}/auth/login", json=new_login_data)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    new_token = data.get("session_token")
-                    
-                    if new_token:
-                        self.log_result("Login With New Password Test", True, f"Successfully logged in with new password, got token: {new_token[:20]}...")
-                        return True
-                    else:
-                        self.log_result("Login With New Password Test", False, "Login succeeded but no token in response")
-                        return False
-                else:
-                    self.log_result("Login With New Password Test", False, f"Login with new password failed: {response.status_code} - {response.text}")
-                    return False
-            else:
-                self.log_result("Login With New Password Test", False, f"Old password still works (expected 401, got {response.status_code})")
-                return False
-                
-        except Exception as e:
-            self.log_result("Login With New Password Test", False, f"Error: {str(e)}")
-            return False
-
-    def run_all_tests(self):
-        """Run all password change tests"""
-        print("=== Password Change Endpoint Testing ===")
-        print(f"Testing endpoint: POST {BACKEND_URL}/org/users/me/change-password")
-        print()
-        
-        # Health check
-        if not self.test_health_check():
-            print("❌ Backend not accessible - stopping tests")
-            return
-        
-        # Setup test user
-        print("\n--- Setup Phase ---")
-        if not self.create_test_user():
-            print("❌ Could not create test user - stopping tests")
-            return
-        
-        # Verify the user's email
-        if not self.verify_user_email():
-            print("❌ Could not verify user email - stopping tests")
-            return
-        
-        if not self.authenticate_user():
-            print("❌ Could not authenticate - stopping tests")
-            return
-        
-        # Run the actual tests
-        print("\n--- Password Change Tests ---")
-        
-        # Test 1: No authentication
-        self.test_password_change_without_auth()
-        
-        # Test 2: Too short password
-        self.test_password_change_short_password()
-        
-        # Test 3: Valid password change
-        valid_change_success = self.test_password_change_valid()
-        
-        # Test 4: Verify password was changed (only if previous test passed)
-        if valid_change_success:
-            self.test_login_with_new_password()
-        else:
-            self.log_result("Login With New Password Test", False, "Skipped - password change failed")
-        
-        # Summary
-        print("\n=== Test Summary ===")
-        passed = sum(1 for result in self.test_results if result['passed'])
-        total = len(self.test_results)
-        
-        print(f"Tests Passed: {passed}/{total}")
-        
-        if passed == total:
-            print("🎉 All tests passed!")
-        else:
-            print("⚠️  Some tests failed - check details above")
-            
-        print("\n--- Detailed Results ---")
-        for result in self.test_results:
-            status = "✅" if result['passed'] else "❌"
-            print(f"{status} {result['test']}: {result['details']}")
 
 if __name__ == "__main__":
-    tester = PasswordChangeTest()
-    tester.run_all_tests()
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)
