@@ -6,13 +6,14 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Backend URL - should be set in environment for production
-const BACKEND_URL = process.env.BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+// Backend URL - MUST be set in environment for production
+// Example: BACKEND_URL=https://your-new-backend.railway.app or your-server.com
+const BACKEND_URL = process.env.BACKEND_URL;
 
 const distPath = path.join(__dirname, 'dist');
 
 console.log('Starting QR-Kassan web server...');
-console.log('Backend URL:', BACKEND_URL);
+console.log('Backend URL:', BACKEND_URL || 'NOT SET - API calls will fail!');
 
 // Check if dist folder exists (should be built by Railway's build step)
 if (!fs.existsSync(distPath) || !fs.existsSync(path.join(distPath, 'index.html'))) {
@@ -31,16 +32,25 @@ if (!fs.existsSync(distPath) || !fs.existsSync(path.join(distPath, 'index.html')
   }
 }
 
-// Proxy API requests to backend
-app.use('/api', createProxyMiddleware({
-  target: BACKEND_URL,
-  changeOrigin: true,
-  logLevel: 'warn',
-  onError: (err, req, res) => {
-    console.error('Proxy error:', err.message);
-    res.status(502).json({ detail: 'Backend unavailable' });
-  }
-}));
+// Proxy API requests to backend (only if BACKEND_URL is configured)
+if (BACKEND_URL) {
+  app.use('/api', createProxyMiddleware({
+    target: BACKEND_URL,
+    changeOrigin: true,
+    logLevel: 'warn',
+    onError: (err, req, res) => {
+      console.error('Proxy error:', err.message);
+      res.status(502).json({ detail: 'Backend unavailable' });
+    }
+  }));
+} else {
+  // Return error for API calls if no backend configured
+  app.use('/api', (req, res) => {
+    res.status(503).json({ 
+      detail: 'Backend not configured. Set BACKEND_URL environment variable.' 
+    });
+  });
+}
 
 // Serve static files from dist directory
 app.use(express.static(distPath, {
