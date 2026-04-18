@@ -168,7 +168,7 @@ class LocalFirstStore {
 
   // ==================== ORDERS ====================
 
-  async getOrders(userId: string, limit: number = 50): Promise<any[]> {
+  async getOrders(userId: string): Promise<any[]> {
     const cached = await this.getCache<any[]>('orders', userId);
     
     if (cached && cached.length > 0) {
@@ -177,7 +177,7 @@ class LocalFirstStore {
       if (firstOrder && firstOrder.user_id === userId) {
         const age = await this.getCacheAge('orders', userId);
         if (age > CACHE_TTL_MS) {
-          this.backgroundSyncOrders(userId, limit);
+          this.backgroundSyncOrders(userId);
         }
         return cached;
       } else {
@@ -188,7 +188,8 @@ class LocalFirstStore {
     }
 
     try {
-      const orders = await api.getOrders(undefined, limit);
+      // Fetch all orders (no limit)
+      const orders = await api.getOrders();
       if (orders.length > 0) {
         await this.setCache('orders', userId, orders);
       }
@@ -199,12 +200,12 @@ class LocalFirstStore {
     }
   }
 
-  private async backgroundSyncOrders(userId: string, limit: number): Promise<void> {
+  private async backgroundSyncOrders(userId: string): Promise<void> {
     const networkState = await NetInfo.fetch();
     if (!networkState.isConnected) return;
 
     try {
-      const orders = await api.getOrders(undefined, limit);
+      const orders = await api.getOrders();
       if (orders.length > 0) {
         await this.setCache('orders', userId, orders);
       }

@@ -693,7 +693,7 @@ class CommHubService {
 
   // ==================== Orders ====================
 
-  async getOrders(status?: number, limit = 50): Promise<Order[]> {
+  async getOrders(status?: number, limit?: number): Promise<Order[]> {
     // CRITICAL: Filter by user_id to only show user's own orders
     const userId = await this.getUserIdAsync();
     if (!userId) {
@@ -701,15 +701,18 @@ class CommHubService {
       return [];
     }
     
+    // If no limit specified, fetch all orders (use very high number)
+    const queryLimit = limit || 10000;
+    
     if (status !== undefined) {
       return this.query<Order>('qr_orders', { 
         user_id: userId,
         status 
-      }, { sort: { created_at: -1 }, limit });
+      }, { sort: { created_at: -1 }, limit: queryLimit });
     }
     return this.query<Order>('qr_orders', { 
       user_id: userId 
-    }, { sort: { created_at: -1 }, limit });
+    }, { sort: { created_at: -1 }, limit: queryLimit });
   }
 
   async createOrder(data: Omit<Order, 'id' | 'created_at' | 'user_id'>): Promise<Order> {

@@ -53,8 +53,8 @@ export default function OrdersScreen() {
   const loadOrders = useCallback(async () => {
     if (!user?.user_id) return;
     try {
-      // Use local-first store for orders - fetch up to 500 orders
-      const data = await localStore.getOrders(user.user_id, 500);
+      // Use local-first store for orders - fetch all orders (no limit)
+      const data = await localStore.getOrders(user.user_id);
       // Apply local filter if set
       const filtered = filter 
         ? data.filter((o: Order) => o.status === filter)
