@@ -203,13 +203,13 @@ class SyncService {
   private async syncProductOperation(op: OfflineDB.SyncOperation): Promise<void> {
     switch (op.operation) {
       case 'CREATE':
-        await api.post('/products', op.data);
+        await api.createProduct(op.data);
         break;
       case 'UPDATE':
-        await api.put(`/products/${op.record_id}`, op.data);
+        await api.updateProduct(op.record_id, op.data);
         break;
       case 'DELETE':
-        await api.delete(`/products/${op.record_id}`);
+        await api.deleteProduct(op.record_id);
         break;
     }
   }
@@ -218,10 +218,10 @@ class SyncService {
   private async syncOrderOperation(op: OfflineDB.SyncOperation): Promise<void> {
     switch (op.operation) {
       case 'CREATE':
-        await api.post('/orders', op.data);
+        await api.createOrder(op.data);
         break;
       case 'UPDATE':
-        await api.put(`/orders/${op.record_id}`, op.data);
+        await api.updateOrder(op.record_id, op.data);
         break;
     }
   }
@@ -230,10 +230,10 @@ class SyncService {
   private async syncParkedCartOperation(op: OfflineDB.SyncOperation): Promise<void> {
     switch (op.operation) {
       case 'CREATE':
-        await api.post('/parked-carts', op.data);
+        await api.createParkedCart(op.data);
         break;
       case 'DELETE':
-        await api.delete(`/parked-carts/${op.record_id}`);
+        await api.deleteParkedCart(op.record_id);
         break;
     }
   }
@@ -242,9 +242,11 @@ class SyncService {
 
   async pullProducts(userId: string): Promise<void> {
     try {
-      const products = await api.get('/products');
+      // Use CommHub API instead of legacy endpoint
+      const products = await api.getProducts(false);
+      const validProducts = Array.isArray(products) ? products : [];
 
-      for (const product of products || []) {
+      for (const product of validProducts) {
         await OfflineDB.saveLocalProduct({
           ...product,
           user_id: userId,
@@ -253,7 +255,7 @@ class SyncService {
         });
       }
 
-      console.log(`[SyncService] Pulled ${(products || []).length} products`);
+      console.log(`[SyncService] Pulled ${validProducts.length} products`);
     } catch (error) {
       console.error('[SyncService] Failed to pull products:', error);
       throw error;
@@ -262,9 +264,11 @@ class SyncService {
 
   async pullOrders(userId: string): Promise<void> {
     try {
-      const orders = await api.get('/orders');
+      // Use CommHub API instead of legacy endpoint
+      const orders = await api.getOrders(undefined, 100);
+      const validOrders = Array.isArray(orders) ? orders : [];
 
-      for (const order of orders || []) {
+      for (const order of validOrders) {
         await OfflineDB.saveLocalOrder({
           ...order,
           user_id: userId,
@@ -272,7 +276,7 @@ class SyncService {
         });
       }
 
-      console.log(`[SyncService] Pulled ${(orders || []).length} orders`);
+      console.log(`[SyncService] Pulled ${validOrders.length} orders`);
     } catch (error) {
       console.error('[SyncService] Failed to pull orders:', error);
       throw error;
@@ -281,9 +285,11 @@ class SyncService {
 
   async pullParkedCarts(userId: string): Promise<void> {
     try {
-      const carts = await api.get('/parked-carts');
+      // Use CommHub API instead of legacy endpoint
+      const carts = await api.getParkedCarts();
+      const validCarts = Array.isArray(carts) ? carts : [];
 
-      for (const cart of carts || []) {
+      for (const cart of validCarts) {
         await OfflineDB.saveLocalParkedCart({
           ...cart,
           user_id: userId,
@@ -291,7 +297,7 @@ class SyncService {
         });
       }
 
-      console.log(`[SyncService] Pulled ${(carts || []).length} parked carts`);
+      console.log(`[SyncService] Pulled ${validCarts.length} parked carts`);
     } catch (error) {
       console.error('[SyncService] Failed to pull parked carts:', error);
       throw error;

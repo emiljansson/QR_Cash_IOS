@@ -9,12 +9,15 @@ import { Colors } from '../src/utils/colors';
 import { api } from '../src/utils/api';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
+import { commHubWS } from '../src/services/commHubWebSocket';
 
 interface PairedDisplay {
+  id: string;
   display_id: string;
   device_name: string;
   paired_at: string;
   last_active: string;
+  user_id: string;
 }
 
 // Web-compatible alert helpers
@@ -137,25 +140,88 @@ export default function PairDisplayScreen() {
   const isTablet = Math.min(width, height) >= 600;
 
   const loadDisplays = useCallback(async () => {
-    // Feature disabled - backend removed
-    // TODO: Migrate to CommHub when supported
-    setLoading(false);
-    setDisplays([]);
-    setConnectionStatus({ connected: false, count: 0 });
-  }, []);
+    if (!user?.user_id) {
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      // Fetch paired displays from CommHub
+      const pairedDisplays = await api.query<PairedDisplay>('qr_display_pairings', {
+        user_id: user.user_id
+      });
+      
+      setDisplays(pairedDisplays);
+      setConnectionStatus({ 
+        connected: pairedDisplays.length > 0, 
+        count: pairedDisplays.length 
+      });
+    } catch (e) {
+      console.error('[PairDisplay] Failed to load displays:', e);
+      setDisplays([]);
+      setConnectionStatus({ connected: false, count: 0 });
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.user_id]);
 
   useEffect(() => {
     loadDisplays();
-  }, []);
+    
+    // Listen for real-time updates
+    const unsubscribe = commHubWS.onMessage((message) => {
+      if (message.type === 'document_changed' && message.collection === 'qr_display_pairings') {
+        loadDisplays();
+      }
+    });
+    
+    return unsubscribe;
+  }, [loadDisplays]);
 
   const handlePair = async () => {
-    // Feature disabled - backend removed
-    showAlert('Inte tillgänglig', 'Denna funktion är tillfälligt avstängd. Kontakta support.');
+    if (code.length !== 4 || !user?.user_id) return;
+    
+    setPairing(true);
+    try {
+      // Generate a unique display_id based on the pairing code
+      const displayId = `display_${code}_${Date.now()}`;
+      
+      // Create pairing record in CommHub
+      await api.create<PairedDisplay>('qr_display_pairings', {
+        display_id: displayId,
+        device_name: deviceName || 'Kundskärm',
+        paired_at: new Date().toISOString(),
+        last_active: new Date().toISOString(),
+        user_id: user.user_id,
+        pairing_code: code,
+      });
+      
+      showAlert('Kopplad!', `${deviceName} har kopplats till ditt konto.`);
+      setCode('');
+      loadDisplays();
+    } catch (e: any) {
+      console.error('[PairDisplay] Pairing failed:', e);
+      showAlert('Fel', e.message || 'Kunde inte koppla skärmen. Kontrollera koden och försök igen.');
+    } finally {
+      setPairing(false);
+    }
   };
 
   const handleUnpair = (display: PairedDisplay) => {
-    // Feature disabled - backend removed
-    showAlert('Inte tillgänglig', 'Denna funktion är tillfälligt avstängd.');
+    confirmAction(
+      'Koppla bort',
+      `Vill du koppla bort ${display.device_name}?`,
+      async () => {
+        try {
+          await api.delete('qr_display_pairings', display.id);
+          showAlert('Bortkopplad', `${display.device_name} har kopplats bort.`);
+          loadDisplays();
+        } catch (e: any) {
+          console.error('[PairDisplay] Unpair failed:', e);
+          showAlert('Fel', e.message || 'Kunde inte koppla bort skärmen.');
+        }
+      }
+    );
   };
 
   const formatDate = (dateStr: string) => {
@@ -260,7 +326,7 @@ export default function PairDisplayScreen() {
             </View>
           ) : (
             displays.map((item) => (
-              <View key={item.display_id} testID={`display-row-${item.display_id}`} style={styles.displayRow}>
+              <View key={item.id} testID={`display-row-${item.id}`} style={styles.displayRow}>
                 <View style={styles.displayInfo}>
                   <View style={styles.displayIconWrap}>
                     <Ionicons name="tv-outline" size={20} color={Colors.primary} />
@@ -271,7 +337,7 @@ export default function PairDisplayScreen() {
                   </View>
                 </View>
                 <TouchableOpacity
-                  testID={`unpair-${item.display_id}`}
+                  testID={`unpair-${item.id}`}
                   style={styles.unpairBtn}
                   onPress={() => handleUnpair(item)}
                 >

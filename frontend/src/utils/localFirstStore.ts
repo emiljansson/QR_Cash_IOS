@@ -126,9 +126,12 @@ class LocalFirstStore {
 
     try {
       const products = await api.getProducts(activeOnly);
+      const validProducts = Array.isArray(products) ? products : [];
       const cacheKey = activeOnly ? 'products_active' : 'products';
-      await this.setCache(cacheKey, userId, products);
-      console.log('[LocalFirst] Background synced products');
+      if (validProducts.length > 0) {
+        await this.setCache(cacheKey, userId, validProducts);
+        console.log('[LocalFirst] Background synced products');
+      }
     } catch (e) {
       console.log('[LocalFirst] Background sync failed, using cached data');
     }
@@ -306,16 +309,21 @@ class LocalFirstStore {
       const [products, settings, orders, carts] = await Promise.all([
         api.getProducts(false),
         api.getSettings(),
-        api.getOrders(100),
+        api.getOrders(undefined, 100),  // status, limit
         api.getParkedCarts(),
       ]);
 
+      // Validate data before caching
+      const validProducts = Array.isArray(products) ? products : [];
+      const validOrders = Array.isArray(orders) ? orders : [];
+      const validCarts = Array.isArray(carts) ? carts : [];
+
       await Promise.all([
-        this.setCache('products', userId, products),
-        this.setCache('products_active', userId, products.filter((p: any) => p.active !== false)),
-        this.setCache('settings', userId, settings),
-        this.setCache('orders', userId, orders),
-        this.setCache('parked_carts', userId, carts),
+        this.setCache('products', userId, validProducts),
+        this.setCache('products_active', userId, validProducts.filter((p: any) => p.active !== false)),
+        this.setCache('settings', userId, settings || {}),
+        this.setCache('orders', userId, validOrders),
+        this.setCache('parked_carts', userId, validCarts),
       ]);
 
       // Process pending changes
