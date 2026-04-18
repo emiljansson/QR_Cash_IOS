@@ -752,10 +752,17 @@ class CommHubService {
       startDate.setMonth(now.getMonth() - 1);
     }
 
-    const orders = await this.query<Order>('qr_orders', {
+    // Fetch all paid orders and filter by date on client side
+    // (CommHub may not support $gte/$lte on dates)
+    const allOrders = await this.query<Order>('qr_orders', {
       user_id: userId,
       $or: [{ status: 200 }, { status: 'paid' }],
-      created_at: { $gte: startDate.toISOString() }
+    }, { limit: 1000 });
+    
+    const startTime = startDate.getTime();
+    const orders = allOrders.filter(order => {
+      const orderTime = new Date(order.created_at).getTime();
+      return orderTime >= startTime;
     });
 
     const total = orders.reduce((sum, order) => sum + order.total, 0);
@@ -853,15 +860,19 @@ class CommHubService {
       };
     }
 
-    // Query paid orders in the date range for this user
-    // Support both status: 200 (new) and status: "paid" (legacy)
-    const orders = await this.query<Order>('qr_orders', {
+    // Fetch all paid orders for this user (CommHub may not support $gte/$lte on dates)
+    // Then filter by date on the client side
+    const allOrders = await this.query<Order>('qr_orders', {
       user_id: userId,
       $or: [{ status: 200 }, { status: 'paid' }],
-      created_at: { 
-        $gte: startDate.toISOString(),
-        $lte: endDate.toISOString()
-      }
+    }, { limit: 1000 });
+    
+    // Filter orders by date range on client side
+    const startTime = startDate.getTime();
+    const endTime = endDate.getTime();
+    const orders = allOrders.filter(order => {
+      const orderTime = new Date(order.created_at).getTime();
+      return orderTime >= startTime && orderTime <= endTime;
     });
 
     // Calculate totals
