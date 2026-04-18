@@ -172,20 +172,52 @@ class CommHubService {
 
     const data = await response.json();
     
+    // Fetch the original user_id from qr_users (for RLS compatibility)
+    let originalUserId = data.user_id;
+    try {
+      const userLookup = await fetch(
+        `${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY,
+          },
+          body: JSON.stringify({
+            filter: { email: email.toLowerCase() },
+            limit: 1,
+          }),
+        }
+      );
+      if (userLookup.ok) {
+        const userData = await userLookup.json();
+        if (userData.documents?.[0]) {
+          // Use the original user_id from qr_users for data queries
+          originalUserId = userData.documents[0].data.user_id || userData.documents[0].id;
+        }
+      }
+    } catch (e) {
+      // If lookup fails, continue with Public Auth user_id
+      console.warn('[CommHub] Could not fetch original user_id, using Public Auth user_id');
+    }
+    
     // Build user profile from response
     const user: UserProfile = data.user || {
-      user_id: data.user_id,
+      user_id: originalUserId,
       email: data.email,
       org_id: data.org_id,
       name: data.name,
       organization_name: data.organization_name,
     };
+    
+    // Override user_id with original for RLS compatibility
+    user.user_id = originalUserId;
 
     await this.saveToken(data.token, user);
 
     return {
       token: data.token,
-      user_id: user.user_id || data.user_id,
+      user_id: originalUserId,
       email: user.email || data.email,
       org_id: user.org_id || data.org_id,
       expires_at: data.expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
