@@ -44,6 +44,14 @@ interface UserStat {
   average_order: number;
 }
 
+interface ProductStat {
+  product_id: string;
+  name: string;
+  quantity_sold: number;
+  total_revenue: number;
+  average_price: number;
+}
+
 interface UserSalesStatsProps {
   isWide: boolean;
   showAlert: (title: string, message: string) => void;
@@ -55,12 +63,14 @@ function UserSalesStats({ isWide, showAlert }: UserSalesStatsProps) {
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year' | 'custom'>('day');
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [statsView, setStatsView] = useState<'users' | 'products'>('users');
   const [stats, setStats] = useState<{
     period_label: string;
     total_sales: number;
     total_orders: number;
     average_order: number;
     users: UserStat[];
+    products: ProductStat[];
   } | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -187,34 +197,83 @@ function UserSalesStats({ isWide, showAlert }: UserSalesStatsProps) {
       </View>
 
       {/* User sales list */}
-      <Text style={userStatsStyles.sectionTitle}>Försäljning per användare</Text>
-      
+      <View style={userStatsStyles.viewToggle}>
+        <TouchableOpacity 
+          style={[userStatsStyles.viewToggleBtn, statsView === 'users' && userStatsStyles.viewToggleBtnActive]}
+          onPress={() => setStatsView('users')}
+        >
+          <Ionicons name="people-outline" size={16} color={statsView === 'users' ? Colors.white : Colors.textMuted} />
+          <Text style={[userStatsStyles.viewToggleText, statsView === 'users' && userStatsStyles.viewToggleTextActive]}>
+            Per användare
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[userStatsStyles.viewToggleBtn, statsView === 'products' && userStatsStyles.viewToggleBtnActive]}
+          onPress={() => setStatsView('products')}
+        >
+          <Ionicons name="pricetag-outline" size={16} color={statsView === 'products' ? Colors.white : Colors.textMuted} />
+          <Text style={[userStatsStyles.viewToggleText, statsView === 'products' && userStatsStyles.viewToggleTextActive]}>
+            Per produkt
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
-      ) : stats?.users && stats.users.length > 0 ? (
-        <View style={userStatsStyles.userList}>
-          {stats.users.map((user, idx) => (
-            <View key={user.user_id} style={userStatsStyles.userRow}>
-              <View style={userStatsStyles.userRank}>
-                <Text style={userStatsStyles.userRankText}>{idx + 1}</Text>
+      ) : statsView === 'users' ? (
+        // User statistics view
+        stats?.users && stats.users.length > 0 ? (
+          <View style={userStatsStyles.userList}>
+            {stats.users.map((user, idx) => (
+              <View key={user.user_id} style={userStatsStyles.userRow}>
+                <View style={userStatsStyles.userRank}>
+                  <Text style={userStatsStyles.userRankText}>{idx + 1}</Text>
+                </View>
+                <View style={userStatsStyles.userInfo}>
+                  <Text style={userStatsStyles.userName}>{user.name}</Text>
+                  <Text style={userStatsStyles.userEmail}>{user.email}</Text>
+                </View>
+                <View style={userStatsStyles.userStats}>
+                  <Text style={userStatsStyles.userSales}>{user.total_sales.toFixed(0)} kr</Text>
+                  <Text style={userStatsStyles.userOrders}>{user.order_count} ordrar</Text>
+                  <Text style={userStatsStyles.userAvg}>~{user.average_order.toFixed(0)} kr/order</Text>
+                </View>
               </View>
-              <View style={userStatsStyles.userInfo}>
-                <Text style={userStatsStyles.userName}>{user.name}</Text>
-                <Text style={userStatsStyles.userEmail}>{user.email}</Text>
-              </View>
-              <View style={userStatsStyles.userStats}>
-                <Text style={userStatsStyles.userSales}>{user.total_sales.toFixed(0)} kr</Text>
-                <Text style={userStatsStyles.userOrders}>{user.order_count} ordrar</Text>
-                <Text style={userStatsStyles.userAvg}>~{user.average_order.toFixed(0)} kr/order</Text>
-              </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        ) : (
+          <View style={userStatsStyles.emptyState}>
+            <Ionicons name="bar-chart-outline" size={48} color={Colors.textMuted} />
+            <Text style={userStatsStyles.emptyText}>Ingen försäljning under perioden</Text>
+          </View>
+        )
       ) : (
-        <View style={userStatsStyles.emptyState}>
-          <Ionicons name="bar-chart-outline" size={48} color={Colors.textMuted} />
-          <Text style={userStatsStyles.emptyText}>Ingen försäljning under perioden</Text>
-        </View>
+        // Product statistics view
+        stats?.products && stats.products.length > 0 ? (
+          <View style={userStatsStyles.userList}>
+            {stats.products.map((product, idx) => (
+              <View key={product.product_id} style={userStatsStyles.userRow}>
+                <View style={[userStatsStyles.userRank, { backgroundColor: Colors.warning + '20' }]}>
+                  <Text style={[userStatsStyles.userRankText, { color: Colors.warning }]}>{idx + 1}</Text>
+                </View>
+                <View style={userStatsStyles.userInfo}>
+                  <Text style={userStatsStyles.userName}>{product.name}</Text>
+                  <Text style={userStatsStyles.userEmail}>{product.quantity_sold} st såld</Text>
+                </View>
+                <View style={userStatsStyles.userStats}>
+                  <Text style={userStatsStyles.userSales}>{product.total_revenue.toFixed(0)} kr</Text>
+                  <Text style={userStatsStyles.userOrders}>{product.quantity_sold} st</Text>
+                  <Text style={userStatsStyles.userAvg}>~{product.average_price.toFixed(0)} kr/st</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={userStatsStyles.emptyState}>
+            <Ionicons name="pricetag-outline" size={48} color={Colors.textMuted} />
+            <Text style={userStatsStyles.emptyText}>Inga produkter sålda under perioden</Text>
+          </View>
+        )
       )}
     </View>
   );
@@ -338,6 +397,35 @@ const userStatsStyles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 12,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  viewToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 6,
+  },
+  viewToggleBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  viewToggleText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.textMuted,
+  },
+  viewToggleTextActive: {
+    color: Colors.white,
   },
   userList: {
     gap: 10,

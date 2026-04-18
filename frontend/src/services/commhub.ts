@@ -796,6 +796,13 @@ class CommHubService {
       order_count: number;
       average_order: number;
     }>;
+    products: Array<{
+      product_id: string;
+      name: string;
+      quantity_sold: number;
+      total_revenue: number;
+      average_price: number;
+    }>;
   }> {
     const now = new Date();
     let startDate = new Date();
@@ -888,9 +895,16 @@ class CommHubService {
       order_count: number;
     }>();
 
+    // Group by product for product statistics
+    const productStats = new Map<string, {
+      name: string;
+      quantity_sold: number;
+      total_revenue: number;
+    }>();
+
     for (const order of orders) {
-      const userId = order.user_id || 'unknown';
-      const existing = userStats.get(userId) || {
+      const oderId = order.user_id || 'unknown';
+      const existing = userStats.get(oderId) || {
         name: 'Användare',
         email: '',
         total_sales: 0,
@@ -898,10 +912,28 @@ class CommHubService {
       };
       existing.total_sales += order.total || 0;
       existing.order_count += 1;
-      userStats.set(userId, existing);
+      userStats.set(oderId, existing);
+
+      // Process items for product statistics
+      const items = (order as any).items || [];
+      for (const item of items) {
+        const productId = item.product_id || item.id || 'unknown';
+        const existingProduct = productStats.get(productId) || {
+          name: item.name || 'Okänd produkt',
+          quantity_sold: 0,
+          total_revenue: 0,
+        };
+        existingProduct.quantity_sold += item.quantity || 1;
+        existingProduct.total_revenue += (item.price || 0) * (item.quantity || 1);
+        // Update name if we have a better one
+        if (item.name && existingProduct.name === 'Okänd produkt') {
+          existingProduct.name = item.name;
+        }
+        productStats.set(productId, existingProduct);
+      }
     }
 
-    // Convert map to array
+    // Convert user map to array
     const users = Array.from(userStats.entries()).map(([user_id, stats]) => ({
       user_id,
       name: stats.name,
@@ -911,8 +943,20 @@ class CommHubService {
       average_order: stats.order_count > 0 ? stats.total_sales / stats.order_count : 0,
     }));
 
-    // Sort by total sales descending
+    // Sort users by total sales descending
     users.sort((a, b) => b.total_sales - a.total_sales);
+
+    // Convert product map to array
+    const products = Array.from(productStats.entries()).map(([product_id, stats]) => ({
+      product_id,
+      name: stats.name,
+      quantity_sold: stats.quantity_sold,
+      total_revenue: stats.total_revenue,
+      average_price: stats.quantity_sold > 0 ? stats.total_revenue / stats.quantity_sold : 0,
+    }));
+
+    // Sort products by quantity sold descending
+    products.sort((a, b) => b.quantity_sold - a.quantity_sold);
 
     return {
       period_label: periodLabel,
@@ -920,6 +964,7 @@ class CommHubService {
       total_orders: totalOrders,
       average_order: averageOrder,
       users,
+      products,
     };
   }
 
