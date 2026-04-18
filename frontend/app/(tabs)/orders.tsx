@@ -38,6 +38,7 @@ export default function OrdersScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
   const [orders, setOrders] = useState<Order[]>([]);
+  const [totalOrders, setTotalOrders] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<string>('');
@@ -50,27 +51,34 @@ export default function OrdersScreen() {
   const [currentPage, setCurrentPage] = useState(1);
   const ordersPerPage = 50;
 
-  const loadOrders = useCallback(async () => {
+  // Load orders for current page (server-side pagination)
+  const loadOrders = useCallback(async (page: number = 1) => {
     if (!user?.user_id) return;
+    setLoading(true);
     try {
-      // Use local-first store for orders - fetch all orders (no limit)
-      const data = await localStore.getOrders(user.user_id);
-      // Apply local filter if set
-      const filtered = filter 
-        ? data.filter((o: Order) => o.status === filter)
-        : data;
-      setOrders(filtered);
-    } catch {} finally { setLoading(false); setRefreshing(false); }
+      const skip = (page - 1) * ordersPerPage;
+      // Fetch only the orders for current page
+      const data = await api.getOrders(
+        filter ? (filter === 'paid' ? 200 : filter === 'pending' ? 100 : undefined) : undefined,
+        ordersPerPage,
+        skip
+      );
+      // Also get total count
+      const count = await api.getOrderCount(filter || undefined);
+      setOrders(data);
+      setTotalOrders(count);
+    } catch (e) {
+      console.error('Failed to load orders:', e);
+    } finally { 
+      setLoading(false); 
+      setRefreshing(false); 
+    }
   }, [filter, user?.user_id]);
 
-  useEffect(() => { 
-    if (user?.user_id) {
-      loadOrders();
-      // Start auto-sync
-      localStore.startAutoSync(user.user_id);
-    }
-    return () => { localStore.stopAutoSync(); };
-  }, [user?.user_id, loadOrders]);
+  // Load when page changes
+  useEffect(() => {
+    loadOrders(currentPage);
+  }, [currentPage, loadOrders]);
   
   // Listen for real-time order updates
   useEffect(() => {
@@ -78,19 +86,16 @@ export default function OrdersScreen() {
       if (message.type === 'document_changed' && message.collection === 'qr_orders') {
         console.log('[Orders] Real-time order update:', message.operation);
         if (user?.user_id) {
-          localStore.invalidateCache('orders', user.user_id);
-          loadOrders();
+          loadOrders(currentPage);
         }
       }
     });
     return unsubscribe;
-  }, [loadOrders, user?.user_id]);
+  }, [loadOrders, user?.user_id, currentPage]);
   
   const onRefresh = () => { 
     setRefreshing(true); 
-    if (user?.user_id) {
-      localStore.forceSyncAll(user.user_id).then(loadOrders);
-    }
+    loadOrders(currentPage);
   };
 
   const statusColor = (status: string) => {
@@ -217,7 +222,7 @@ export default function OrdersScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Orderhistorik</Text>
-        <Text style={styles.subtitle}>{orders.length} ordrar</Text>
+        <Text style={styles.subtitle}>{totalOrders} ordrar</Text>
       </View>
 
       <View style={styles.filters}>
@@ -238,10 +243,10 @@ export default function OrdersScreen() {
       </View>
 
       {/* Pagination info */}
-      {orders.length > ordersPerPage && (
+      {totalOrders > ordersPerPage && (
         <View style={styles.paginationInfo}>
           <Text style={styles.paginationText}>
-            Visar {Math.min((currentPage - 1) * ordersPerPage + 1, orders.length)}-{Math.min(currentPage * ordersPerPage, orders.length)} av {orders.length}
+            Visar {Math.min((currentPage - 1) * ordersPerPage + 1, totalOrders)}-{Math.min(currentPage * ordersPerPage, totalOrders)} av {totalOrders}
           </Text>
         </View>
       )}
@@ -250,7 +255,7 @@ export default function OrdersScreen() {
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={orders.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage)}
+          data={orders}
           keyExtractor={item => item.id}
           renderItem={renderOrder}
           contentContainerStyle={styles.list}
@@ -262,7 +267,7 @@ export default function OrdersScreen() {
             </View>
           }
           ListFooterComponent={
-            orders.length > ordersPerPage ? (
+            totalOrders > ordersPerPage ? (
               <View style={styles.pagination}>
                 <TouchableOpacity
                   style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
@@ -274,16 +279,16 @@ export default function OrdersScreen() {
                 </TouchableOpacity>
                 
                 <View style={styles.pageIndicator}>
-                  <Text style={styles.pageNumber}>Sida {currentPage} av {Math.ceil(orders.length / ordersPerPage)}</Text>
+                  <Text style={styles.pageNumber}>Sida {currentPage} av {Math.ceil(totalOrders / ordersPerPage)}</Text>
                 </View>
                 
                 <TouchableOpacity
-                  style={[styles.pageBtn, currentPage >= Math.ceil(orders.length / ordersPerPage) && styles.pageBtnDisabled]}
-                  onPress={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ordersPerPage), p + 1))}
-                  disabled={currentPage >= Math.ceil(orders.length / ordersPerPage)}
+                  style={[styles.pageBtn, currentPage >= Math.ceil(totalOrders / ordersPerPage) && styles.pageBtnDisabled]}
+                  onPress={() => setCurrentPage(p => Math.min(Math.ceil(totalOrders / ordersPerPage), p + 1))}
+                  disabled={currentPage >= Math.ceil(totalOrders / ordersPerPage)}
                 >
-                  <Text style={[styles.pageBtnText, currentPage >= Math.ceil(orders.length / ordersPerPage) && styles.pageBtnTextDisabled]}>Nästa</Text>
-                  <Ionicons name="chevron-forward" size={20} color={currentPage >= Math.ceil(orders.length / ordersPerPage) ? Colors.textMuted : Colors.primary} />
+                  <Text style={[styles.pageBtnText, currentPage >= Math.ceil(totalOrders / ordersPerPage) && styles.pageBtnTextDisabled]}>Nästa</Text>
+                  <Ionicons name="chevron-forward" size={20} color={currentPage >= Math.ceil(totalOrders / ordersPerPage) ? Colors.textMuted : Colors.primary} />
                 </TouchableOpacity>
               </View>
             ) : null

@@ -693,7 +693,7 @@ class CommHubService {
 
   // ==================== Orders ====================
 
-  async getOrders(status?: number, limit?: number): Promise<Order[]> {
+  async getOrders(status?: number, limit?: number, skip?: number): Promise<Order[]> {
     // CRITICAL: Filter by user_id to only show user's own orders
     const userId = await this.getUserIdAsync();
     if (!userId) {
@@ -701,18 +701,54 @@ class CommHubService {
       return [];
     }
     
-    // If no limit specified, fetch all orders (use very high number)
-    const queryLimit = limit || 10000;
+    const queryOptions: { sort?: any; limit?: number; skip?: number } = { 
+      sort: { created_at: -1 } 
+    };
+    if (limit) queryOptions.limit = limit;
+    if (skip) queryOptions.skip = skip;
     
     if (status !== undefined) {
       return this.query<Order>('qr_orders', { 
         user_id: userId,
         status 
-      }, { sort: { created_at: -1 }, limit: queryLimit });
+      }, queryOptions);
     }
     return this.query<Order>('qr_orders', { 
       user_id: userId 
-    }, { sort: { created_at: -1 }, limit: queryLimit });
+    }, queryOptions);
+  }
+
+  /**
+   * Get total order count for pagination
+   */
+  async getOrderCount(status?: string): Promise<number> {
+    const userId = await this.getUserIdAsync();
+    if (!userId) return 0;
+    
+    const filter: any = { user_id: userId };
+    if (status) filter.status = status;
+    
+    // Fetch with limit 1 just to get the total count
+    const response = await fetch(
+      `${COMMHUB_URL}/api/data/qr_orders/query?app_id=${APP_ID}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify({
+          filter,
+          limit: 1,
+        }),
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data.total || 0;
+    }
+    return 0;
   }
 
   async createOrder(data: Omit<Order, 'id' | 'created_at' | 'user_id'>): Promise<Order> {
