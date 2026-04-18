@@ -6,7 +6,10 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../src/utils/colors';
-import { api } from '../src/utils/api';
+
+// CommHub configuration
+const COMMHUB_URL = 'https://commhub.cloud';
+const APP_ID = 'fcd81e2d-d8b9-48c4-9eeb-84116442b3e0';
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -35,10 +38,18 @@ export default function ResetPasswordScreen() {
     setMessage(null);
     
     try {
-      const result = await api.fetch('/auth/request-password-reset', {
+      const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/request-password-reset`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),
       });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.detail || 'Något gick fel');
+      }
+      
       setMessage({ type: 'success', text: result.message || 'Kolla din e-post för återställningslänken.' });
       setEmail('');
     } catch (e: any) {
@@ -66,10 +77,18 @@ export default function ResetPasswordScreen() {
     setMessage(null);
     
     try {
-      const result = await api.fetch('/auth/reset-password', {
+      const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/reset-password`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: params.token, password }),
       });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.detail || 'Ogiltig eller utgången länk');
+      }
+      
       setMessage({ type: 'success', text: result.message || 'Lösenordet har återställts!' });
       setTimeout(() => router.replace('/'), 2000);
     } catch (e: any) {
