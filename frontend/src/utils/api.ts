@@ -1,14 +1,23 @@
-// Production backend URL - hardcoded for native builds
-// In Expo Go, process.env may not work correctly, so we use hardcoded URL as primary
+// Backend URL configuration - uses environment variable
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 const getBackendUrl = () => {
-  // For native (iOS/Android), always use production URL
-  if (Platform.OS !== 'web') {
-    return 'https://qrcashios-production.up.railway.app';
+  // Try to get from Expo config first (works in both dev and prod)
+  const expoUrl = Constants.expoConfig?.extra?.backendUrl;
+  if (expoUrl) return expoUrl;
+  
+  // Try environment variable
+  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
+  if (envUrl) return envUrl;
+  
+  // For web development, use relative URLs (works with proxy)
+  if (Platform.OS === 'web') {
+    return '';
   }
-  // For web, use env variable with fallback to production
-  return process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+  
+  // Fallback for native development
+  return 'http://localhost:8001';
 };
 
 const BACKEND_URL = getBackendUrl();

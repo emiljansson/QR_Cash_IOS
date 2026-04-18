@@ -103,7 +103,7 @@ async def send_verification_email(email: str, token: str, organization_name: str
         resend.api_key = resend_api_key
         
         # Build verification URL using CORS_ORIGINS or default
-        frontend_url = os.environ.get("FRONTEND_URL", "https://pos-platform-13.preview.emergentagent.com")
+        frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
         verify_url = f"{frontend_url}/verify-email?token={token}"
         
         params = {
@@ -244,7 +244,7 @@ async def send_welcome_email(email: str, organization_name: str, login_code: str
         import resend
         resend.api_key = resend_api_key
         
-        frontend_url = os.environ.get("FRONTEND_URL", "https://qrkassa.frontproduction.se")
+        frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
         
         # Different email content for sub-users
         if is_sub_user:
@@ -771,7 +771,7 @@ async def forgot_password(request: Request):
     if resend_api_key and sender_email:
         try:
             resend.api_key = resend_api_key
-            frontend_url = os.environ.get("FRONTEND_URL", "https://pos-platform-13.preview.emergentagent.com")
+            frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
             reset_url = f"{frontend_url}/reset-password?token={reset_token}"
             
             params = {
@@ -960,7 +960,7 @@ async def request_password_reset(request: Request):
         resend.api_key = os.getenv("RESEND_API_KEY")
         
         app_name = os.getenv("APP_NAME", "QR-Kassan")
-        frontend_url = os.getenv("FRONTEND_URL", "https://qrkassa.frontproduction.se")
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         sender_email = os.getenv("SENDER_EMAIL", "noreply@qrkassa.frontproduction.se")
         reset_url = f"{frontend_url}/reset-password?token={reset_token}"
         

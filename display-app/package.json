@@ -1,6 +1,6 @@
 {
   "name": "display-app",
-  "version": "1.0.388",
+  "version": "1.0.389",
   "main": "index.tsx",
   "scripts": {
     "start": "expo start",

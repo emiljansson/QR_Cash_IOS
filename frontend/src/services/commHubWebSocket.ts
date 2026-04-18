@@ -7,8 +7,10 @@ import { Platform } from 'react-native';
 
 // CommHub WebSocket endpoint
 const WS_URL = 'wss://commhub.cloud/api/ws/realtime';
-const COMMHUB_API_KEY = 'KHue8NLldN3dkeQxHllN9hAWjkLQx17LFXRbW2UnUCs';
-const COMMHUB_APP_ID = 'fcd81e2d-d8b9-48c4-9eeb-84116442b3e0';
+
+// Get CommHub credentials from environment variables
+const COMMHUB_API_KEY = process.env.EXPO_PUBLIC_COMMHUB_API_KEY || '';
+const COMMHUB_APP_ID = process.env.EXPO_PUBLIC_COMMHUB_APP_ID || '';
 
 // Reconnection settings
 const RECONNECT_DELAY_MS = 3000;
