@@ -251,7 +251,7 @@ export default function POSScreen() {
       />
       <View style={styles.productInfo}>
         <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.productPrice}>{item.price.toFixed(0)} kr</Text>
+        <Text style={styles.productPrice}>{(item.price || 0).toFixed(0)} kr</Text>
       </View>
     </TouchableOpacity>
   );
