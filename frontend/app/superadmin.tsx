@@ -105,8 +105,9 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
   // Transform CommHub response to expected format
   if (path === '/users') {
     const users = (data.documents || []).map((doc: any) => ({
-      user_id: doc.id,
       ...doc.data,
+      user_id: doc.id,  // Use CommHub doc.id, not data.user_id
+      _original_user_id: doc.data.user_id,  // Keep original for reference
     }));
     return { users };
   } else if (path.match(/^\/users\/([^/]+)\/sub-users$/)) {
