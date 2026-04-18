@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "main": "expo-router/entry",
-  "version": "2.0.404",
+  "version": "2.0.405",
   "scripts": {
     "start": "node server.js",
     "build": "expo export --platform web",
@@ -39,7 +39,6 @@
     "expo-system-ui": "~6.0.9",
     "expo-web-browser": "~15.0.10",
     "express": "^5.2.1",
-    "http-proxy-middleware": "^3.0.5",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",

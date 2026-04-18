@@ -156,8 +156,6 @@ class CommHubService {
    * Login using CommHub's native Public Auth (users imported to their system)
    */
   async login(email: string, password: string): Promise<AuthResponse> {
-    console.log('[CommHub] Login attempt for:', email);
-    
     const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -166,7 +164,6 @@ class CommHubService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-      console.log('[CommHub] Login failed:', error);
       const errorMessage = typeof error.detail === 'string' 
         ? error.detail 
         : (error.detail?.message || error.message || 'Fel e-post eller lösenord');
@@ -174,7 +171,6 @@ class CommHubService {
     }
 
     const data = await response.json();
-    console.log('[CommHub] Login successful!');
     
     // Build user profile from response
     const user: UserProfile = data.user || {
