@@ -754,7 +754,7 @@ class CommHubService {
 
     const orders = await this.query<Order>('qr_orders', {
       user_id: userId,
-      status: 200,
+      $or: [{ status: 200 }, { status: 'paid' }],
       created_at: { $gte: startDate.toISOString() }
     });
 
@@ -854,9 +854,10 @@ class CommHubService {
     }
 
     // Query paid orders in the date range for this user
+    // Support both status: 200 (new) and status: "paid" (legacy)
     const orders = await this.query<Order>('qr_orders', {
       user_id: userId,
-      status: 200,
+      $or: [{ status: 200 }, { status: 'paid' }],
       created_at: { 
         $gte: startDate.toISOString(),
         $lte: endDate.toISOString()

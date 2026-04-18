@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { commhub, UserProfile } from '../services/commhub';
+import { localStore } from '../utils/localFirstStore';
 
 interface User {
   user_id: string;
@@ -77,6 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // If token is provided, use it directly (for code login)
     if (token) {
       const profile = await commhub.loginWithToken(token);
+      // Clear old cache before setting new user
+      await localStore.clearAllCache(profile.user_id);
       setUser(profileToUser(profile));
       return;
     }
@@ -86,10 +89,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     // Use the user profile from login result (already has legacy data mapped)
     if (result.user) {
+      // Clear old cache before setting new user
+      await localStore.clearAllCache(result.user.user_id);
       setUser(profileToUser(result.user));
     } else {
       // Fallback to getting profile from stored data
       const profile = await commhub.getMe();
+      await localStore.clearAllCache(profile.user_id);
       setUser(profileToUser(profile));
     }
   };
@@ -112,6 +118,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    // Clear cache for current user before logging out
+    if (user) {
+      await localStore.clearAllCache(user.user_id);
+    }
     await commhub.logout();
     setUser(null);
   };

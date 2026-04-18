@@ -85,23 +85,34 @@ class LocalFirstStore {
   // ==================== PRODUCTS ====================
 
   async getProducts(userId: string, activeOnly: boolean = false): Promise<any[]> {
-    // 1. Return cached data immediately
+    // 1. Return cached data immediately if cache exists for THIS user
     const cacheKey = activeOnly ? 'products_active' : 'products';
     const cached = await this.getCache<any[]>(cacheKey, userId);
     
-    if (cached) {
-      // Check if we should background sync
-      const age = await this.getCacheAge(cacheKey, userId);
-      if (age > CACHE_TTL_MS) {
-        this.backgroundSyncProducts(userId, activeOnly);
+    if (cached && cached.length > 0) {
+      // Verify cache is for this user by checking first product's user_id
+      const firstProduct = cached[0];
+      if (firstProduct && firstProduct.user_id === userId) {
+        // Check if we should background sync
+        const age = await this.getCacheAge(cacheKey, userId);
+        if (age > CACHE_TTL_MS) {
+          this.backgroundSyncProducts(userId, activeOnly);
+        }
+        return cached;
+      } else {
+        // Cache is for a different user - invalidate and fetch fresh
+        console.log('[LocalFirst] Cache user mismatch, fetching fresh data');
+        await this.invalidateCache(cacheKey, userId);
       }
-      return cached;
     }
 
-    // 2. No cache - fetch from server
+    // 2. No valid cache - fetch from server
     try {
       const products = await api.getProducts(activeOnly);
-      await this.setCache(cacheKey, userId, products);
+      // Only cache if we got products
+      if (products.length > 0) {
+        await this.setCache(cacheKey, userId, products);
+      }
       return products;
     } catch (e) {
       console.error('[LocalFirst] Failed to fetch products:', e);
