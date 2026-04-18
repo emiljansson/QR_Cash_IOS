@@ -492,28 +492,36 @@ class CommHubService {
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.skip) params.set('skip', String(options.skip));
 
-    const data = await this.request<{ documents: T[] }>(
+    const data = await this.request<{ documents: any[] }>(
       `/api/data/${collection}?${params.toString()}`
     );
-    return data.documents || [];
+    // CommHub returns documents with nested 'data' field - extract it
+    return (data.documents || []).map(doc => ({
+      id: doc.id,
+      ...doc.data,
+    })) as T[];
   }
 
   async get<T>(collection: string, id: string): Promise<T> {
-    return this.request<T>(`/api/data/${collection}/${id}?app_id=${APP_ID}`);
+    const doc = await this.request<any>(`/api/data/${collection}/${id}?app_id=${APP_ID}`);
+    // Extract data from nested structure
+    return { id: doc.id, ...doc.data } as T;
   }
 
   async create<T>(collection: string, data: Partial<T>): Promise<T> {
-    return this.request<T>(`/api/data/${collection}?app_id=${APP_ID}`, {
+    const doc = await this.request<any>(`/api/data/${collection}?app_id=${APP_ID}`, {
       method: 'POST',
       body: JSON.stringify({ data }),
     });
+    return { id: doc.id, ...doc.data } as T;
   }
 
   async update<T>(collection: string, id: string, data: Partial<T>): Promise<T> {
-    return this.request<T>(`/api/data/${collection}/${id}?app_id=${APP_ID}`, {
+    const doc = await this.request<any>(`/api/data/${collection}/${id}?app_id=${APP_ID}`, {
       method: 'PUT',
       body: JSON.stringify({ data }),
     });
+    return { id: doc.id, ...doc.data } as T;
   }
 
   async delete(collection: string, id: string): Promise<void> {
@@ -527,14 +535,18 @@ class CommHubService {
     filter: Record<string, any>,
     options?: { sort?: Record<string, number>; limit?: number; skip?: number }
   ): Promise<T[]> {
-    const data = await this.request<{ documents: T[] }>(
+    const data = await this.request<{ documents: any[] }>(
       `/api/data/${collection}/query?app_id=${APP_ID}`,
       {
         method: 'POST',
         body: JSON.stringify({ filter, ...options }),
       }
     );
-    return data.documents || [];
+    // CommHub returns documents with nested 'data' field - extract it
+    return (data.documents || []).map(doc => ({
+      id: doc.id,
+      ...doc.data,
+    })) as T[];
   }
 
   // ==================== Products ====================
