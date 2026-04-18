@@ -45,6 +45,10 @@ export default function OrdersScreen() {
   const [receiptEmail, setReceiptEmail] = useState('');
   const [sendingReceipt, setSendingReceipt] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ordersPerPage = 50;
 
   const loadOrders = useCallback(async () => {
     if (!user?.user_id) return;
@@ -226,18 +230,27 @@ export default function OrdersScreen() {
             key={f.key}
             testID={`order-filter-${f.key || 'all'}`}
             style={[styles.filterBtn, filter === f.key && styles.filterBtnActive]}
-            onPress={() => setFilter(f.key)}
+            onPress={() => { setFilter(f.key); setCurrentPage(1); }}
           >
             <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>{f.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
+      {/* Pagination info */}
+      {orders.length > ordersPerPage && (
+        <View style={styles.paginationInfo}>
+          <Text style={styles.paginationText}>
+            Visar {Math.min((currentPage - 1) * ordersPerPage + 1, orders.length)}-{Math.min(currentPage * ordersPerPage, orders.length)} av {orders.length}
+          </Text>
+        </View>
+      )}
+
       {loading ? (
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={orders}
+          data={orders.slice((currentPage - 1) * ordersPerPage, currentPage * ordersPerPage)}
           keyExtractor={item => item.id}
           renderItem={renderOrder}
           contentContainerStyle={styles.list}
@@ -247,6 +260,33 @@ export default function OrdersScreen() {
               <Ionicons name="receipt-outline" size={48} color={Colors.textMuted} />
               <Text style={styles.emptyText}>Inga ordrar</Text>
             </View>
+          }
+          ListFooterComponent={
+            orders.length > ordersPerPage ? (
+              <View style={styles.pagination}>
+                <TouchableOpacity
+                  style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
+                  onPress={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <Ionicons name="chevron-back" size={20} color={currentPage === 1 ? Colors.textMuted : Colors.primary} />
+                  <Text style={[styles.pageBtnText, currentPage === 1 && styles.pageBtnTextDisabled]}>Föregående</Text>
+                </TouchableOpacity>
+                
+                <View style={styles.pageIndicator}>
+                  <Text style={styles.pageNumber}>Sida {currentPage} av {Math.ceil(orders.length / ordersPerPage)}</Text>
+                </View>
+                
+                <TouchableOpacity
+                  style={[styles.pageBtn, currentPage >= Math.ceil(orders.length / ordersPerPage) && styles.pageBtnDisabled]}
+                  onPress={() => setCurrentPage(p => Math.min(Math.ceil(orders.length / ordersPerPage), p + 1))}
+                  disabled={currentPage >= Math.ceil(orders.length / ordersPerPage)}
+                >
+                  <Text style={[styles.pageBtnText, currentPage >= Math.ceil(orders.length / ordersPerPage) && styles.pageBtnTextDisabled]}>Nästa</Text>
+                  <Ionicons name="chevron-forward" size={20} color={currentPage >= Math.ceil(orders.length / ordersPerPage) ? Colors.textMuted : Colors.primary} />
+                </TouchableOpacity>
+              </View>
+            ) : null
           }
         />
       )}
@@ -351,6 +391,56 @@ const styles = StyleSheet.create({
   },
   emptyState: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 16, color: Colors.textMuted, marginTop: 12 },
+  paginationInfo: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  paginationText: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  pageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: Colors.surface,
+    gap: 4,
+  },
+  pageBtnDisabled: {
+    opacity: 0.5,
+  },
+  pageBtnText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.primary,
+  },
+  pageBtnTextDisabled: {
+    color: Colors.textMuted,
+  },
+  pageIndicator: {
+    paddingHorizontal: 16,
+  },
+  pageNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 24 },
   modal: { backgroundColor: Colors.surface, borderRadius: 20, padding: 24 },
   modalTitle: { fontSize: 20, fontWeight: '600', color: Colors.textPrimary },
