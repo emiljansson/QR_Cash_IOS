@@ -41,6 +41,8 @@ export interface UserProfile {
   picture?: string;
   email_verified?: boolean;
   subscription_active?: boolean;
+  subscription_start?: string;
+  subscription_end?: string;
   role?: string;
   created_at?: string;
 }
@@ -270,6 +272,8 @@ class CommHubService {
       phone: userPhone,
       role: userRole,
       subscription_active: subscriptionActive,
+      subscription_start: subscriptionStart,
+      subscription_end: subscriptionEnd,
       email_verified: emailVerified,
     };
 

@@ -45,6 +45,8 @@ function profileToUser(profile: UserProfile): User {
     phone: profile.phone || '',
     email_verified: profile.email_verified ?? true,
     subscription_active: profile.subscription_active ?? true,
+    subscription_start: profile.subscription_start,
+    subscription_end: profile.subscription_end,
     picture: profile.picture,
     role: profile.role,
     org_id: profile.org_id,
