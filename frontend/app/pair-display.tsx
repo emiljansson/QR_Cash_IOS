@@ -137,14 +137,11 @@ export default function PairDisplayScreen() {
   const isTablet = Math.min(width, height) >= 600;
 
   const loadDisplays = useCallback(async () => {
-    try {
-      const [displaysRes, statusRes] = await Promise.all([
-        api.fetch('/customer-display/paired-displays'),
-        api.fetch('/customer-display/connection-status'),
-      ]);
-      setDisplays(displaysRes.displays || []);
-      setConnectionStatus(statusRes);
-    } catch {} finally { setLoading(false); }
+    // Feature disabled - backend removed
+    // TODO: Migrate to CommHub when supported
+    setLoading(false);
+    setDisplays([]);
+    setConnectionStatus({ connected: false, count: 0 });
   }, []);
 
   useEffect(() => {
@@ -152,37 +149,13 @@ export default function PairDisplayScreen() {
   }, []);
 
   const handlePair = async () => {
-    if (code.length !== 4) {
-      showAlert('Fel', 'Ange en 4-siffrig kod');
-      return;
-    }
-    setPairing(true);
-    try {
-      const data = await api.fetch('/customer-display/pair', {
-        method: 'POST',
-        body: JSON.stringify({ code, device_name: deviceName }),
-      });
-      if (data.success) {
-        showAlert('Kopplad!', 'Kundskärmen är nu ansluten');
-        setCode('');
-        loadDisplays();
-      } else {
-        showAlert('Fel', data.message || 'Kunde inte koppla skärm');
-      }
-    } catch (e: any) {
-      showAlert('Fel', 'Något gick fel');
-    } finally { setPairing(false); }
+    // Feature disabled - backend removed
+    showAlert('Inte tillgänglig', 'Denna funktion är tillfälligt avstängd. Kontakta support.');
   };
 
   const handleUnpair = (display: PairedDisplay) => {
-    confirmAction('Koppla bort', `Vill du koppla bort "${display.device_name}"?`, async () => {
-      try {
-        await api.fetch(`/customer-display/paired-displays/${display.display_id}`, {
-          method: 'DELETE',
-        });
-        loadDisplays();
-      } catch {}
-    });
+    // Feature disabled - backend removed
+    showAlert('Inte tillgänglig', 'Denna funktion är tillfälligt avstängd.');
   };
 
   const formatDate = (dateStr: string) => {

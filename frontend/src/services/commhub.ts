@@ -764,29 +764,14 @@ class CommHubService {
     return ws;
   }
 
-  // ==================== Legacy Backend Fetch (for features not yet migrated) ====================
+  // ==================== Legacy Backend Fetch (DISABLED - Backend removed) ====================
 
   /**
-   * Legacy fetch method for backend API calls
-   * Used by pair-display and other features that still need backend
+   * Legacy fetch method - returns error since backend is removed
+   * Features like pair-display need to be migrated to CommHub
    */
   async fetch(path: string, options: RequestInit = {}): Promise<any> {
-    const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://github-import-56.preview.emergentagent.com';
-    
-    const response = await fetch(`${backendUrl}/api${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
-    }
-
-    return response.json();
+    throw new Error('Denna funktion är inte tillgänglig. Backend har tagits bort.');
   }
 }
 
