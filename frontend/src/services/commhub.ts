@@ -697,7 +697,7 @@ class CommHubService {
 
   // ==================== Orders ====================
 
-  async getOrders(status?: number, limit?: number, skip?: number): Promise<Order[]> {
+  async getOrders(status?: string, limit?: number, skip?: number): Promise<Order[]> {
     // CRITICAL: Filter by user_id to only show user's own orders
     const userId = await this.getUserIdAsync();
     if (!userId) {
@@ -711,15 +711,12 @@ class CommHubService {
     if (limit) queryOptions.limit = limit;
     if (skip) queryOptions.skip = skip;
     
-    if (status !== undefined) {
-      return this.query<Order>('qr_orders', { 
-        user_id: userId,
-        status 
-      }, queryOptions);
+    const filter: any = { user_id: userId };
+    if (status) {
+      filter.status = status;  // Use string status: 'paid', 'pending', 'cancelled'
     }
-    return this.query<Order>('qr_orders', { 
-      user_id: userId 
-    }, queryOptions);
+    
+    return this.query<Order>('qr_orders', filter, queryOptions);
   }
 
   /**
@@ -730,7 +727,7 @@ class CommHubService {
     if (!userId) return 0;
     
     const filter: any = { user_id: userId };
-    if (status) filter.status = status;
+    if (status) filter.status = status;  // Use string status
     
     // Fetch with limit 1 just to get the total count
     const response = await fetch(

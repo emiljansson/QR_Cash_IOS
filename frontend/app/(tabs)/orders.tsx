@@ -57,9 +57,9 @@ export default function OrdersScreen() {
     setLoading(true);
     try {
       const skip = (page - 1) * ordersPerPage;
-      // Fetch only the orders for current page
+      // Fetch only the orders for current page - use string status values
       const data = await api.getOrders(
-        filter ? (filter === 'paid' ? 200 : filter === 'pending' ? 100 : undefined) : undefined,
+        filter || undefined,  // 'paid', 'pending', or undefined for all
         ordersPerPage,
         skip
       );
@@ -230,6 +230,7 @@ export default function OrdersScreen() {
           { key: '', label: 'Alla' },
           { key: 'paid', label: 'Betalda' },
           { key: 'pending', label: 'Väntande' },
+          { key: 'cancelled', label: 'Avbrutna' },
         ].map(f => (
           <TouchableOpacity
             key={f.key}
