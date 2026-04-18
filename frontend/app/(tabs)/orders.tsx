@@ -138,14 +138,19 @@ export default function OrdersScreen() {
   };
 
   const handleDeleteOrder = (order: Order) => {
+    console.log('[Orders] Attempting to delete order:', order.id);
     confirmAction(
       'Radera order',
       `Radera order #${order.id.substring(0, 8)}?`,
       async () => {
         try {
+          console.log('[Orders] Deleting order:', order.id);
           await api.deleteOrder(order.id);
-          loadOrders();
+          console.log('[Orders] Order deleted successfully');
+          // Reload current page after deletion
+          loadOrders(currentPage);
         } catch (e: any) {
+          console.error('[Orders] Delete failed:', e);
           if (Platform.OS === 'web') {
             window.alert(e.message || 'Kunde inte radera order');
           } else {

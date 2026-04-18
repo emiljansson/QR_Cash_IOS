@@ -558,14 +558,11 @@ class CommHubService {
   // ==================== Generic Data Operations (with RLS) ====================
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    if (!this.token) {
-      throw new Error('Not authenticated');
-    }
-
+    // Use X-API-Key for data operations (more reliable than Bearer token)
     const response = await fetch(`${COMMHUB_URL}${path}`, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${this.token}`,
+        'X-API-Key': API_KEY,
         'Content-Type': 'application/json',
         ...options.headers,
       },
@@ -592,10 +589,15 @@ class CommHubService {
       `/api/data/${collection}?${params.toString()}`
     );
     // CommHub returns documents with nested 'data' field - extract it
-    return (data.documents || []).map(doc => ({
-      id: doc.id,
-      ...doc.data,
-    })) as T[];
+    // IMPORTANT: Use doc.id as the primary ID (not data.id which may be legacy)
+    return (data.documents || []).map(doc => {
+      const { id: legacyId, ...restData } = doc.data || {};
+      return {
+        ...restData,
+        id: doc.id,  // Use CommHub's document ID
+        legacy_id: legacyId,  // Keep legacy ID if needed
+      };
+    }) as T[];
   }
 
   async get<T>(collection: string, id: string): Promise<T> {
@@ -639,10 +641,15 @@ class CommHubService {
       }
     );
     // CommHub returns documents with nested 'data' field - extract it
-    return (data.documents || []).map(doc => ({
-      id: doc.id,
-      ...doc.data,
-    })) as T[];
+    // IMPORTANT: Use doc.id as the primary ID (not data.id which may be legacy)
+    return (data.documents || []).map(doc => {
+      const { id: legacyId, ...restData } = doc.data || {};
+      return {
+        ...restData,
+        id: doc.id,  // Use CommHub's document ID
+        legacy_id: legacyId,  // Keep legacy ID if needed
+      };
+    }) as T[];
   }
 
   // ==================== Products ====================
