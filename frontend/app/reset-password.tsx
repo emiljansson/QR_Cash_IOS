@@ -38,7 +38,7 @@ export default function ResetPasswordScreen() {
     setMessage(null);
     
     try {
-      const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/request-password-reset`, {
+      const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim() }),
