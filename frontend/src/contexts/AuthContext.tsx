@@ -84,9 +84,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Normal email/password login via CommHub Public API
     const result = await commhub.login(email, password || '');
     
-    // Get full profile
-    const profile = await commhub.getMe();
-    setUser(profileToUser(profile));
+    // Use the user profile from login result (already has legacy data mapped)
+    if (result.user) {
+      setUser(profileToUser(result.user));
+    } else {
+      // Fallback to getting profile from stored data
+      const profile = await commhub.getMe();
+      setUser(profileToUser(profile));
+    }
   };
 
   const register = async (data: { email: string; password: string; organization_name: string; phone: string; name?: string }): Promise<string> => {

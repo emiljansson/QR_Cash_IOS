@@ -84,6 +84,109 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
     url = `${COMMHUB_URL}/api/data/qr_org_users/query?app_id=${APP_ID}`;
     method = 'POST';
     body = JSON.stringify({ filter: { login_code: 'Guest1' }, limit: 1 });
+  } else if (path === '/stats') {
+    // Calculate system statistics from collections
+    const [usersRes, ordersRes, productsRes] = await Promise.all([
+      fetch(`${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ filter: {}, limit: 500 }),
+      }),
+      fetch(`${COMMHUB_URL}/api/data/qr_orders/query?app_id=${APP_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ filter: {}, limit: 1000 }),
+      }),
+      fetch(`${COMMHUB_URL}/api/data/qr_products/query?app_id=${APP_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ filter: {}, limit: 1000 }),
+      }),
+    ]);
+    
+    const usersData = await usersRes.json();
+    const ordersData = await ordersRes.json();
+    const productsData = await productsRes.json();
+    
+    const users = usersData.documents || [];
+    const orders = ordersData.documents || [];
+    const products = productsData.documents || [];
+    
+    return {
+      total_users: users.length,
+      verified_users: users.filter((u: any) => u.data?.email_verified).length,
+      active_subscriptions: users.filter((u: any) => u.data?.subscription_active !== false).length,
+      total_orders: orders.length,
+      total_products: products.length,
+      shared_images: 0,
+    };
+  } else if (path === '/economic-overview') {
+    // Calculate economic overview from orders and users
+    const [usersRes, ordersRes] = await Promise.all([
+      fetch(`${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ filter: {}, limit: 500 }),
+      }),
+      fetch(`${COMMHUB_URL}/api/data/qr_orders/query?app_id=${APP_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ filter: { status: 200 }, limit: 5000 }),
+      }),
+    ]);
+    
+    const usersData = await usersRes.json();
+    const ordersData = await ordersRes.json();
+    
+    const users = (usersData.documents || []).map((doc: any) => ({
+      user_id: doc.data?.user_id || doc.id,
+      email: doc.data?.email || '',
+      organization_name: doc.data?.organization_name || '',
+    }));
+    const orders = (ordersData.documents || []).map((doc: any) => ({
+      ...doc.data,
+      id: doc.id,
+    }));
+    
+    // Calculate totals
+    const totalRevenue = orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
+    const totalOrders = orders.length;
+    
+    // Group orders by user_id
+    const userOrderMap = new Map<string, { total: number; count: number }>();
+    for (const order of orders) {
+      const userId = order.user_id || 'unknown';
+      const existing = userOrderMap.get(userId) || { total: 0, count: 0 };
+      existing.total += order.total || 0;
+      existing.count += 1;
+      userOrderMap.set(userId, existing);
+    }
+    
+    // Build per-user stats
+    const userStats = users.map((u: any) => {
+      const stats = userOrderMap.get(u.user_id) || { total: 0, count: 0 };
+      return {
+        user_id: u.user_id,
+        email: u.email,
+        organization_name: u.organization_name,
+        total_revenue: stats.total,
+        total_orders: stats.count,
+      };
+    }).filter((u: any) => u.total_orders > 0).sort((a: any, b: any) => b.total_revenue - a.total_revenue);
+    
+    return {
+      totals: {
+        total_revenue: totalRevenue,
+        total_orders: totalOrders,
+        active_users: userStats.length,
+      },
+      users: userStats,
+    };
+  } else if (path === '/settings') {
+    // Get or create superadmin settings
+    url = `${COMMHUB_URL}/api/data/qr_settings/query?app_id=${APP_ID}`;
+    method = 'POST';
+    body = JSON.stringify({ filter: {}, limit: 1 });
   } else {
     url = `${COMMHUB_URL}/api/data/qr_superadmins${path}?app_id=${APP_ID}`;
   }

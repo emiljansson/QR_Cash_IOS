@@ -172,8 +172,18 @@ class CommHubService {
 
     const data = await response.json();
     
-    // Fetch the original user_id from qr_users (for RLS compatibility)
+    // Fetch the original user data from qr_users (for RLS compatibility and org mapping)
     let originalUserId = data.user_id;
+    let organizationName = data.organization_name || '';
+    let orgId = data.org_id || '';
+    let userName = data.name || '';
+    let userPhone = '';
+    let userRole = 'admin';
+    let subscriptionActive = true;
+    let subscriptionEnd = '';
+    let subscriptionStart = '';
+    let emailVerified = true;
+    
     try {
       const userLookup = await fetch(
         `${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`,
@@ -192,34 +202,52 @@ class CommHubService {
       if (userLookup.ok) {
         const userData = await userLookup.json();
         if (userData.documents?.[0]) {
+          const legacyUser = userData.documents[0].data;
           // Use the original user_id from qr_users for data queries
-          originalUserId = userData.documents[0].data.user_id || userData.documents[0].id;
+          originalUserId = legacyUser.user_id || userData.documents[0].id;
+          // Extract organization data
+          organizationName = legacyUser.organization_name || organizationName;
+          orgId = legacyUser.org_id || legacyUser.user_id || originalUserId;
+          userName = legacyUser.name || userName;
+          userPhone = legacyUser.phone || '';
+          userRole = legacyUser.role || 'admin';
+          subscriptionActive = legacyUser.subscription_active !== false;
+          subscriptionEnd = legacyUser.subscription_end || '';
+          subscriptionStart = legacyUser.subscription_start || '';
+          emailVerified = legacyUser.email_verified !== false;
+          
+          console.log('[CommHub] Legacy user mapping:', {
+            originalUserId,
+            orgId,
+            organizationName,
+          });
         }
       }
     } catch (e) {
       // If lookup fails, continue with Public Auth user_id
-      console.warn('[CommHub] Could not fetch original user_id, using Public Auth user_id');
+      console.warn('[CommHub] Could not fetch original user data, using Public Auth data');
     }
     
-    // Build user profile from response
-    const user: UserProfile = data.user || {
+    // Build user profile from response with legacy data
+    const user: UserProfile = {
       user_id: originalUserId,
-      email: data.email,
-      org_id: data.org_id,
-      name: data.name,
-      organization_name: data.organization_name,
+      email: data.email || email.toLowerCase(),
+      org_id: orgId,
+      name: userName,
+      organization_name: organizationName,
+      phone: userPhone,
+      role: userRole,
+      subscription_active: subscriptionActive,
+      email_verified: emailVerified,
     };
-    
-    // Override user_id with original for RLS compatibility
-    user.user_id = originalUserId;
 
     await this.saveToken(data.token, user);
 
     return {
       token: data.token,
       user_id: originalUserId,
-      email: user.email || data.email,
-      org_id: user.org_id || data.org_id,
+      email: user.email,
+      org_id: orgId,
       expires_at: data.expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       user,
     };
@@ -666,6 +694,134 @@ class CommHubService {
       count,
       average: count > 0 ? total / count : 0,
       orders,
+    };
+  }
+
+  /**
+   * Get user sales statistics for admin panel
+   */
+  async getUserSalesStats(
+    period: 'day' | 'week' | 'month' | 'year' | 'custom' = 'day',
+    startDateStr?: string,
+    endDateStr?: string
+  ): Promise<{
+    period_label: string;
+    total_sales: number;
+    total_orders: number;
+    average_order: number;
+    users: Array<{
+      user_id: string;
+      name: string;
+      email: string;
+      total_sales: number;
+      order_count: number;
+      average_order: number;
+    }>;
+  }> {
+    const now = new Date();
+    let startDate = new Date();
+    let endDate = new Date();
+    let periodLabel = '';
+
+    // Parse start date if provided
+    if (startDateStr) {
+      startDate = new Date(startDateStr);
+    }
+    if (endDateStr) {
+      endDate = new Date(endDateStr);
+    }
+
+    // Calculate date range based on period
+    if (period === 'day') {
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = startDate.toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' });
+    } else if (period === 'week') {
+      const dayOfWeek = startDate.getDay();
+      const diff = startDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+      startDate.setDate(diff);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = `Vecka ${Math.ceil((startDate.getDate() + 6 - startDate.getDay()) / 7)}, ${startDate.getFullYear()}`;
+    } else if (period === 'month') {
+      startDate.setDate(1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + 1);
+      endDate.setDate(0);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = startDate.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
+    } else if (period === 'year') {
+      startDate.setMonth(0, 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+      endDate.setDate(0);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = startDate.getFullYear().toString();
+    } else if (period === 'custom') {
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(23, 59, 59, 999);
+      periodLabel = `${startDate.toLocaleDateString('sv-SE')} - ${endDate.toLocaleDateString('sv-SE')}`;
+    }
+
+    // Query paid orders in the date range
+    const orders = await this.query<Order>('qr_orders', {
+      status: 200,
+      created_at: { 
+        $gte: startDate.toISOString(),
+        $lte: endDate.toISOString()
+      }
+    });
+
+    // Calculate totals
+    const totalSales = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+    const totalOrders = orders.length;
+    const averageOrder = totalOrders > 0 ? totalSales / totalOrders : 0;
+
+    // Group by user (for org sub-users if applicable)
+    const userStats = new Map<string, { 
+      name: string; 
+      email: string; 
+      total_sales: number; 
+      order_count: number;
+    }>();
+
+    for (const order of orders) {
+      const userId = order.user_id || 'unknown';
+      const existing = userStats.get(userId) || {
+        name: 'Användare',
+        email: '',
+        total_sales: 0,
+        order_count: 0,
+      };
+      existing.total_sales += order.total || 0;
+      existing.order_count += 1;
+      userStats.set(userId, existing);
+    }
+
+    // Convert map to array
+    const users = Array.from(userStats.entries()).map(([user_id, stats]) => ({
+      user_id,
+      name: stats.name,
+      email: stats.email,
+      total_sales: stats.total_sales,
+      order_count: stats.order_count,
+      average_order: stats.order_count > 0 ? stats.total_sales / stats.order_count : 0,
+    }));
+
+    // Sort by total sales descending
+    users.sort((a, b) => b.total_sales - a.total_sales);
+
+    return {
+      period_label: periodLabel,
+      total_sales: totalSales,
+      total_orders: totalOrders,
+      average_order: averageOrder,
+      users,
     };
   }
 
