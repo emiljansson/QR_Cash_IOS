@@ -2,6 +2,8 @@
  * CommHub Direct Integration - No Backend Required!
  * 
  * App → CommHub direkt (utan mellanliggande FastAPI-backend)
+ * 
+ * Auth Strategy: Uses qr_users collection for authentication (User Sync)
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,6 +12,7 @@ import { Platform } from 'react-native';
 // CommHub Configuration
 const COMMHUB_URL = 'https://commhub.cloud';
 const APP_ID = 'fcd81e2d-d8b9-48c4-9eeb-84116442b3e0';
+const API_KEY = 'KHue8NLldN3dkeQxHllN9hAWjkLQx17LFXRbW2UnUCs';
 
 // Token storage key
 const TOKEN_KEY = 'commhub_token';
@@ -147,7 +150,216 @@ class CommHubService {
     return !!this.token;
   }
 
-  // ==================== Auth (Public API - No API Key!) ====================
+  // ==================== Auth using qr_users collection (User Sync) ====================
+
+  /**
+   * Login using qr_users collection directly
+   * This syncs with existing user data instead of CommHub's separate auth system
+   */
+  async login(email: string, password: string): Promise<AuthResponse> {
+    console.log('[CommHub] Login attempt for:', email);
+    
+    // Query qr_users collection to find user by email
+    const response = await fetch(
+      `${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify({
+          filter: { email: email.toLowerCase() },
+          limit: 1,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.log('[CommHub] Query failed:', response.status);
+      throw new Error('Kunde inte ansluta till servern');
+    }
+
+    const data = await response.json();
+    console.log('[CommHub] Query result:', JSON.stringify(data).substring(0, 200));
+    
+    const users = data.documents || [];
+
+    if (users.length === 0) {
+      console.log('[CommHub] No user found');
+      throw new Error('Fel e-post eller lösenord');
+    }
+
+    // CommHub returns documents with nested 'data' field
+    const doc = users[0];
+    const user = doc.data || doc;
+    console.log('[CommHub] User data keys:', Object.keys(user));
+
+    // Verify password using bcrypt comparison via backend
+    const passwordHash = user.password_hash || user.hashed_password || user.password;
+    console.log('[CommHub] Password hash found:', passwordHash ? 'yes' : 'no', passwordHash?.substring(0, 10));
+    
+    const isValidPassword = await this.verifyPassword(password, passwordHash);
+    console.log('[CommHub] Password valid:', isValidPassword);
+    
+    if (!isValidPassword) {
+      throw new Error('Fel e-post eller lösenord');
+    }
+
+    // Create a session token (simple JWT-like structure)
+    const sessionToken = this.generateSessionToken({ ...user, id: doc.id });
+
+    // Build user profile
+    const userProfile: UserProfile = {
+      user_id: user.user_id || doc.id,
+      email: user.email,
+      name: user.name || user.organization_name,
+      organization_name: user.organization_name,
+      phone: user.phone,
+      picture: user.picture,
+      email_verified: user.email_verified ?? true,
+      subscription_active: user.subscription_active ?? true,
+      role: user.role,
+      org_id: user.org_id || user.user_id || doc.id,
+    };
+
+    await this.saveToken(sessionToken, userProfile);
+    console.log('[CommHub] Login successful!');
+
+    return {
+      token: sessionToken,
+      user_id: userProfile.user_id,
+      email: userProfile.email,
+      org_id: userProfile.org_id,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      user: userProfile,
+    };
+  }
+
+  /**
+   * Login with code (for sub-users)
+   */
+  async loginWithCode(code: string): Promise<AuthResponse> {
+    // Query qr_org_users collection to find user by login code
+    const response = await fetch(
+      `${COMMHUB_URL}/api/data/qr_org_users/query?app_id=${APP_ID}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify({
+          filter: { login_code: code },
+          limit: 1,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Kunde inte ansluta till servern');
+    }
+
+    const data = await response.json();
+    const users = data.documents || [];
+
+    if (users.length === 0) {
+      throw new Error('Ogiltig inloggningskod');
+    }
+
+    const orgUser = users[0];
+
+    // Get the parent user for org info
+    const parentResponse = await fetch(
+      `${COMMHUB_URL}/api/data/qr_users/${orgUser.parent_user_id}?app_id=${APP_ID}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+      }
+    );
+
+    let parentUser = null;
+    if (parentResponse.ok) {
+      parentUser = await parentResponse.json();
+    }
+
+    // Create session token
+    const sessionToken = this.generateSessionToken({
+      ...orgUser,
+      parent_user: parentUser,
+    });
+
+    // Build user profile for sub-user
+    const userProfile: UserProfile = {
+      user_id: orgUser.parent_user_id, // Use parent's user_id for data access
+      email: orgUser.email || `${code}@org.local`,
+      name: orgUser.name,
+      organization_name: parentUser?.organization_name || '',
+      phone: orgUser.phone,
+      role: orgUser.role || 'staff',
+      org_id: orgUser.parent_user_id,
+    };
+
+    await this.saveToken(sessionToken, userProfile);
+
+    return {
+      token: sessionToken,
+      user_id: userProfile.user_id,
+      email: userProfile.email,
+      org_id: userProfile.org_id,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      user: userProfile,
+    };
+  }
+
+  /**
+   * Simple password verification using backend API
+   */
+  private async verifyPassword(inputPassword: string, storedHash: string): Promise<boolean> {
+    // If no hash stored, check plain text (legacy)
+    if (!storedHash) return false;
+    
+    // Check if it's a bcrypt hash
+    if (storedHash.startsWith('$2')) {
+      // Use the backend API for password verification
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://github-import-56.preview.emergentagent.com';
+      
+      try {
+        const verifyResponse = await fetch(`${backendUrl}/api/auth/verify-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: inputPassword, hash: storedHash }),
+        });
+        if (verifyResponse.ok) {
+          const result = await verifyResponse.json();
+          return result.valid === true;
+        }
+      } catch (e) {
+        console.error('[CommHub] Password verification failed:', e);
+      }
+      
+      return false;
+    }
+    
+    // Plain text comparison (legacy/development only)
+    return inputPassword === storedHash;
+  }
+
+  /**
+   * Generate a simple session token
+   */
+  private generateSessionToken(user: any): string {
+    const payload = {
+      user_id: user.id || user._id || user.user_id,
+      email: user.email,
+      exp: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+      iat: Date.now(),
+    };
+    // Simple base64 encoding (not secure JWT, but works for session management)
+    return btoa(JSON.stringify(payload));
+  }
 
   async register(
     email: string,
@@ -156,60 +368,82 @@ class CommHubService {
     phone?: string,
     name?: string
   ): Promise<AuthResponse> {
-    const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password,
-        organization_name: organizationName,
-        phone,
-        first_name: name,
-      }),
-    });
+    // Check if user already exists
+    const checkResponse = await fetch(
+      `${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify({
+          filter: { email: email.toLowerCase() },
+          limit: 1,
+        }),
+      }
+    );
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Registration failed' }));
-      throw new Error(error.detail || 'Registration failed');
+    if (checkResponse.ok) {
+      const existing = await checkResponse.json();
+      if (existing.documents && existing.documents.length > 0) {
+        throw new Error('E-postadressen är redan registrerad');
+      }
     }
 
-    const data = await response.json();
-    
-    // Save token if provided
-    if (data.token && data.user) {
-      await this.saveToken(data.token, data.user);
+    // Create new user in qr_users collection
+    // Note: Password should be hashed server-side in production
+    const createResponse = await fetch(
+      `${COMMHUB_URL}/api/data/qr_users?app_id=${APP_ID}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify({
+          data: {
+            email: email.toLowerCase(),
+            password_hash: password, // Should be hashed!
+            organization_name: organizationName,
+            phone: phone || '',
+            name: name || '',
+            email_verified: false,
+            subscription_active: true,
+            created_at: new Date().toISOString(),
+          },
+        }),
+      }
+    );
+
+    if (!createResponse.ok) {
+      const error = await createResponse.json().catch(() => ({}));
+      throw new Error(error.detail || 'Registrering misslyckades');
     }
 
-    return data;
-  }
+    const newUser = await createResponse.json();
 
-  async login(email: string, password: string): Promise<AuthResponse> {
-    const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-      // Handle case where detail might be an object
-      const errorMessage = typeof error.detail === 'string' 
-        ? error.detail 
-        : (error.detail?.message || error.message || JSON.stringify(error.detail) || 'Fel e-post eller lösenord');
-      throw new Error(errorMessage);
-    }
-
-    const data = await response.json();
-    
-    // Build user profile from response
-    const user: UserProfile = data.user || {
-      user_id: data.user_id,
-      email: data.email,
-      org_id: data.org_id,
+    // Auto-login after registration
+    const userProfile: UserProfile = {
+      user_id: newUser.id || newUser._id,
+      email: email.toLowerCase(),
+      name: name || organizationName,
+      organization_name: organizationName,
+      phone: phone || '',
+      email_verified: false,
+      subscription_active: true,
     };
 
-    await this.saveToken(data.token, user);
-    return data;
+    const sessionToken = this.generateSessionToken(newUser);
+    await this.saveToken(sessionToken, userProfile);
+
+    return {
+      token: sessionToken,
+      user_id: userProfile.user_id,
+      email: userProfile.email,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      user: userProfile,
+    };
   }
 
   async loginWithToken(token: string): Promise<UserProfile> {

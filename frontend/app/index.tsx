@@ -36,27 +36,15 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     // Check if using code or email+password
     if (loginCode.trim()) {
-      // Login with code
+      // Login with code via CommHub direct
       setError('');
       setSubmitting(true);
       try {
-        const backendUrl = Platform.OS === 'web' 
-          ? (process.env.EXPO_PUBLIC_BACKEND_URL || 'https://qrcashios-production.up.railway.app')
-          : 'https://qrcashios-production.up.railway.app';
-        const response = await fetch(`${backendUrl}/api/auth/login-code`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: loginCode.trim() }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.detail || 'Ogiltig kod');
-        }
-        // Use the session token to login
-        await login(data.user.email, null, data.session_token);
+        const { commhub } = await import('../src/services/commhub');
+        const result = await commhub.loginWithCode(loginCode.trim());
         router.replace('/(tabs)/pos');
       } catch (e: any) {
-        setError(e.message || 'Inloggningen misslyckades');
+        setError(e.message || 'Ogiltig inloggningskod');
       } finally {
         setSubmitting(false);
       }

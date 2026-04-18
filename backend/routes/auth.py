@@ -694,6 +694,25 @@ async def logout(request: Request, response: Response):
     return {"success": True, "message": "Utloggad"}
 
 
+@router.post("/verify-password")
+async def verify_password_endpoint(request: Request):
+    """Verify a password against a bcrypt hash (for frontend direct auth)"""
+    body = await request.json()
+    
+    password = body.get("password")
+    hash_value = body.get("hash")
+    
+    if not password or not hash_value:
+        raise HTTPException(status_code=400, detail="Password and hash required")
+    
+    try:
+        is_valid = await verify_password_async(password, hash_value)
+        return {"valid": is_valid}
+    except Exception as e:
+        logger.error(f"Password verification error: {e}")
+        return {"valid": False}
+
+
 @router.put("/profile")
 async def update_profile(request: Request):
     """Update user profile (for completing Google OAuth registration)"""
