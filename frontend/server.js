@@ -1,13 +1,18 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Backend URL - should be set in environment for production
+const BACKEND_URL = process.env.BACKEND_URL || 'https://qrcashios-production.up.railway.app';
+
 const distPath = path.join(__dirname, 'dist');
 
 console.log('Starting QR-Kassan web server...');
+console.log('Backend URL:', BACKEND_URL);
 
 // Check if dist folder exists (should be built by Railway's build step)
 if (!fs.existsSync(distPath) || !fs.existsSync(path.join(distPath, 'index.html'))) {
@@ -25,6 +30,17 @@ if (!fs.existsSync(distPath) || !fs.existsSync(path.join(distPath, 'index.html')
     process.exit(1);
   }
 }
+
+// Proxy API requests to backend
+app.use('/api', createProxyMiddleware({
+  target: BACKEND_URL,
+  changeOrigin: true,
+  logLevel: 'warn',
+  onError: (err, req, res) => {
+    console.error('Proxy error:', err.message);
+    res.status(502).json({ detail: 'Backend unavailable' });
+  }
+}));
 
 // Serve static files from dist directory
 app.use(express.static(distPath, {
