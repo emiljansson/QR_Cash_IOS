@@ -171,19 +171,30 @@ class LocalFirstStore {
   async getOrders(userId: string, limit: number = 50): Promise<any[]> {
     const cached = await this.getCache<any[]>('orders', userId);
     
-    if (cached) {
-      const age = await this.getCacheAge('orders', userId);
-      if (age > CACHE_TTL_MS) {
-        this.backgroundSyncOrders(userId, limit);
+    if (cached && cached.length > 0) {
+      // Verify cache is for this user by checking first order's user_id
+      const firstOrder = cached[0];
+      if (firstOrder && firstOrder.user_id === userId) {
+        const age = await this.getCacheAge('orders', userId);
+        if (age > CACHE_TTL_MS) {
+          this.backgroundSyncOrders(userId, limit);
+        }
+        return cached;
+      } else {
+        // Cache is for a different user - invalidate and fetch fresh
+        console.log('[LocalFirst] Order cache user mismatch, fetching fresh data');
+        await this.invalidateCache('orders', userId);
       }
-      return cached;
     }
 
     try {
-      const orders = await api.getOrders(limit);
-      await this.setCache('orders', userId, orders);
+      const orders = await api.getOrders(undefined, limit);
+      if (orders.length > 0) {
+        await this.setCache('orders', userId, orders);
+      }
       return orders;
     } catch (e) {
+      console.error('[LocalFirst] Failed to fetch orders:', e);
       return [];
     }
   }
@@ -193,8 +204,10 @@ class LocalFirstStore {
     if (!networkState.isConnected) return;
 
     try {
-      const orders = await api.getOrders(limit);
-      await this.setCache('orders', userId, orders);
+      const orders = await api.getOrders(undefined, limit);
+      if (orders.length > 0) {
+        await this.setCache('orders', userId, orders);
+      }
     } catch {}
   }
 
