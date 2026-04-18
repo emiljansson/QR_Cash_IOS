@@ -98,8 +98,10 @@ class CommHubService {
   private userId: string | null = null;
 
   constructor() {
-    // Load token from storage on init
-    this.loadToken();
+    // Load token from storage on init (only in browser/client context)
+    if (typeof window !== 'undefined') {
+      this.loadToken();
+    }
   }
 
   private async loadToken() {
@@ -111,7 +113,7 @@ class CommHubService {
         this.userId = user.user_id;
       }
     } catch (e) {
-      console.error('[CommHub] Failed to load token:', e);
+      // Silently ignore - this can happen during SSR
     }
   }
 
@@ -190,7 +192,11 @@ class CommHubService {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-      throw new Error(error.detail || 'Fel e-post eller lösenord');
+      // Handle case where detail might be an object
+      const errorMessage = typeof error.detail === 'string' 
+        ? error.detail 
+        : (error.detail?.message || error.message || JSON.stringify(error.detail) || 'Fel e-post eller lösenord');
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
