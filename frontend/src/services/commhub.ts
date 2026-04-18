@@ -146,6 +146,38 @@ class CommHubService {
     return this.userId;
   }
 
+  /**
+   * Ensure userId is loaded from storage - useful for initial API calls
+   */
+  async ensureUserId(): Promise<string | null> {
+    if (this.userId) {
+      return this.userId;
+    }
+    
+    try {
+      const userData = await AsyncStorage.getItem(USER_KEY);
+      if (userData) {
+        const user = JSON.parse(userData);
+        this.userId = user.user_id;
+        return this.userId;
+      }
+    } catch (e) {
+      console.warn('[CommHub] Could not load userId from storage');
+    }
+    
+    return null;
+  }
+
+  /**
+   * Get userId, loading from storage if needed (synchronous check, then async fallback)
+   */
+  private async getUserIdAsync(): Promise<string | null> {
+    if (this.userId) {
+      return this.userId;
+    }
+    return this.ensureUserId();
+  }
+
   isAuthenticated(): boolean {
     return !!this.token;
   }
@@ -612,15 +644,34 @@ class CommHubService {
   // ==================== Products ====================
 
   async getProducts(activeOnly = false): Promise<Product[]> {
-    if (activeOnly) {
-      return this.query<Product>('qr_products', { active: { $ne: false } }, { sort: { sort_order: 1 } });
+    // CRITICAL: Filter by user_id to only show user's own products
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      console.warn('[CommHub] No user_id available for product filtering');
+      return [];
     }
-    const products = await this.list<Product>('qr_products');
+    
+    if (activeOnly) {
+      return this.query<Product>('qr_products', { 
+        user_id: userId,
+        active: { $ne: false } 
+      }, { sort: { sort_order: 1 } });
+    }
+    
+    const products = await this.query<Product>('qr_products', { 
+      user_id: userId 
+    });
     return products.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
   }
 
   async createProduct(data: Omit<Product, 'id'>): Promise<Product> {
-    return this.create<Product>('qr_products', { ...data, active: true });
+    // Include user_id when creating products
+    const userId = await this.getUserIdAsync();
+    return this.create<Product>('qr_products', { 
+      ...data, 
+      active: true,
+      user_id: userId,
+    });
   }
 
   async updateProduct(id: string, data: Partial<Product>): Promise<Product> {
@@ -643,15 +694,29 @@ class CommHubService {
   // ==================== Orders ====================
 
   async getOrders(status?: number, limit = 50): Promise<Order[]> {
-    if (status !== undefined) {
-      return this.query<Order>('qr_orders', { status }, { sort: { created_at: -1 }, limit });
+    // CRITICAL: Filter by user_id to only show user's own orders
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      console.warn('[CommHub] No user_id available for order filtering');
+      return [];
     }
-    return this.query<Order>('qr_orders', {}, { sort: { created_at: -1 }, limit });
+    
+    if (status !== undefined) {
+      return this.query<Order>('qr_orders', { 
+        user_id: userId,
+        status 
+      }, { sort: { created_at: -1 }, limit });
+    }
+    return this.query<Order>('qr_orders', { 
+      user_id: userId 
+    }, { sort: { created_at: -1 }, limit });
   }
 
   async createOrder(data: Omit<Order, 'id' | 'created_at' | 'user_id'>): Promise<Order> {
+    const userId = await this.getUserIdAsync();
     return this.create<Order>('qr_orders', {
       ...data,
+      user_id: userId,
       created_at: new Date().toISOString(),
     });
   }
@@ -670,6 +735,12 @@ class CommHubService {
 
   async getDailyStats(period = 'day', date?: string): Promise<any> {
     // Calculate stats locally from orders
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      console.warn('[CommHub] No user_id available for daily stats');
+      return { total: 0, count: 0, average: 0, orders: [] };
+    }
+    
     const now = new Date();
     const startDate = new Date();
     
@@ -682,6 +753,7 @@ class CommHubService {
     }
 
     const orders = await this.query<Order>('qr_orders', {
+      user_id: userId,
       status: 200,
       created_at: { $gte: startDate.toISOString() }
     });
@@ -768,8 +840,22 @@ class CommHubService {
       periodLabel = `${startDate.toLocaleDateString('sv-SE')} - ${endDate.toLocaleDateString('sv-SE')}`;
     }
 
-    // Query paid orders in the date range
+    // CRITICAL: Filter by user_id for RLS
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      console.warn('[CommHub] No user_id available for sales stats');
+      return {
+        period_label: periodLabel,
+        total_sales: 0,
+        total_orders: 0,
+        average_order: 0,
+        users: [],
+      };
+    }
+
+    // Query paid orders in the date range for this user
     const orders = await this.query<Order>('qr_orders', {
+      user_id: userId,
       status: 200,
       created_at: { 
         $gte: startDate.toISOString(),
@@ -828,16 +914,24 @@ class CommHubService {
   // ==================== Settings ====================
 
   async getSettings(): Promise<Settings> {
-    const settings = await this.list<Settings>('qr_settings', { limit: 1 });
+    // CRITICAL: Filter by user_id to get user's own settings
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      console.warn('[CommHub] No user_id available for settings');
+      return {};
+    }
+    
+    const settings = await this.query<Settings>('qr_settings', { user_id: userId }, { limit: 1 });
     return settings[0] || {};
   }
 
   async updateSettings(data: Partial<Settings>): Promise<Settings> {
+    const userId = await this.getUserIdAsync();
     const existing = await this.getSettings();
     if (existing.id) {
       return this.update<Settings>('qr_settings', existing.id, data);
     } else {
-      return this.create<Settings>('qr_settings', data);
+      return this.create<Settings>('qr_settings', { ...data, user_id: userId });
     }
   }
 
@@ -849,12 +943,21 @@ class CommHubService {
   // ==================== Parked Carts ====================
 
   async getParkedCarts(): Promise<ParkedCart[]> {
-    return this.list<ParkedCart>('qr_parked_carts');
+    // CRITICAL: Filter by user_id to get user's own parked carts
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      console.warn('[CommHub] No user_id available for parked carts');
+      return [];
+    }
+    
+    return this.query<ParkedCart>('qr_parked_carts', { user_id: userId });
   }
 
   async createParkedCart(data: Omit<ParkedCart, 'id' | 'created_at' | 'user_id'>): Promise<ParkedCart> {
+    const userId = await this.getUserIdAsync();
     return this.create<ParkedCart>('qr_parked_carts', {
       ...data,
+      user_id: userId,
       created_at: new Date().toISOString(),
     });
   }
