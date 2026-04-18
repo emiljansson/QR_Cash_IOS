@@ -21,6 +21,7 @@ const C = {
 
 // Auth helper – uses CommHub API directly
 async function adminFetch(path: string, opts: RequestInit = {}) {
+  console.log('[adminFetch] Called with path:', path);
   const token = await AsyncStorage.getItem('admin_token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -31,26 +32,99 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
   
-  // Map superadmin paths to CommHub data API
+  // Handle different paths for CommHub
   let url = '';
-  if (path.startsWith('/users')) {
-    url = `${COMMHUB_URL}/api/data/qr_users${path.replace('/users', '')}?app_id=${APP_ID}`;
-  } else if (path.startsWith('/stats')) {
-    // Stats need to be calculated from orders
-    url = `${COMMHUB_URL}/api/data/qr_orders/query?app_id=${APP_ID}`;
+  let method = opts.method || 'GET';
+  let body = opts.body;
+  
+  if (path === '/me') {
+    // Just verify token is valid - return admin info from token
+    const tokenData = token ? JSON.parse(atob(token)) : null;
+    if (tokenData && tokenData.exp > Date.now()) {
+      return { admin_id: tokenData.admin_id, email: tokenData.email };
+    }
+    throw new Error('Session expired');
+  } else if (path === '/logout') {
+    // Clear local token - no server call needed
+    return { success: true };
+  } else if (path === '/users') {
+    // Get all users from qr_users collection
+    url = `${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`;
+    method = 'POST';
+    body = JSON.stringify({ filter: {}, limit: 500 });
+  } else if (path.match(/^\/users\/([^/]+)\/sub-users$/)) {
+    // Get sub-users for a specific user
+    const userId = path.match(/^\/users\/([^/]+)\/sub-users$/)?.[1];
+    url = `${COMMHUB_URL}/api/data/qr_org_users/query?app_id=${APP_ID}`;
+    method = 'POST';
+    body = JSON.stringify({ filter: { parent_user_id: userId }, limit: 100 });
+  } else if (path.match(/^\/users\/([^/]+)\/subscription$/)) {
+    // Update subscription
+    const userId = path.match(/^\/users\/([^/]+)\/subscription$/)?.[1];
+    url = `${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`;
+    method = 'PUT';
+  } else if (path.match(/^\/users\/([^/]+)\/verify$/)) {
+    // Verify email
+    const userId = path.match(/^\/users\/([^/]+)\/verify$/)?.[1];
+    url = `${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`;
+    method = 'PUT';
+    const inputData = opts.body ? JSON.parse(opts.body as string) : {};
+    body = JSON.stringify({ data: { ...inputData, email_verified: true } });
+  } else if (path.match(/^\/users\/([^/]+)$/)) {
+    // Get/Update/Delete single user
+    const userId = path.match(/^\/users\/([^/]+)$/)?.[1];
+    url = `${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`;
+  } else if (path === '/guest1-status') {
+    // Get guest account status from qr_org_users
+    url = `${COMMHUB_URL}/api/data/qr_org_users/query?app_id=${APP_ID}`;
+    method = 'POST';
+    body = JSON.stringify({ filter: { login_code: 'Guest1' }, limit: 1 });
+  } else if (path === '/toggle-guest1') {
+    // Toggle guest account - need to find and update
+    url = `${COMMHUB_URL}/api/data/qr_org_users/query?app_id=${APP_ID}`;
+    method = 'POST';
+    body = JSON.stringify({ filter: { login_code: 'Guest1' }, limit: 1 });
   } else {
     url = `${COMMHUB_URL}/api/data/qr_superadmins${path}?app_id=${APP_ID}`;
   }
   
   const res = await fetch(url, {
     ...opts,
+    method,
     headers,
+    body,
   });
+  
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Fel' }));
     throw new Error(err.detail || `HTTP ${res.status}`);
   }
-  return res.json();
+  
+  const data = await res.json();
+  
+  // Transform CommHub response to expected format
+  if (path === '/users') {
+    const users = (data.documents || []).map((doc: any) => ({
+      user_id: doc.id,
+      ...doc.data,
+    }));
+    return { users };
+  } else if (path.match(/^\/users\/([^/]+)\/sub-users$/)) {
+    const subUsers = (data.documents || []).map((doc: any) => ({
+      id: doc.id,
+      ...doc.data,
+    }));
+    return { sub_users: subUsers };
+  } else if (path === '/guest1-status') {
+    const guest = data.documents?.[0];
+    return {
+      exists: !!guest,
+      active: guest?.data?.active !== false,
+      login_code: guest?.data?.login_code || 'Guest1',
+    };
+  }
+  
+  return data;
 }
 
 // =================== LOGIN ===================
@@ -185,10 +259,15 @@ function UsersTab() {
   };
 
   const loadUsers = useCallback(async () => {
+    setLoading(true);
     try {
+      console.log('[Superadmin] Loading users...');
       const data = await adminFetch('/users');
+      console.log('[Superadmin] Users loaded:', data.users?.length || 0);
       setUsers(data.users || []);
-    } catch {} finally { setLoading(false); }
+    } catch (e) {
+      console.error('[Superadmin] Error loading users:', e);
+    } finally { setLoading(false); }
   }, []);
 
   const loadSubUsers = async (userId: string) => {
@@ -212,7 +291,11 @@ function UsersTab() {
     try { const data = await adminFetch('/guest1-status'); setGuest1Status(data); } catch {}
   }, []);
 
-  useEffect(() => { loadUsers(); loadGuest1(); }, []);
+  useEffect(() => { 
+    // Load users and guest1 status when component mounts
+    loadUsers(); 
+    loadGuest1(); 
+  }, [loadUsers, loadGuest1]);
 
   const handleSubscription = async () => {
     if (!subModal) return;
