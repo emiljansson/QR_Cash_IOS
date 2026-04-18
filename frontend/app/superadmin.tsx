@@ -8,21 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
-// Production backend URL - use environment variable for flexibility
-const getBackendUrl = () => {
-  // Use environment variable if available
-  const envUrl = process.env.EXPO_PUBLIC_BACKEND_URL;
-  if (envUrl) return envUrl;
-  
-  // For native apps, use production URL
-  if (Platform.OS !== 'web') {
-    return 'https://qrcashios-production.up.railway.app';
-  }
-  
-  // For web (development), use relative URLs with proxy
-  return '';
-};
-const BACKEND = getBackendUrl();
+// Backend URL - use environment variable which is set correctly
+// For preview environments: https://github-import-56.preview.emergentagent.com
+// For production: should be set to production backend URL
+const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 const C = {
   bg: '#09090b', surface: '#18181b', surfaceHi: '#27272a', border: '#3f3f46',
   text: '#f4f4f5', textSec: '#a1a1aa', textMut: '#71717a',
