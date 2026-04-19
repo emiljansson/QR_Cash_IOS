@@ -14,6 +14,7 @@ import { localStore } from '../../src/utils/localFirstStore';
 import { generateOrderQR } from '../../src/utils/swishQR';
 import QRCode from 'react-native-qrcode-svg';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import NetInfo from '@react-native-community/netinfo';
 
 interface Product {
   id: string;
@@ -159,6 +160,37 @@ export default function POSScreen() {
       localStore.stopAutoSync();
     };
   }, [user?.user_id, loadProducts, loadSettings]);
+
+  // Reload data when network comes back online
+  const wasOfflineRef = React.useRef(false);
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      const isOnline = state.isConnected && state.isInternetReachable !== false;
+      
+      if (wasOfflineRef.current && isOnline && user?.user_id) {
+        // We were offline and now we're online - reload everything
+        console.log('[POS] Network restored, reloading data...');
+        retryAttemptsRef.current = 0;
+        setRetryCount(0);
+        
+        // Invalidate cache and reload
+        localStore.invalidateCache('products_active', user.user_id);
+        localStore.invalidateCache('settings', user.user_id);
+        loadProducts();
+        loadSettings();
+        loadParkedCount();
+        
+        // Also trigger sync of pending changes
+        localStore.forceSyncAll(user.user_id).catch(e => 
+          console.log('[POS] Sync failed:', e.message)
+        );
+      }
+      
+      wasOfflineRef.current = !isOnline;
+    });
+
+    return () => unsubscribe();
+  }, [user?.user_id, loadProducts, loadSettings, loadParkedCount]);
   
   // Listen for real-time product updates via WebSocket
   useEffect(() => {
