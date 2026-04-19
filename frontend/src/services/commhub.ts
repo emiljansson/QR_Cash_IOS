@@ -431,8 +431,8 @@ class CommHubService {
    * Online login with code
    */
   private async loginWithCodeOnline(code: string): Promise<AuthResponse> {
-    // Query qr_org_users collection to find user by login code
-    const response = await fetch(
+    // First, try qr_org_users (sub-users)
+    let response = await fetch(
       `${COMMHUB_URL}/api/data/qr_org_users/query?app_id=${APP_ID}`,
       {
         method: 'POST',
@@ -441,7 +441,7 @@ class CommHubService {
           'X-API-Key': API_KEY,
         },
         body: JSON.stringify({
-          filter: { login_code: code },
+          filter: { login_code: code.toUpperCase() },
           limit: 1,
         }),
       }
@@ -451,14 +451,72 @@ class CommHubService {
       throw new Error('Kunde inte ansluta till servern');
     }
 
-    const data = await response.json();
-    const users = data.documents || [];
+    let data = await response.json();
+    let users = data.documents || [];
 
+    // If not found in qr_org_users, try qr_users (main users)
     if (users.length === 0) {
-      throw new Error('Ogiltig inloggningskod');
+      console.log('[CommHub] Code not found in qr_org_users, trying qr_users...');
+      response = await fetch(
+        `${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY,
+          },
+          body: JSON.stringify({
+            filter: { login_code: code.toUpperCase() },
+            limit: 1,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Kunde inte ansluta till servern');
+      }
+
+      data = await response.json();
+      users = data.documents || [];
+
+      if (users.length === 0) {
+        throw new Error('Ogiltig inloggningskod');
+      }
+
+      // Found in qr_users - this is a main user
+      const mainUser = users[0].data || users[0];
+      const userId = mainUser.user_id || users[0].id;
+      
+      console.log('[CommHub] Main user login with code:', mainUser.email);
+
+      // Create session token
+      const sessionToken = this.generateSessionToken(mainUser);
+
+      // Build user profile
+      const userProfile: UserProfile = {
+        user_id: userId,
+        email: mainUser.email,
+        name: mainUser.name || '',
+        organization_name: mainUser.organization_name || '',
+        phone: mainUser.phone || '',
+        role: mainUser.role || 'admin',
+        org_id: mainUser.org_id || userId,
+      };
+
+      await this.saveToken(sessionToken, userProfile);
+
+      return {
+        token: sessionToken,
+        user_id: userProfile.user_id,
+        email: userProfile.email,
+        org_id: userProfile.org_id,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        user: userProfile,
+      };
     }
 
-    const orgUser = users[0];
+    // Found in qr_org_users - this is a sub-user
+    const orgUser = users[0].data || users[0];
 
     // Get the parent user for org info
     const parentResponse = await fetch(
@@ -658,6 +716,25 @@ class CommHubService {
   }
 
   async getMe(): Promise<UserProfile> {
+    // First, check if we have a locally stored user profile
+    // This is used for local session tokens (generated from login code)
+    const storedUser = await AsyncStorage.getItem(USER_KEY);
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        // Verify the stored user has required fields
+        if (user.user_id && user.email) {
+          console.log('[CommHub] Using cached user profile:', user.email);
+          this.userId = user.user_id;
+          return user;
+        }
+      } catch (e) {
+        // Invalid stored user, continue to API call
+      }
+    }
+
+    // No valid cached user, try the CommHub API
+    // This will work for CommHub-issued tokens (email/password login)
     const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/me`, {
       headers: { 'Authorization': `Bearer ${this.token}` },
     });

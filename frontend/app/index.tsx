@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import NetInfo from '@react-native-community/netinfo';
 
 export default function LoginScreen() {
-  const { user, loading, login } = useAuth();
+  const { user, loading, login, refreshUser } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -51,7 +51,10 @@ export default function LoginScreen() {
       setSubmitting(true);
       try {
         const { commhub } = await import('../src/services/commhub');
-        const result = await commhub.loginWithCode(loginCode.trim());
+        const result = await commhub.loginWithCode(loginCode.trim().toUpperCase());
+        // Token and user are saved by loginWithCode
+        // Refresh the AuthContext user state
+        await refreshUser();
         router.replace('/(tabs)/pos');
       } catch (e: any) {
         setError(e.message || 'Ogiltig inloggningskod');
