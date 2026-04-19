@@ -1495,7 +1495,8 @@ class CommHubService {
             </p>
           </div>
           <div class="footer">
-            Powered by QR-Kassan
+            Powered by QR-Kassan<br>
+            <a href="mailto:support@frontproduction.se">Support</a> · <a href="https://support.frontproduction.se/support/69bf526cd5d2ae24bbbc28e9">Hjälpcenter</a>
           </div>
         </div>
       </body>
@@ -1546,7 +1547,8 @@ class CommHubService {
             </p>
           </div>
           <div class="footer">
-            Powered by QR-Kassan
+            Powered by QR-Kassan<br>
+            <a href="mailto:support@frontproduction.se">Support</a> · <a href="https://support.frontproduction.se/support/69bf526cd5d2ae24bbbc28e9">Hjälpcenter</a>
           </div>
         </div>
       </body>
@@ -1668,12 +1670,12 @@ class CommHubService {
 
             <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">
               <strong>Behöver du hjälp?</strong><br>
-              Kontakta oss på support@qr-kassan.se eller besök vår supportsida.
+              Kontakta oss på <a href="mailto:support@frontproduction.se">support@frontproduction.se</a> eller besök vår <a href="https://support.frontproduction.se/support/69bf526cd5d2ae24bbbc28e9">supportsida</a>.
             </p>
           </div>
           <div class="footer">
             <p>© 2024 QR-Kassan. Alla rättigheter förbehållna.</p>
-            <p><a href="${manualUrl}">Manual</a> · <a href="mailto:support@qr-kassan.se">Support</a></p>
+            <p><a href="${manualUrl}">Manual</a> · <a href="mailto:support@frontproduction.se">Support</a> · <a href="https://support.frontproduction.se/support/69bf526cd5d2ae24bbbc28e9">Hjälpcenter</a></p>
           </div>
         </div>
       </body>
@@ -1787,7 +1789,7 @@ class CommHubService {
           </div>
           <div class="footer">
             <p>Detta mail skickades från ${organizationName} via QR-Kassan.</p>
-            <p><a href="${manualUrl}">Manual</a> · <a href="mailto:support@qr-kassan.se">Support</a></p>
+            <p><a href="${manualUrl}">Manual</a> · <a href="mailto:support@frontproduction.se">Support</a> · <a href="https://support.frontproduction.se/support/69bf526cd5d2ae24bbbc28e9">Hjälpcenter</a></p>
           </div>
         </div>
       </body>
