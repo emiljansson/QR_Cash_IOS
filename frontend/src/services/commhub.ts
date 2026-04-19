@@ -1430,7 +1430,7 @@ class CommHubService {
         subject: params.subject,
         html: params.html,
         text: params.text,
-        from: params.from || 'hallo@commhub.cloud',
+        from: params.from || 'hallo@resend.commhub.cloud',
         reply_to: params.reply_to,
       }),
     });
