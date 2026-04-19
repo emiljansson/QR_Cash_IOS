@@ -1395,6 +1395,255 @@ class CommHubService {
   async fetch(path: string, options: RequestInit = {}): Promise<any> {
     throw new Error('Denna funktion är inte tillgänglig. Backend har tagits bort.');
   }
+
+  // ==================== EMAIL ====================
+
+  /**
+   * Send email via CommHub
+   */
+  async sendEmail(params: {
+    to: string | string[];
+    subject: string;
+    html?: string;
+    text?: string;
+    from?: string;
+    reply_to?: string;
+  }): Promise<{ success: boolean; message_id?: string }> {
+    const response = await fetch(`${COMMHUB_URL}/api/email/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY,
+      },
+      body: JSON.stringify({
+        to: Array.isArray(params.to) ? params.to : [params.to],
+        subject: params.subject,
+        html: params.html,
+        text: params.text,
+        from: params.from || 'hallo@commhub.cloud',
+        reply_to: params.reply_to,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'Kunde inte skicka e-post');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Send receipt email to customer
+   */
+  async sendReceipt(order: Order, customerEmail: string): Promise<void> {
+    const items = order.items || [];
+    const itemsHtml = items.map((item: any) => 
+      `<tr>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">${(item.price * item.quantity).toFixed(2)} kr</td>
+      </tr>`
+    ).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { background: #22c55e; color: white; padding: 24px; text-align: center; }
+          .header h1 { margin: 0; font-size: 24px; }
+          .content { padding: 24px; }
+          table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+          th { text-align: left; padding: 8px; border-bottom: 2px solid #22c55e; }
+          .total { font-size: 24px; font-weight: bold; color: #22c55e; text-align: right; margin-top: 16px; }
+          .footer { text-align: center; padding: 16px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Tack för ditt köp!</h1>
+          </div>
+          <div class="content">
+            <p>Här är ditt kvitto:</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Produkt</th>
+                  <th style="text-align: center;">Antal</th>
+                  <th style="text-align: right;">Pris</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+            <div class="total">Totalt: ${(order.total || 0).toFixed(2)} kr</div>
+            <p style="color: #666; font-size: 14px; margin-top: 24px;">
+              Ordernummer: ${order.id}<br>
+              Datum: ${new Date(order.created_at).toLocaleString('sv-SE')}
+            </p>
+          </div>
+          <div class="footer">
+            Powered by QR-Kassan
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to: customerEmail,
+      subject: `Kvitto - ${(order.total || 0).toFixed(2)} kr`,
+      html,
+    });
+  }
+
+  /**
+   * Send password reset email
+   */
+  async sendPasswordResetEmail(email: string, resetToken: string, appUrl: string): Promise<void> {
+    const resetLink = `${appUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { background: #3b82f6; color: white; padding: 24px; text-align: center; }
+          .content { padding: 24px; }
+          .button { display: inline-block; background: #3b82f6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 16px 0; }
+          .footer { text-align: center; padding: 16px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Återställ lösenord</h1>
+          </div>
+          <div class="content">
+            <p>Du har begärt att återställa ditt lösenord för QR-Kassan.</p>
+            <p>Klicka på knappen nedan för att välja ett nytt lösenord:</p>
+            <p style="text-align: center;">
+              <a href="${resetLink}" class="button">Återställ lösenord</a>
+            </p>
+            <p style="color: #666; font-size: 14px;">
+              Om du inte begärt detta kan du ignorera detta mail.<br>
+              Länken är giltig i 1 timme.
+            </p>
+          </div>
+          <div class="footer">
+            Powered by QR-Kassan
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to: email,
+      subject: 'Återställ lösenord - QR-Kassan',
+      html,
+    });
+  }
+
+  /**
+   * Send welcome email to new user
+   */
+  async sendWelcomeEmail(email: string, name: string, loginCode?: string): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { background: #22c55e; color: white; padding: 24px; text-align: center; }
+          .content { padding: 24px; }
+          .code { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; padding: 16px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 4px; margin: 16px 0; }
+          .footer { text-align: center; padding: 16px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Välkommen till QR-Kassan!</h1>
+          </div>
+          <div class="content">
+            <p>Hej ${name || 'där'}!</p>
+            <p>Ditt konto har skapats. ${loginCode ? 'Här är din inloggningskod:' : ''}</p>
+            ${loginCode ? `<div class="code">${loginCode}</div>` : ''}
+            <p>Du kan nu logga in och börja använda QR-Kassan för att ta emot betalningar.</p>
+          </div>
+          <div class="footer">
+            Powered by QR-Kassan
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to: email,
+      subject: 'Välkommen till QR-Kassan!',
+      html,
+    });
+  }
+
+  /**
+   * Send invite email to sub-user
+   */
+  async sendInviteEmail(email: string, name: string, loginCode: string, organizationName: string): Promise<void> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+          .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { background: #8b5cf6; color: white; padding: 24px; text-align: center; }
+          .content { padding: 24px; }
+          .code { background: #f5f3ff; border: 2px solid #8b5cf6; border-radius: 8px; padding: 16px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 4px; margin: 16px 0; }
+          .footer { text-align: center; padding: 16px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Du har bjudits in!</h1>
+          </div>
+          <div class="content">
+            <p>Hej ${name || 'där'}!</p>
+            <p>Du har bjudits in att använda QR-Kassan för <strong>${organizationName}</strong>.</p>
+            <p>Använd denna kod för att logga in:</p>
+            <div class="code">${loginCode}</div>
+            <p style="color: #666; font-size: 14px;">
+              Ladda ner QR-Kassan-appen och ange koden för att komma igång.
+            </p>
+          </div>
+          <div class="footer">
+            Powered by QR-Kassan
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await this.sendEmail({
+      to: email,
+      subject: `Du har bjudits in till ${organizationName} - QR-Kassan`,
+      html,
+    });
+  }
 }
 
 // ==================== Singleton Export ====================
