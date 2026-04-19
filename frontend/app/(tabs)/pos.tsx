@@ -44,6 +44,8 @@ export default function POSScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const [settings, setSettings] = useState<any>({});
   const [showQR, setShowQR] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<any>(null);
@@ -55,26 +57,56 @@ export default function POSScreen() {
   // Network status - actual internet connectivity
   const { isConnected: networkConnected } = useNetworkStatus();
 
-  const loadProducts = useCallback(async () => {
+  const loadProducts = useCallback(async (isRetry = false) => {
     if (!user?.user_id) {
       console.log('[POS] No user_id, skipping product load');
       setLoading(false);
       return;
     }
+    
+    if (isRetry) {
+      setRetrying(true);
+    }
+    
     try {
-      console.log('[POS] Loading products for user:', user.user_id);
+      console.log('[POS] Loading products for user:', user.user_id, isRetry ? `(retry #${retryCount + 1})` : '');
       // Use local-first store - returns cached data instantly, syncs in background
       const data = await localStore.getProducts(user.user_id, true);
-      console.log('[POS] Loaded', data?.length || 0, 'products');
-      setProducts(data || []);
+      const productList = data || [];
+      console.log('[POS] Loaded', productList.length, 'products');
+      setProducts(productList);
+      setRetryCount(0);
+      setRetrying(false);
+      
+      // If no products found and we have network, schedule a retry
+      if (productList.length === 0 && networkConnected && retryCount < 5) {
+        console.log('[POS] No products found, will retry in 3 seconds...');
+        setRetryCount(prev => prev + 1);
+      }
     } catch (e: any) {
       console.error('[POS] Failed to load products:', e.message);
-      // Show empty list on error
       setProducts([]);
+      // Schedule retry on error
+      if (networkConnected && retryCount < 5) {
+        setRetryCount(prev => prev + 1);
+      }
     } finally {
       setLoading(false);
+      setRetrying(false);
     }
-  }, [user?.user_id]);
+  }, [user?.user_id, networkConnected, retryCount]);
+
+  // Auto-retry when products are empty
+  useEffect(() => {
+    if (retryCount > 0 && retryCount <= 5 && products.length === 0 && !loading && !retrying) {
+      const delay = Math.min(3000 * retryCount, 15000); // 3s, 6s, 9s, 12s, 15s
+      console.log(`[POS] Scheduling retry #${retryCount} in ${delay/1000}s`);
+      const timer = setTimeout(() => {
+        loadProducts(true);
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [retryCount, products.length, loading, retrying, loadProducts]);
 
   const loadSettings = useCallback(async () => {
     if (!user?.user_id) return;
@@ -389,9 +421,31 @@ export default function POSScreen() {
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
-                <Text style={styles.emptyText}>Inga produkter</Text>
-                <Text style={styles.emptySubtext}>Lägg till produkter i Admin-panelen</Text>
+                {retrying || (retryCount > 0 && retryCount <= 5) ? (
+                  <>
+                    <ActivityIndicator size="large" color={Colors.primary} />
+                    <Text style={styles.emptyText}>Hämtar produkter...</Text>
+                    <Text style={styles.emptySubtext}>Försök {retryCount} av 5</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
+                    <Text style={styles.emptyText}>Inga produkter</Text>
+                    <Text style={styles.emptySubtext}>Lägg till produkter i Admin-panelen</Text>
+                    {networkConnected && (
+                      <TouchableOpacity 
+                        style={styles.retryBtn} 
+                        onPress={() => {
+                          setRetryCount(1);
+                          loadProducts(true);
+                        }}
+                      >
+                        <Ionicons name="refresh" size={16} color={Colors.primary} />
+                        <Text style={styles.retryBtnText}>Försök igen</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
               </View>
             }
           />
@@ -606,6 +660,12 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', paddingVertical: 60 },
   emptyText: { fontSize: 18, fontWeight: '600', color: Colors.textPrimary, marginTop: 12 },
   emptySubtext: { fontSize: 14, color: Colors.textMuted, marginTop: 4 },
+  retryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16,
+    backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: 8, borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)',
+  },
+  retryBtnText: { color: Colors.primary, fontSize: 14, fontWeight: '500' },
   // Cart section
   cartSection: {
     backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border,
