@@ -1269,7 +1269,7 @@ class CommHubService {
    * Get system-wide settings (from qr_system_settings collection)
    * Used for subscription payment phone number etc.
    */
-  async getSystemSettings(): Promise<{ contact_phone?: string; contact_email?: string; app_name?: string } | null> {
+  async getSystemSettings(): Promise<{ contact_phone?: string; contact_email?: string; app_name?: string; swish_number?: string } | null> {
     try {
       const settings = await this.query<any>('qr_system_settings', {}, { limit: 1 });
       return settings[0] || null;

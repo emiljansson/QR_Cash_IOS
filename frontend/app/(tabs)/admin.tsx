@@ -689,15 +689,15 @@ export default function AdminScreen() {
     return () => { localStore.stopAutoSync(); };
   }, [pinVerified, user?.user_id, loadProducts, loadSettings, loadSubUsers]);
 
-  // Load system settings (contact_phone) for subscription tab
+  // Load system settings (swish_number) for subscription tab
   useEffect(() => {
     if (tab === 'subscription') {
       (async () => {
         setLoadingSubscription(true);
         try {
           const sysSettings = await api.getSystemSettings();
-          if (sysSettings?.contact_phone) {
-            setSystemPhone(sysSettings.contact_phone);
+          if (sysSettings?.swish_number) {
+            setSystemPhone(sysSettings.swish_number);
           }
         } catch (e) {
           // Use default if can't fetch
