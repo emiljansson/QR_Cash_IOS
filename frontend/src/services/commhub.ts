@@ -686,6 +686,15 @@ class CommHubService {
     const sessionToken = this.generateSessionToken(newUser);
     await this.saveToken(sessionToken, userProfile);
 
+    // Send welcome email to new user
+    try {
+      await this.sendWelcomeEmail(email, name || organizationName);
+      console.log('[CommHub] Welcome email sent to:', email);
+    } catch (e) {
+      console.log('[CommHub] Failed to send welcome email:', e);
+      // Don't fail registration if email fails
+    }
+
     return {
       token: sessionToken,
       user_id: userProfile.user_id,
@@ -1668,6 +1677,192 @@ class CommHubService {
       password: newPassword,
       updated_at: new Date().toISOString(),
     });
+  }
+
+  // ==================== SUB-USER MANAGEMENT ====================
+
+  /**
+   * Generate a random login code
+   */
+  private generateLoginCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  }
+
+  /**
+   * Generate a random password
+   */
+  private generatePassword(): string {
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#';
+    let password = '';
+    for (let i = 0; i < 10; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  }
+
+  /**
+   * Get all sub-users for the current user's organization
+   */
+  async getSubUsers(): Promise<any[]> {
+    const userId = await this.getUserIdAsync();
+    if (!userId) return [];
+
+    // Get org_id from current user
+    const currentUser = await AsyncStorage.getItem(USER_KEY);
+    let orgId = userId;
+    if (currentUser) {
+      const userData = JSON.parse(currentUser);
+      orgId = userData.org_id || userId;
+    }
+
+    const users = await this.query<any>('qr_org_users', { org_id: orgId }, { limit: 100 });
+    return users.map(u => ({
+      user_id: u.user_id || u.id,
+      email: u.email,
+      name: u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim(),
+      first_name: u.first_name,
+      last_name: u.last_name,
+      login_code: u.login_code,
+      last_login: u.last_login,
+      created_at: u.created_at,
+      _doc_id: u._doc_id || u.id,
+    }));
+  }
+
+  /**
+   * Create a new sub-user
+   */
+  async createSubUser(data: { first_name: string; last_name: string; email: string }): Promise<{ user: any; login_code: string }> {
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      throw new Error('Du måste vara inloggad');
+    }
+
+    // Get org info from current user
+    const currentUser = await AsyncStorage.getItem(USER_KEY);
+    let orgId = userId;
+    let orgName = '';
+    if (currentUser) {
+      const userData = JSON.parse(currentUser);
+      orgId = userData.org_id || userId;
+      orgName = userData.organization_name || '';
+    }
+
+    // Generate login code and password
+    const loginCode = this.generateLoginCode();
+    const password = this.generatePassword();
+    const newUserId = `org_user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    const newUser = {
+      user_id: newUserId,
+      org_id: orgId,
+      email: data.email.toLowerCase(),
+      first_name: data.first_name,
+      last_name: data.last_name,
+      name: `${data.first_name} ${data.last_name}`.trim(),
+      login_code: loginCode,
+      password: password,
+      role: 'user',
+      created_at: new Date().toISOString(),
+    };
+
+    await this.create('qr_org_users', newUser);
+
+    // Send welcome/invite email
+    await this.sendInviteEmail(data.email, newUser.name, loginCode, orgName);
+
+    return { user: newUser, login_code: loginCode };
+  }
+
+  /**
+   * Delete a sub-user
+   */
+  async deleteSubUser(subUserId: string): Promise<void> {
+    // Find the user document
+    const users = await this.query<any>('qr_org_users', { user_id: subUserId }, { limit: 1 });
+    if (users.length === 0) {
+      throw new Error('Användaren hittades inte');
+    }
+    
+    await this.delete('qr_org_users', users[0]._doc_id || users[0].id);
+  }
+
+  /**
+   * Regenerate login code for a sub-user
+   */
+  async regenerateSubUserCode(subUserId: string): Promise<string> {
+    const users = await this.query<any>('qr_org_users', { user_id: subUserId }, { limit: 1 });
+    if (users.length === 0) {
+      throw new Error('Användaren hittades inte');
+    }
+
+    const newCode = this.generateLoginCode();
+    await this.update('qr_org_users', users[0]._doc_id || users[0].id, {
+      login_code: newCode,
+      updated_at: new Date().toISOString(),
+    });
+
+    return newCode;
+  }
+
+  /**
+   * Reset password for a sub-user
+   */
+  async resetSubUserPassword(subUserId: string): Promise<string> {
+    const users = await this.query<any>('qr_org_users', { user_id: subUserId }, { limit: 1 });
+    if (users.length === 0) {
+      throw new Error('Användaren hittades inte');
+    }
+
+    const newPassword = this.generatePassword();
+    await this.update('qr_org_users', users[0]._doc_id || users[0].id, {
+      password: newPassword,
+      updated_at: new Date().toISOString(),
+    });
+
+    return newPassword;
+  }
+
+  /**
+   * Send credentials to a sub-user (regenerates both code and password)
+   */
+  async sendSubUserCredentials(subUserId: string): Promise<void> {
+    const users = await this.query<any>('qr_org_users', { user_id: subUserId }, { limit: 1 });
+    if (users.length === 0) {
+      throw new Error('Användaren hittades inte');
+    }
+
+    const user = users[0];
+    const newCode = this.generateLoginCode();
+    const newPassword = this.generatePassword();
+
+    // Update user with new credentials
+    await this.update('qr_org_users', user._doc_id || user.id, {
+      login_code: newCode,
+      password: newPassword,
+      updated_at: new Date().toISOString(),
+    });
+
+    // Get org name
+    const currentUser = await AsyncStorage.getItem(USER_KEY);
+    let orgName = '';
+    if (currentUser) {
+      const userData = JSON.parse(currentUser);
+      orgName = userData.organization_name || '';
+    }
+
+    // Send invite email with new credentials
+    await this.sendInviteEmail(
+      user.email,
+      user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim(),
+      newCode,
+      orgName
+    );
   }
 }
 

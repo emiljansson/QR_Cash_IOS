@@ -662,8 +662,8 @@ export default function AdminScreen() {
   const loadSubUsers = useCallback(async () => {
     setLoadingUsers(true);
     try {
-      const data = await api.fetch('/org/users');
-      setSubUsers(data.users || []);
+      const users = await api.getSubUsers();
+      setSubUsers(users);
     } catch (e) {
       // Silent fail - will show empty list
     } finally {
@@ -714,11 +714,8 @@ export default function AdminScreen() {
     }
     setSavingUser(true);
     try {
-      await api.fetch('/org/users', {
-        method: 'POST',
-        body: JSON.stringify(userForm),
-      });
-      showAlert('Klart', 'Användare skapad och välkomstmail skickat!');
+      const result = await api.createSubUser(userForm);
+      showAlert('Klart', `Användare skapad! Inloggningskod: ${result.login_code}\n\nVälkomstmail skickat till ${userForm.email}`);
       setShowAddUser(false);
       setUserForm({ first_name: '', last_name: '', email: '' });
       loadSubUsers();
@@ -735,7 +732,7 @@ export default function AdminScreen() {
       `Vill du ta bort ${user.name || user.email}?`,
       async () => {
         try {
-          await api.fetch(`/org/users/${user.user_id}`, { method: 'DELETE' });
+          await api.deleteSubUser(user.user_id);
           loadSubUsers();
         } catch (e: any) {
           showAlert('Fel', e.message);
@@ -750,8 +747,8 @@ export default function AdminScreen() {
       `Återställ lösenord för ${user.name || user.email}?`,
       async () => {
         try {
-          const result = await api.fetch(`/org/users/${user.user_id}/reset-password`, { method: 'POST' });
-          showAlert('Klart', `Nytt lösenord: ${result.temp_password}\n\nSpara detta lösenord!`);
+          const newPassword = await api.resetSubUserPassword(user.user_id);
+          showAlert('Klart', `Nytt lösenord: ${newPassword}\n\nSpara detta lösenord!`);
         } catch (e: any) {
           showAlert('Fel', e.message);
         }
@@ -765,7 +762,7 @@ export default function AdminScreen() {
       `Skicka ny inloggningskod och lösenord till ${user.email}? Tidigare inloggningsuppgifter kommer sluta fungera.`,
       async () => {
         try {
-          await api.fetch(`/org/users/${user.user_id}/send-credentials`, { method: 'POST' });
+          await api.sendSubUserCredentials(user.user_id);
           showAlert('Klart', 'Ny inloggningsinfo skickad till användaren!');
           loadSubUsers();
         } catch (e: any) {
@@ -781,8 +778,8 @@ export default function AdminScreen() {
       'Skapa en ny inloggningskod? Den gamla slutar fungera.',
       async () => {
         try {
-          const result = await api.fetch(`/org/users/${user.user_id}/regenerate-code`, { method: 'POST' });
-          showAlert('Klart', `Ny kod: ${result.login_code}`);
+          const newCode = await api.regenerateSubUserCode(user.user_id);
+          showAlert('Klart', `Ny kod: ${newCode}`);
           loadSubUsers();
         } catch (e: any) {
           showAlert('Fel', e.message);
