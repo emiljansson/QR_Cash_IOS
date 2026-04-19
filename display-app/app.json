@@ -2,7 +2,7 @@
   "expo": {
     "name": "QR-Kassan Display",
     "slug": "qr-kassan-display",
-    "version": "1.0.522",
+    "version": "1.0.523",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",

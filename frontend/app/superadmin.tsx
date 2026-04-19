@@ -1175,8 +1175,6 @@ function SettingsTab() {
         const data = await adminFetch('/settings');
         setForm({
           app_name: data.app_name || '',
-          resend_api_key: data.resend_api_key || '',
-          sender_email: data.sender_email || '',
           grace_period_days: String(data.grace_period_days || 7),
           contact_email: data.contact_email || '',
           contact_phone: data.contact_phone || '',
@@ -1203,8 +1201,6 @@ function SettingsTab() {
 
   const fields = [
     { key: 'app_name', label: 'Appnamn', placeholder: 'QR-Kassan', icon: 'apps-outline' as const },
-    { key: 'resend_api_key', label: 'Resend API-nyckel', placeholder: 're_...', icon: 'key-outline' as const, secure: true },
-    { key: 'sender_email', label: 'Avsändar e-post', placeholder: 'noreply@example.com', icon: 'mail-outline' as const, kbd: 'email-address' as const },
     { key: 'grace_period_days', label: 'Grace period (dagar)', placeholder: '7', icon: 'time-outline' as const, kbd: 'number-pad' as const },
     { key: 'contact_email', label: 'Kontakt e-post', placeholder: 'support@example.com', icon: 'help-circle-outline' as const, kbd: 'email-address' as const },
     { key: 'contact_phone', label: 'Kontakt telefon', placeholder: '070-1234567', icon: 'call-outline' as const, kbd: 'phone-pad' as const },
