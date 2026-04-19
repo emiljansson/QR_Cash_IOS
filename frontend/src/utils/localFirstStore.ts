@@ -457,6 +457,9 @@ class LocalFirstStore {
   }
 
   // ==================== SYNC MANAGEMENT ====================
+
+  async forceSyncAll(userId: string): Promise<void> {
+    console.log('[LocalFirst] Force syncing all data...');
     
     const networkState = await NetInfo.fetch();
     if (!networkState.isConnected) {
