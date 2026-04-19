@@ -219,10 +219,34 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
       users: userStats,
     };
   } else if (path === '/settings') {
-    // Get or create superadmin settings
-    url = `${COMMHUB_URL}/api/data/qr_settings/query?app_id=${APP_ID}`;
-    method = 'POST';
-    body = JSON.stringify({ filter: {}, limit: 1 });
+    if (opts.method === 'PUT') {
+      // Save settings - first check if settings exist, then update or create
+      const queryRes = await fetch(`${COMMHUB_URL}/api/data/qr_system_settings/query?app_id=${APP_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+        body: JSON.stringify({ filter: {}, limit: 1 }),
+      });
+      const queryData = await queryRes.json();
+      const existing = queryData.documents?.[0];
+      const settingsData = opts.body ? JSON.parse(opts.body as string) : {};
+      
+      if (existing) {
+        // Update existing settings
+        url = `${COMMHUB_URL}/api/data/qr_system_settings/${existing.id}?app_id=${APP_ID}`;
+        method = 'PUT';
+        body = JSON.stringify({ data: { ...existing.data, ...settingsData } });
+      } else {
+        // Create new settings
+        url = `${COMMHUB_URL}/api/data/qr_system_settings?app_id=${APP_ID}`;
+        method = 'POST';
+        body = JSON.stringify({ data: settingsData });
+      }
+    } else {
+      // Get settings from qr_system_settings
+      url = `${COMMHUB_URL}/api/data/qr_system_settings/query?app_id=${APP_ID}`;
+      method = 'POST';
+      body = JSON.stringify({ filter: {}, limit: 1 });
+    }
   } else {
     url = `${COMMHUB_URL}/api/data/qr_superadmins${path}?app_id=${APP_ID}`;
   }
@@ -262,6 +286,10 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
       active: guest?.data?.active !== false,
       login_code: guest?.data?.login_code || 'Guest1',
     };
+  } else if (path === '/settings' && !opts.method) {
+    // Transform settings response - return data from first document
+    const settingsDoc = data.documents?.[0];
+    return settingsDoc?.data || {};
   }
   
   return data;
