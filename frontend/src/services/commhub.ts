@@ -1425,6 +1425,7 @@ class CommHubService {
         'X-API-Key': API_KEY,
       },
       body: JSON.stringify({
+        app_id: APP_ID,
         to: Array.isArray(params.to) ? params.to : [params.to],
         subject: params.subject,
         html: params.html,
