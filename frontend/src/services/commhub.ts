@@ -102,11 +102,13 @@ export interface ParkedCart {
 class CommHubService {
   private token: string | null = null;
   private userId: string | null = null;
+  private tokenLoaded: boolean = false;
+  private tokenLoadPromise: Promise<void> | null = null;
 
   constructor() {
     // Load token from storage on init (only in browser/client context)
     if (typeof window !== 'undefined') {
-      this.loadToken();
+      this.tokenLoadPromise = this.loadToken();
     }
   }
 
@@ -118,14 +120,28 @@ class CommHubService {
         const user = JSON.parse(userData);
         this.userId = user.user_id;
       }
+      console.log('[CommHub] Token loaded from storage:', this.token ? 'yes' : 'no');
     } catch (e) {
       // Silently ignore - this can happen during SSR
+    } finally {
+      this.tokenLoaded = true;
+    }
+  }
+
+  /**
+   * Ensure token is loaded from storage before accessing it
+   */
+  async ensureTokenLoaded(): Promise<void> {
+    if (this.tokenLoaded) return;
+    if (this.tokenLoadPromise) {
+      await this.tokenLoadPromise;
     }
   }
 
   private async saveToken(token: string, user: UserProfile) {
     this.token = token;
     this.userId = user.user_id;
+    this.tokenLoaded = true;
     await AsyncStorage.setItem(TOKEN_KEY, token);
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
   }
@@ -138,6 +154,14 @@ class CommHubService {
   }
 
   getToken(): string | null {
+    return this.token;
+  }
+
+  /**
+   * Get token after ensuring it's loaded from storage
+   */
+  async getTokenAsync(): Promise<string | null> {
+    await this.ensureTokenLoaded();
     return this.token;
   }
 

@@ -62,14 +62,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadSession = useCallback(async () => {
     try {
+      // Wait for token to be loaded from storage first
+      await commhub.ensureTokenLoaded();
+      
       // Check if we have a stored token
-      if (commhub.getToken()) {
+      const token = await commhub.getTokenAsync();
+      if (token) {
         const profile = await commhub.getMe();
         setUser(profileToUser(profile));
         console.log('[Auth] Session loaded for:', profile.email);
+      } else {
+        console.log('[Auth] No stored session found');
       }
-    } catch (e) {
-      console.log('[Auth] Session expired or invalid');
+    } catch (e: any) {
+      console.log('[Auth] Session expired or invalid:', e.message);
       // Token is invalid, commhub will clear it
     } finally {
       setLoading(false);
@@ -84,7 +90,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       sessionRefreshInProgressRef.current = true;
       console.log('[Auth] Refreshing session after reconnect...');
       
-      if (commhub.getToken()) {
+      const token = await commhub.getTokenAsync();
+      if (token) {
         const profile = await commhub.getMe();
         setUser(profileToUser(profile));
         console.log('[Auth] Session refreshed for:', profile.email);
