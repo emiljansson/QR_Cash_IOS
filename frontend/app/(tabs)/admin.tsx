@@ -2,17 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, TextInput,
   ActivityIndicator, Alert, Modal, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform,
-  useWindowDimensions, Image,
+  useWindowDimensions, Image, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import QRCode from 'react-native-qrcode-svg';
 import { Colors } from '../../src/utils/colors';
 import { commhub as api } from '../../src/services/commhub';
 import { localStore } from '../../src/utils/localFirstStore';
 import { commHubWS } from '../../src/services/commHubWebSocket';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { generateSwishQRData } from '../../src/utils/swishQR';
 
 interface Product {
   id: string;
@@ -564,7 +566,7 @@ export default function AdminScreen() {
   const { width } = useWindowDimensions();
   const isWide = width > 600;
   
-  const [tab, setTab] = useState<'products' | 'users' | 'stats' | 'settings'>('products');
+  const [tab, setTab] = useState<'products' | 'users' | 'stats' | 'settings' | 'subscription'>('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -591,6 +593,11 @@ export default function AdminScreen() {
   // Logo upload state
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  
+  // Subscription state
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | '6months' | 'yearly'>('monthly');
+  const [systemPhone, setSystemPhone] = useState<string>('');
+  const [loadingSubscription, setLoadingSubscription] = useState(false);
   
   // Default QR-Kassan logo
   const DEFAULT_LOGO = 'https://res.cloudinary.com/demo/image/upload/v1/qrkassan/logos/default_logo.png';
@@ -681,6 +688,25 @@ export default function AdminScreen() {
     }
     return () => { localStore.stopAutoSync(); };
   }, [pinVerified, user?.user_id, loadProducts, loadSettings, loadSubUsers]);
+
+  // Load system settings (contact_phone) for subscription tab
+  useEffect(() => {
+    if (tab === 'subscription') {
+      (async () => {
+        setLoadingSubscription(true);
+        try {
+          const sysSettings = await api.getSystemSettings();
+          if (sysSettings?.contact_phone) {
+            setSystemPhone(sysSettings.contact_phone);
+          }
+        } catch (e) {
+          // Use default if can't fetch
+        } finally {
+          setLoadingSubscription(false);
+        }
+      })();
+    }
+  }, [tab]);
   
   // Listen for real-time product updates
   useEffect(() => {
@@ -1155,6 +1181,7 @@ export default function AdminScreen() {
           { key: 'users', icon: 'people-outline', label: 'Användare' },
           { key: 'stats', icon: 'bar-chart-outline', label: 'Statistik' },
           { key: 'settings', icon: 'cog-outline', label: 'Inställningar' },
+          { key: 'subscription', icon: 'card-outline', label: 'Abonnemang' },
         ] as const).map(t => (
           <TouchableOpacity
             key={t.key}
@@ -1457,6 +1484,138 @@ export default function AdminScreen() {
               <Text style={styles.saveButtonText}>Spara inställningar</Text>
             )}
           </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* Subscription Tab */}
+      {tab === 'subscription' && (
+        <ScrollView style={styles.tabContent} contentContainerStyle={styles.subscriptionContent}>
+          <View style={styles.subscriptionHeader}>
+            <Ionicons name="card" size={48} color={Colors.primary} />
+            <Text style={styles.subscriptionTitle}>QR-Kassan Abonnemang</Text>
+            <Text style={styles.subscriptionSubtitle}>
+              Välj ett abonnemang för att fortsätta använda QR-Kassan
+            </Text>
+          </View>
+
+          {/* Subscription Plans */}
+          <View style={styles.plansContainer}>
+            {([
+              { key: 'monthly', label: '1 Månad', price: 29, perMonth: '29 kr/mån', savings: '' },
+              { key: '6months', label: '6 Månader', price: 150, perMonth: '25 kr/mån', savings: 'Spara 24 kr' },
+              { key: 'yearly', label: '12 Månader', price: 250, perMonth: '~21 kr/mån', savings: 'Spara 98 kr', popular: true },
+            ] as const).map(plan => (
+              <TouchableOpacity
+                key={plan.key}
+                style={[
+                  styles.planCard,
+                  selectedPlan === plan.key && styles.planCardSelected,
+                  plan.popular && styles.planCardPopular,
+                ]}
+                onPress={() => setSelectedPlan(plan.key)}
+              >
+                {plan.popular && (
+                  <View style={styles.popularBadge}>
+                    <Text style={styles.popularBadgeText}>Populärast</Text>
+                  </View>
+                )}
+                <Text style={[styles.planLabel, selectedPlan === plan.key && styles.planLabelSelected]}>
+                  {plan.label}
+                </Text>
+                <Text style={[styles.planPrice, selectedPlan === plan.key && styles.planPriceSelected]}>
+                  {plan.price} kr
+                </Text>
+                <Text style={[styles.planPerMonth, selectedPlan === plan.key && styles.planPerMonthSelected]}>
+                  {plan.perMonth}
+                </Text>
+                {plan.savings ? (
+                  <View style={styles.savingsBadge}>
+                    <Text style={styles.savingsText}>{plan.savings}</Text>
+                  </View>
+                ) : null}
+                <View style={[styles.planRadio, selectedPlan === plan.key && styles.planRadioSelected]}>
+                  {selectedPlan === plan.key && <View style={styles.planRadioInner} />}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* QR Code Section */}
+          <View style={styles.qrSection}>
+            <Text style={styles.qrSectionTitle}>Betala med Swish</Text>
+            <Text style={styles.qrSectionSubtitle}>
+              Skanna QR-koden med Swish-appen eller tryck på knappen nedan
+            </Text>
+            
+            <View style={styles.qrCodeContainer}>
+              <QRCode
+                value={generateSwishQRData(
+                  systemPhone || settings.swish_phone || '0701234567',
+                  selectedPlan === 'monthly' ? 29 : selectedPlan === '6months' ? 150 : 250,
+                  `QR-Kassan ${selectedPlan === 'monthly' ? '1 mån' : selectedPlan === '6months' ? '6 mån' : '12 mån'}`
+                )}
+                size={200}
+                backgroundColor="white"
+              />
+            </View>
+
+            <View style={styles.paymentSummary}>
+              <Text style={styles.paymentSummaryLabel}>Att betala:</Text>
+              <Text style={styles.paymentSummaryAmount}>
+                {selectedPlan === 'monthly' ? '29' : selectedPlan === '6months' ? '150' : '250'} kr
+              </Text>
+            </View>
+
+            {/* Swish Deep Link Button */}
+            <TouchableOpacity
+              style={styles.swishPayButton}
+              onPress={() => {
+                const phone = (systemPhone || settings.swish_phone || '0701234567').replace(/[-\s]/g, '');
+                const amount = selectedPlan === 'monthly' ? 29 : selectedPlan === '6months' ? 150 : 250;
+                const message = encodeURIComponent(`QR-Kassan ${selectedPlan === 'monthly' ? '1 mån' : selectedPlan === '6months' ? '6 mån' : '12 mån'}`);
+                
+                // Swish deep link format
+                const swishUrl = `swish://payment?data={"version":1,"payee":{"value":"${phone}"},"amount":{"value":${amount}},"message":{"value":"${message}","editable":false}}`;
+                
+                Linking.canOpenURL(swishUrl).then(supported => {
+                  if (supported) {
+                    Linking.openURL(swishUrl);
+                  } else {
+                    // Fallback - try standard swish URL
+                    const fallbackUrl = `swish://paymentrequest?token=${phone}&amount=${amount}&message=${message}`;
+                    Linking.openURL(fallbackUrl).catch(() => {
+                      showAlert('Swish', 'Kunde inte öppna Swish. Skanna QR-koden istället.');
+                    });
+                  }
+                });
+              }}
+            >
+              <Ionicons name="phone-portrait-outline" size={24} color="#fff" />
+              <Text style={styles.swishPayButtonText}>Öppna Swish</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.paymentNote}>
+              Efter betalning skickas bekräftelse till din e-post och ditt abonnemang aktiveras automatiskt.
+            </Text>
+          </View>
+
+          {/* Features */}
+          <View style={styles.featuresSection}>
+            <Text style={styles.featuresSectionTitle}>Ingår i abonnemanget:</Text>
+            {[
+              'Obegränsade Swish-betalningar',
+              'Statistik & rapporter',
+              'Flera användare/kassor',
+              'Offline-läge',
+              'Digitala kvitton via e-post',
+              'Support via e-post',
+            ].map((feature, i) => (
+              <View key={i} style={styles.featureRow}>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                <Text style={styles.featureText}>{feature}</Text>
+              </View>
+            ))}
+          </View>
         </ScrollView>
       )}
 
@@ -1827,4 +1986,53 @@ const styles = StyleSheet.create({
   logoPickerText: { color: Colors.textMuted, fontSize: 13, textAlign: 'center', marginTop: 8, paddingHorizontal: 12 },
   logoPickerHint: { color: Colors.textMuted, fontSize: 11, textAlign: 'center', marginTop: 4, opacity: 0.7 },
   settingsDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 16 },
+  // Subscription styles
+  subscriptionContent: { padding: 16, paddingBottom: 40 },
+  subscriptionHeader: { alignItems: 'center', marginBottom: 24 },
+  subscriptionTitle: { fontSize: 24, fontWeight: '700', color: Colors.textPrimary, marginTop: 12 },
+  subscriptionSubtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 300 },
+  plansContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center', marginBottom: 32 },
+  planCard: {
+    width: '100%', maxWidth: 160, padding: 16, borderRadius: 16,
+    backgroundColor: Colors.surface, borderWidth: 2, borderColor: Colors.border,
+    alignItems: 'center', position: 'relative',
+  },
+  planCardSelected: { borderColor: Colors.primary, backgroundColor: 'rgba(34, 197, 94, 0.05)' },
+  planCardPopular: { borderColor: Colors.warning },
+  popularBadge: {
+    position: 'absolute', top: -10, backgroundColor: Colors.warning,
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
+  },
+  popularBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  planLabel: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary, marginTop: 8 },
+  planLabelSelected: { color: Colors.primary },
+  planPrice: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, marginTop: 4 },
+  planPriceSelected: { color: Colors.primary },
+  planPerMonth: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
+  planPerMonthSelected: { color: Colors.primary },
+  savingsBadge: { backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginTop: 8 },
+  savingsText: { color: Colors.primary, fontSize: 12, fontWeight: '600' },
+  planRadio: {
+    width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: Colors.border,
+    marginTop: 12, justifyContent: 'center', alignItems: 'center',
+  },
+  planRadioSelected: { borderColor: Colors.primary },
+  planRadioInner: { width: 12, height: 12, borderRadius: 6, backgroundColor: Colors.primary },
+  qrSection: { alignItems: 'center', backgroundColor: Colors.surface, borderRadius: 20, padding: 24, marginBottom: 24 },
+  qrSectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
+  qrSectionSubtitle: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 20 },
+  qrCodeContainer: { padding: 16, backgroundColor: '#fff', borderRadius: 16, marginBottom: 16 },
+  paymentSummary: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  paymentSummaryLabel: { fontSize: 16, color: Colors.textSecondary },
+  paymentSummaryAmount: { fontSize: 28, fontWeight: '800', color: Colors.primary },
+  swishPayButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#5AC062',
+    paddingHorizontal: 32, paddingVertical: 16, borderRadius: 14,
+  },
+  swishPayButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  paymentNote: { fontSize: 12, color: Colors.textMuted, textAlign: 'center', marginTop: 16, maxWidth: 280 },
+  featuresSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 20 },
+  featuresSectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16 },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  featureText: { fontSize: 15, color: Colors.textPrimary },
 });
