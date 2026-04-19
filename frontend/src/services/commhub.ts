@@ -99,30 +99,35 @@ export interface ParkedCart {
 
 // ==================== CommHub Service ====================
 
+// Module-level initialization promise
+let initPromise: Promise<void> | null = null;
+
 class CommHubService {
   private token: string | null = null;
   private userId: string | null = null;
   private tokenLoaded: boolean = false;
-  private tokenLoadPromise: Promise<void> | null = null;
 
   constructor() {
-    // Load token from storage on init (only in browser/client context)
-    if (typeof window !== 'undefined') {
-      this.tokenLoadPromise = this.loadToken();
+    // Start token loading immediately and store promise at module level
+    if (typeof window !== 'undefined' && !initPromise) {
+      initPromise = this.loadToken();
     }
   }
 
   private async loadToken() {
     try {
-      this.token = await AsyncStorage.getItem(TOKEN_KEY);
+      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
       const userData = await AsyncStorage.getItem(USER_KEY);
+      
+      this.token = storedToken;
+      
       if (userData) {
         const user = JSON.parse(userData);
         this.userId = user.user_id;
       }
       console.log('[CommHub] Token loaded from storage:', this.token ? 'yes' : 'no');
     } catch (e) {
-      // Silently ignore - this can happen during SSR
+      console.log('[CommHub] Error loading token from storage:', e);
     } finally {
       this.tokenLoaded = true;
     }
@@ -133,9 +138,15 @@ class CommHubService {
    */
   async ensureTokenLoaded(): Promise<void> {
     if (this.tokenLoaded) return;
-    if (this.tokenLoadPromise) {
-      await this.tokenLoadPromise;
+    
+    // If init promise exists, wait for it
+    if (initPromise) {
+      await initPromise;
+      return;
     }
+    
+    // Fallback: load token directly if no promise exists
+    await this.loadToken();
   }
 
   private async saveToken(token: string, user: UserProfile) {
@@ -144,6 +155,7 @@ class CommHubService {
     this.tokenLoaded = true;
     await AsyncStorage.setItem(TOKEN_KEY, token);
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
+    console.log('[CommHub] Token saved to storage');
   }
 
   private async clearToken() {
@@ -151,6 +163,8 @@ class CommHubService {
     this.userId = null;
     await AsyncStorage.removeItem(TOKEN_KEY);
     await AsyncStorage.removeItem(USER_KEY);
+    await AsyncStorage.removeItem(OFFLINE_LOGIN_KEY);
+    console.log('[CommHub] Token cleared from storage');
   }
 
   getToken(): string | null {
