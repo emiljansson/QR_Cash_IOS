@@ -40,6 +40,7 @@ export interface UserProfile {
   org_id?: string;
   phone?: string;
   picture?: string;
+  login_code?: string;
   email_verified?: boolean;
   subscription_active?: boolean;
   subscription_start?: string;
@@ -642,6 +643,8 @@ class CommHubService {
 
     // Create new user in qr_users collection
     // Note: Password should be hashed server-side in production
+    const loginCode = this.generateLoginCode(); // Generate login code for new user
+    
     const createResponse = await fetch(
       `${COMMHUB_URL}/api/data/qr_users?app_id=${APP_ID}`,
       {
@@ -657,6 +660,7 @@ class CommHubService {
             organization_name: organizationName,
             phone: phone || '',
             name: name || '',
+            login_code: loginCode, // Save login code
             email_verified: false,
             subscription_active: true,
             created_at: new Date().toISOString(),
@@ -679,6 +683,7 @@ class CommHubService {
       name: name || organizationName,
       organization_name: organizationName,
       phone: phone || '',
+      login_code: loginCode,
       email_verified: false,
       subscription_active: true,
     };
@@ -686,9 +691,16 @@ class CommHubService {
     const sessionToken = this.generateSessionToken(newUser);
     await this.saveToken(sessionToken, userProfile);
 
-    // Send welcome email to new user
+    // Send welcome email to new user with all registration details
     try {
-      await this.sendWelcomeEmail(email, name || organizationName);
+      await this.sendWelcomeEmail(
+        email, 
+        name || organizationName, 
+        loginCode, 
+        organizationName, 
+        undefined, // swishNumber - not set during registration
+        phone
+      );
       console.log('[CommHub] Welcome email sent to:', email);
     } catch (e) {
       console.log('[CommHub] Failed to send welcome email:', e);
