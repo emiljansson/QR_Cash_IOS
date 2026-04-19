@@ -18,9 +18,9 @@ import Purchases, {
   PurchasesError,
 } from 'react-native-purchases';
 
-// ⚠️ REPLACE THESE WITH YOUR REVENUECAT API KEYS
-const REVENUECAT_IOS_KEY = 'YOUR_REVENUECAT_IOS_API_KEY';
-const REVENUECAT_ANDROID_KEY = 'YOUR_REVENUECAT_ANDROID_API_KEY';
+// RevenueCat API Keys (from RevenueCat Dashboard)
+const REVENUECAT_IOS_KEY = 'test_eigNrTLGWyBzQhvfvnFtYMkdlDi';
+const REVENUECAT_ANDROID_KEY = 'test_eigNrTLGWyBzQhvfvnFtYMkdlDi';
 
 // Entitlement identifier (create this in RevenueCat Dashboard)
 export const ENTITLEMENT_ID = 'pro';
@@ -79,8 +79,8 @@ class RevenueCatService {
         default: REVENUECAT_IOS_KEY,
       });
 
-      if (apiKey.startsWith('YOUR_')) {
-        console.warn('[RevenueCat] ⚠️ API key not configured! Replace placeholder in revenuecat.ts');
+      if (!apiKey) {
+        console.warn('[RevenueCat] ⚠️ API key not configured!');
         return;
       }
 
