@@ -62,12 +62,15 @@ export default function ParkedCartsScreen() {
       return;
     }
     setSaving(true);
+    
+    const cartData = {
+      name: cartName.trim(),
+      items: currentCartItems,
+      total: currentCartTotal,
+    };
+    
     try {
-      await api.createParkedCart({
-        name: cartName.trim(),
-        items: currentCartItems,
-        total: currentCartTotal,
-      });
+      await api.createParkedCart(cartData);
       // Invalidate local cache to force refresh
       await localStore.invalidateCache('parked_carts', userId);
       setShowSave(false);
@@ -78,7 +81,16 @@ export default function ParkedCartsScreen() {
         params: { clearCart: 'true' },
       });
     } catch (e: any) {
-      Alert.alert('Fel', e.message);
+      // Offline mode - save locally
+      console.log('[ParkedCarts] Saving cart offline');
+      await localStore.queueOfflineParkedCart(userId, cartData);
+      setShowSave(false);
+      setCartName('');
+      Alert.alert('Sparat offline', 'Varukorgen sparas lokalt och synkas när du är online');
+      router.replace({
+        pathname: '/(tabs)/pos',
+        params: { clearCart: 'true' },
+      });
     } finally { setSaving(false); }
   };
 
@@ -92,7 +104,12 @@ export default function ParkedCartsScreen() {
             // Invalidate local cache to force refresh
             await localStore.invalidateCache('parked_carts', userId);
             loadCarts();
-          } catch (e: any) { Alert.alert('Fel', e.message); }
+          } catch (e: any) {
+            // Offline mode - delete locally and queue for sync
+            console.log('[ParkedCarts] Deleting cart offline:', cart.id);
+            await localStore.queueOfflineParkedCartDelete(userId, cart.id);
+            loadCarts();
+          }
         }
       }
     ]);
@@ -123,7 +140,18 @@ export default function ParkedCartsScreen() {
         params: { clearCart: 'true' },
       });
     } catch (e: any) {
-      Alert.alert('Fel', e.message);
+      // Offline mode - merge locally and queue for sync
+      console.log('[ParkedCarts] Merging cart offline:', cart.id);
+      await localStore.queueOfflineParkedCartMerge(userId, cart.id, {
+        name: cart.name,
+        items: currentCartItems,
+        total: currentCartTotal,
+      });
+      Alert.alert('Tillagt offline!', `Varorna sparas lokalt och synkas när du är online`);
+      router.replace({
+        pathname: '/(tabs)/pos',
+        params: { clearCart: 'true' },
+      });
     }
   };
 

@@ -360,8 +360,103 @@ class LocalFirstStore {
     console.log('[LocalFirst] Offline confirmation queued');
   }
 
-  async forceSyncAll(userId: string): Promise<void> {
-    console.log('[LocalFirst] Force syncing all data...');
+  // ==================== PARKED CARTS OFFLINE ====================
+
+  // Queue an offline parked cart creation
+  async queueOfflineParkedCart(userId: string, cartData: any): Promise<void> {
+    console.log('[LocalFirst] Queuing offline parked cart');
+    
+    const offlineCart = {
+      ...cartData,
+      id: `offline_cart_${Date.now()}`,
+      created_at: new Date().toISOString(),
+      offline: true,
+    };
+    
+    // Add to local cache
+    const carts = await this.getCache<any[]>('parked_carts', userId) || [];
+    carts.unshift(offlineCart);
+    await this.setCache('parked_carts', userId, carts);
+    
+    // Add to sync queue
+    this.pendingChanges.push({
+      type: 'create_parked_cart',
+      data: cartData,
+      localId: offlineCart.id,
+      timestamp: Date.now(),
+    });
+    await this.savePendingChanges();
+  }
+
+  // Queue an offline parked cart deletion
+  async queueOfflineParkedCartDelete(userId: string, cartId: string): Promise<void> {
+    console.log('[LocalFirst] Queuing offline parked cart delete:', cartId);
+    
+    // Remove from local cache
+    const carts = await this.getCache<any[]>('parked_carts', userId) || [];
+    const updatedCarts = carts.filter((c: any) => c.id !== cartId);
+    await this.setCache('parked_carts', userId, updatedCarts);
+    
+    // If it's an offline cart that hasn't been synced, just remove it from the create queue
+    const isOfflineCart = cartId.startsWith('offline_cart_');
+    if (isOfflineCart) {
+      this.pendingChanges = this.pendingChanges.filter((change: any) => 
+        !(change.type === 'create_parked_cart' && change.localId === cartId)
+      );
+    } else {
+      // It's a synced cart - add delete to queue
+      this.pendingChanges.push({
+        type: 'delete_parked_cart',
+        cartId: cartId,
+        timestamp: Date.now(),
+      });
+    }
+    await this.savePendingChanges();
+  }
+
+  // Queue an offline parked cart merge
+  async queueOfflineParkedCartMerge(userId: string, cartId: string, mergeData: any): Promise<void> {
+    console.log('[LocalFirst] Queuing offline parked cart merge:', cartId);
+    
+    // Update local cache
+    const carts = await this.getCache<any[]>('parked_carts', userId) || [];
+    const updatedCarts = carts.map((c: any) => {
+      if (c.id === cartId) {
+        // Merge items
+        const existingItems = c.items || [];
+        const newItems = mergeData.items || [];
+        const mergedItems = [...existingItems];
+        
+        for (const newItem of newItems) {
+          const existingIndex = mergedItems.findIndex((i: any) => i.product_id === newItem.product_id);
+          if (existingIndex >= 0) {
+            mergedItems[existingIndex].quantity += newItem.quantity;
+          } else {
+            mergedItems.push(newItem);
+          }
+        }
+        
+        return {
+          ...c,
+          items: mergedItems,
+          total: mergedItems.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0),
+        };
+      }
+      return c;
+    });
+    await this.setCache('parked_carts', userId, updatedCarts);
+    
+    // Add to sync queue
+    this.pendingChanges.push({
+      type: 'merge_parked_cart',
+      cartId: cartId,
+      data: mergeData,
+      timestamp: Date.now(),
+    });
+    await this.savePendingChanges();
+  }
+
+  // ==================== SYNC MANAGEMENT ====================
     
     const networkState = await NetInfo.fetch();
     if (!networkState.isConnected) {
@@ -441,6 +536,18 @@ class LocalFirstStore {
           // Confirm an existing online order
           await api.confirmOrder(change.orderId);
           console.log('[LocalFirst] Synced order confirmation:', change.orderId);
+        } else if (change.type === 'create_parked_cart') {
+          // Create parked cart
+          await api.createParkedCart(change.data);
+          console.log('[LocalFirst] Synced offline parked cart:', change.localId);
+        } else if (change.type === 'delete_parked_cart') {
+          // Delete parked cart
+          await api.deleteParkedCart(change.cartId);
+          console.log('[LocalFirst] Synced parked cart deletion:', change.cartId);
+        } else if (change.type === 'merge_parked_cart') {
+          // Merge parked cart
+          await api.mergeParkedCart(change.cartId, change.data);
+          console.log('[LocalFirst] Synced parked cart merge:', change.cartId);
         }
       } catch (e: any) {
         console.error('[LocalFirst] Failed to sync change:', e.message);

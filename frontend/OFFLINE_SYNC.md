@@ -71,7 +71,10 @@ NetInfo.addEventListener(state => {
 | Bekräfta betalning | ✅ | Sparas i sync-kö |
 | Kontant betalning | ✅ | Sparas i sync-kö |
 | Visa orderhistorik | ✅ | Cachad data |
-| Parkerade kundkorgar | ✅ | Cachad data |
+| Parkera kundkorg | ✅ | Sparas lokalt |
+| Återställ parkerad korg | ✅ | Från lokal cache |
+| Radera parkerad korg | ✅ | Sparas i sync-kö |
+| Lägg till varor i parkerad | ✅ | Sparas i sync-kö |
 | Statistik | ❌ | Kräver live-data |
 | Lägg till produkt | ✅* | Synkas när online |
 | Redigera produkt | ✅* | Synkas när online |
