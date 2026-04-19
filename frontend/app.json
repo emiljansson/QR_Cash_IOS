@@ -2,7 +2,7 @@
   "expo": {
     "name": "QR-Kassan",
     "slug": "frontend",
-    "version": "2.0.524",
+    "version": "2.0.525",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",

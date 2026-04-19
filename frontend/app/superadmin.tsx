@@ -1232,7 +1232,6 @@ function SettingsTab() {
     { key: 'grace_period_days', label: 'Grace period (dagar)', placeholder: '7', icon: 'time-outline' as const, kbd: 'number-pad' as const },
     { key: 'contact_email', label: 'Kontakt e-post', placeholder: 'support@example.com', icon: 'help-circle-outline' as const, kbd: 'email-address' as const },
     { key: 'contact_phone', label: 'Kontakt telefon', placeholder: '070-1234567', icon: 'call-outline' as const, kbd: 'phone-pad' as const },
-    { key: 'swish_number', label: 'Swish-nummer (abonnemang)', placeholder: '123 456 78 90', icon: 'card-outline' as const, kbd: 'phone-pad' as const },
   ];
 
   return (

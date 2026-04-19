@@ -15,6 +15,7 @@ import { localStore } from '../../src/utils/localFirstStore';
 import { commHubWS } from '../../src/services/commHubWebSocket';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { generateSwishQRData } from '../../src/utils/swishQR';
+import revenueCat, { SubscriptionPackage, SubscriptionStatus, ENTITLEMENT_ID } from '../../src/services/revenuecat';
 
 interface Product {
   id: string;
@@ -598,6 +599,10 @@ export default function AdminScreen() {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | '6months' | 'yearly'>('monthly');
   const [systemPhone, setSystemPhone] = useState<string>('');
   const [loadingSubscription, setLoadingSubscription] = useState(false);
+  const [subscriptionPackages, setSubscriptionPackages] = useState<SubscriptionPackage[]>([]);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
+  const [purchasing, setPurchasing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   
   // Default QR-Kassan logo
   const DEFAULT_LOGO = 'https://res.cloudinary.com/demo/image/upload/v1/qrkassan/logos/default_logo.png';
@@ -689,24 +694,36 @@ export default function AdminScreen() {
     return () => { localStore.stopAutoSync(); };
   }, [pinVerified, user?.user_id, loadProducts, loadSettings, loadSubUsers]);
 
-  // Load system settings (swish_number) for subscription tab
+  // Load subscription data when tab is selected
   useEffect(() => {
     if (tab === 'subscription') {
       (async () => {
         setLoadingSubscription(true);
         try {
+          // Initialize RevenueCat if not already
+          await revenueCat.initialize(user?.user_id);
+          
+          // Get subscription status
+          const status = await revenueCat.checkSubscriptionStatus();
+          setSubscriptionStatus(status);
+          
+          // Get available packages
+          const packages = await revenueCat.getPackages();
+          setSubscriptionPackages(packages);
+          
+          // Also get system phone for fallback Swish
           const sysSettings = await api.getSystemSettings();
           if (sysSettings?.swish_number) {
             setSystemPhone(sysSettings.swish_number);
           }
         } catch (e) {
-          // Use default if can't fetch
+          console.error('Failed to load subscription data:', e);
         } finally {
           setLoadingSubscription(false);
         }
       })();
     }
-  }, [tab]);
+  }, [tab, user?.user_id]);
   
   // Listen for real-time product updates
   useEffect(() => {
@@ -1490,125 +1507,232 @@ export default function AdminScreen() {
       {/* Subscription Tab */}
       {tab === 'subscription' && (
         <ScrollView style={styles.tabContent} contentContainerStyle={styles.subscriptionContent}>
-          <View style={styles.subscriptionHeader}>
-            <Ionicons name="card" size={48} color={Colors.primary} />
-            <Text style={styles.subscriptionTitle}>QR-Kassan Abonnemang</Text>
-            <Text style={styles.subscriptionSubtitle}>
-              Välj ett abonnemang för att fortsätta använda QR-Kassan
-            </Text>
-          </View>
-
-          {/* Subscription Plans */}
-          <View style={styles.plansContainer}>
-            {([
-              { key: 'monthly', label: '1 Månad', price: 29, perMonth: '29 kr/mån', savings: '' },
-              { key: '6months', label: '6 Månader', price: 150, perMonth: '25 kr/mån', savings: 'Spara 24 kr' },
-              { key: 'yearly', label: '12 Månader', price: 250, perMonth: '~21 kr/mån', savings: 'Spara 98 kr', popular: true },
-            ] as const).map(plan => (
-              <TouchableOpacity
-                key={plan.key}
-                style={[
-                  styles.planCard,
-                  selectedPlan === plan.key && styles.planCardSelected,
-                  plan.popular && styles.planCardPopular,
-                ]}
-                onPress={() => setSelectedPlan(plan.key)}
-              >
-                {plan.popular && (
-                  <View style={styles.popularBadge}>
-                    <Text style={styles.popularBadgeText}>Populärast</Text>
-                  </View>
-                )}
-                <Text style={[styles.planLabel, selectedPlan === plan.key && styles.planLabelSelected]}>
-                  {plan.label}
-                </Text>
-                <Text style={[styles.planPrice, selectedPlan === plan.key && styles.planPriceSelected]}>
-                  {plan.price} kr
-                </Text>
-                <Text style={[styles.planPerMonth, selectedPlan === plan.key && styles.planPerMonthSelected]}>
-                  {plan.perMonth}
-                </Text>
-                {plan.savings ? (
-                  <View style={styles.savingsBadge}>
-                    <Text style={styles.savingsText}>{plan.savings}</Text>
-                  </View>
-                ) : null}
-                <View style={[styles.planRadio, selectedPlan === plan.key && styles.planRadioSelected]}>
-                  {selectedPlan === plan.key && <View style={styles.planRadioInner} />}
+          {loadingSubscription ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.loadingText}>Laddar prenumerationer...</Text>
+            </View>
+          ) : subscriptionStatus?.isActive ? (
+            /* Active Subscription View */
+            <View>
+              <View style={styles.subscriptionHeader}>
+                <View style={styles.activeSubscriptionBadge}>
+                  <Ionicons name="checkmark-circle" size={32} color="#fff" />
                 </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+                <Text style={styles.subscriptionTitle}>Prenumeration Aktiv</Text>
+                <Text style={styles.subscriptionSubtitle}>
+                  Tack för att du använder QR-Kassan!
+                </Text>
+              </View>
 
-          {/* QR Code Section */}
-          <View style={styles.qrSection}>
-            <Text style={styles.qrSectionTitle}>Betala med Swish</Text>
-            <Text style={styles.qrSectionSubtitle}>
-              Skanna QR-koden med Swish-appen eller tryck på knappen nedan
-            </Text>
-            
-            <View style={styles.qrCodeContainer}>
-              <QRCode
-                value={generateSwishQRData(
-                  systemPhone || settings.swish_phone || '0701234567',
-                  selectedPlan === 'monthly' ? 29 : selectedPlan === '6months' ? 150 : 250,
-                  `QR-Kassan ${selectedPlan === 'monthly' ? '1 mån' : selectedPlan === '6months' ? '6 mån' : '12 mån'}`
+              <View style={styles.subscriptionInfoCard}>
+                <View style={styles.subscriptionInfoRow}>
+                  <Text style={styles.subscriptionInfoLabel}>Status</Text>
+                  <View style={styles.activeBadge}>
+                    <Text style={styles.activeBadgeText}>Aktiv</Text>
+                  </View>
+                </View>
+                {subscriptionStatus.expirationDate && (
+                  <View style={styles.subscriptionInfoRow}>
+                    <Text style={styles.subscriptionInfoLabel}>Förnyas</Text>
+                    <Text style={styles.subscriptionInfoValue}>
+                      {new Date(subscriptionStatus.expirationDate).toLocaleDateString('sv-SE')}
+                    </Text>
+                  </View>
                 )}
-                size={200}
-                backgroundColor="white"
-              />
-            </View>
+                <View style={styles.subscriptionInfoRow}>
+                  <Text style={styles.subscriptionInfoLabel}>Automatisk förnyelse</Text>
+                  <Text style={styles.subscriptionInfoValue}>
+                    {subscriptionStatus.willRenew ? 'Ja' : 'Nej'}
+                  </Text>
+                </View>
+              </View>
 
-            <View style={styles.paymentSummary}>
-              <Text style={styles.paymentSummaryLabel}>Att betala:</Text>
-              <Text style={styles.paymentSummaryAmount}>
-                {selectedPlan === 'monthly' ? '29' : selectedPlan === '6months' ? '150' : '250'} kr
-              </Text>
-            </View>
-
-            {/* Swish Deep Link Button */}
-            <TouchableOpacity
-              style={styles.swishPayButton}
-              onPress={() => {
-                const phone = (systemPhone || settings.swish_phone || '0701234567').replace(/[-\s]/g, '');
-                const amount = selectedPlan === 'monthly' ? 29 : selectedPlan === '6months' ? 150 : 250;
-                const message = encodeURIComponent(`QR-Kassan ${selectedPlan === 'monthly' ? '1 mån' : selectedPlan === '6months' ? '6 mån' : '12 mån'}`);
-                
-                // Swish deep link format
-                const swishUrl = `swish://payment?data={"version":1,"payee":{"value":"${phone}"},"amount":{"value":${amount}},"message":{"value":"${message}","editable":false}}`;
-                
-                Linking.canOpenURL(swishUrl).then(supported => {
-                  if (supported) {
-                    Linking.openURL(swishUrl);
+              <TouchableOpacity
+                style={styles.manageSubscriptionBtn}
+                onPress={() => {
+                  // Open subscription management
+                  if (Platform.OS === 'ios') {
+                    Linking.openURL('https://apps.apple.com/account/subscriptions');
                   } else {
-                    // Fallback - try standard swish URL
-                    const fallbackUrl = `swish://paymentrequest?token=${phone}&amount=${amount}&message=${message}`;
-                    Linking.openURL(fallbackUrl).catch(() => {
-                      showAlert('Swish', 'Kunde inte öppna Swish. Skanna QR-koden istället.');
-                    });
+                    Linking.openURL('https://play.google.com/store/account/subscriptions');
                   }
-                });
-              }}
-            >
-              <Ionicons name="phone-portrait-outline" size={24} color="#fff" />
-              <Text style={styles.swishPayButtonText}>Öppna Swish</Text>
-            </TouchableOpacity>
+                }}
+              >
+                <Ionicons name="settings-outline" size={20} color={Colors.primary} />
+                <Text style={styles.manageSubscriptionBtnText}>Hantera prenumeration</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* No Subscription - Show Plans */
+            <View>
+              <View style={styles.subscriptionHeader}>
+                <Ionicons name="card" size={48} color={Colors.primary} />
+                <Text style={styles.subscriptionTitle}>QR-Kassan Pro</Text>
+                <Text style={styles.subscriptionSubtitle}>
+                  Välj ett abonnemang för att låsa upp alla funktioner
+                </Text>
+              </View>
 
-            <Text style={styles.paymentNote}>
-              Efter betalning skickas bekräftelse till din e-post och ditt abonnemang aktiveras automatiskt.
-            </Text>
-          </View>
+              {/* Subscription Packages from RevenueCat */}
+              {subscriptionPackages.length > 0 ? (
+                <View style={styles.plansContainer}>
+                  {subscriptionPackages.map((pkg, index) => {
+                    const isSelected = selectedPlan === pkg.identifier;
+                    const isPopular = pkg.packageType === 'ANNUAL';
+                    return (
+                      <TouchableOpacity
+                        key={pkg.identifier}
+                        style={[
+                          styles.planCard,
+                          isSelected && styles.planCardSelected,
+                          isPopular && styles.planCardPopular,
+                        ]}
+                        onPress={() => setSelectedPlan(pkg.identifier as any)}
+                      >
+                        {isPopular && (
+                          <View style={styles.popularBadge}>
+                            <Text style={styles.popularBadgeText}>Populärast</Text>
+                          </View>
+                        )}
+                        <Text style={[styles.planLabel, isSelected && styles.planLabelSelected]}>
+                          {pkg.product.title}
+                        </Text>
+                        <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>
+                          {pkg.product.priceString}
+                        </Text>
+                        <Text style={[styles.planPerMonth, isSelected && styles.planPerMonthSelected]}>
+                          {pkg.product.description}
+                        </Text>
+                        <View style={[styles.planRadio, isSelected && styles.planRadioSelected]}>
+                          {isSelected && <View style={styles.planRadioInner} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                /* Fallback static plans if RevenueCat not configured */
+                <View style={styles.plansContainer}>
+                  {([
+                    { key: 'monthly', label: '1 Månad', price: 29, perMonth: '29 kr/mån', savings: '' },
+                    { key: '6months', label: '6 Månader', price: 150, perMonth: '25 kr/mån', savings: 'Spara 24 kr' },
+                    { key: 'yearly', label: '12 Månader', price: 250, perMonth: '~21 kr/mån', savings: 'Spara 98 kr', popular: true },
+                  ] as const).map(plan => (
+                    <TouchableOpacity
+                      key={plan.key}
+                      style={[
+                        styles.planCard,
+                        selectedPlan === plan.key && styles.planCardSelected,
+                        plan.popular && styles.planCardPopular,
+                      ]}
+                      onPress={() => setSelectedPlan(plan.key)}
+                    >
+                      {plan.popular && (
+                        <View style={styles.popularBadge}>
+                          <Text style={styles.popularBadgeText}>Populärast</Text>
+                        </View>
+                      )}
+                      <Text style={[styles.planLabel, selectedPlan === plan.key && styles.planLabelSelected]}>
+                        {plan.label}
+                      </Text>
+                      <Text style={[styles.planPrice, selectedPlan === plan.key && styles.planPriceSelected]}>
+                        {plan.price} kr
+                      </Text>
+                      <Text style={[styles.planPerMonth, selectedPlan === plan.key && styles.planPerMonthSelected]}>
+                        {plan.perMonth}
+                      </Text>
+                      {plan.savings ? (
+                        <View style={styles.savingsBadge}>
+                          <Text style={styles.savingsText}>{plan.savings}</Text>
+                        </View>
+                      ) : null}
+                      <View style={[styles.planRadio, selectedPlan === plan.key && styles.planRadioSelected]}>
+                        {selectedPlan === plan.key && <View style={styles.planRadioInner} />}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Purchase Button */}
+              <TouchableOpacity
+                style={[styles.purchaseButton, purchasing && styles.purchaseButtonDisabled]}
+                disabled={purchasing}
+                onPress={async () => {
+                  const selectedPackage = subscriptionPackages.find(p => p.identifier === selectedPlan);
+                  if (selectedPackage) {
+                    setPurchasing(true);
+                    const result = await revenueCat.purchasePackage(selectedPackage);
+                    setPurchasing(false);
+                    if (result.success) {
+                      const status = await revenueCat.checkSubscriptionStatus();
+                      setSubscriptionStatus(status);
+                      showAlert('Köp genomfört!', 'Tack för ditt köp. Din prenumeration är nu aktiv.');
+                    } else if (result.error) {
+                      showAlert('Köp misslyckades', result.error);
+                    }
+                  } else {
+                    showAlert('RevenueCat', 'Prenumerationer är inte konfigurerade än. Kontakta support.');
+                  }
+                }}
+              >
+                {purchasing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="cart" size={24} color="#fff" />
+                    <Text style={styles.purchaseButtonText}>Prenumerera nu</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Restore Purchases */}
+              <TouchableOpacity
+                style={styles.restoreButton}
+                disabled={restoring}
+                onPress={async () => {
+                  setRestoring(true);
+                  const result = await revenueCat.restorePurchases();
+                  setRestoring(false);
+                  if (result.hasActiveSubscription) {
+                    const status = await revenueCat.checkSubscriptionStatus();
+                    setSubscriptionStatus(status);
+                    showAlert('Återställt!', 'Din prenumeration har återställts.');
+                  } else {
+                    showAlert('Inga köp hittades', 'Vi kunde inte hitta några tidigare köp kopplade till ditt konto.');
+                  }
+                }}
+              >
+                {restoring ? (
+                  <ActivityIndicator color={Colors.primary} size="small" />
+                ) : (
+                  <Text style={styles.restoreButtonText}>Återställ tidigare köp</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Dev Mode Notice */}
+              {subscriptionPackages.length === 0 && (
+                <View style={styles.devNotice}>
+                  <Ionicons name="information-circle" size={20} color={Colors.warning} />
+                  <Text style={styles.devNoticeText}>
+                    RevenueCat API-nycklar saknas. Konfigurera dem i revenuecat.ts för att aktivera köp via App Store/Google Play.
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Features */}
           <View style={styles.featuresSection}>
-            <Text style={styles.featuresSectionTitle}>Ingår i abonnemanget:</Text>
+            <Text style={styles.featuresSectionTitle}>Ingår i QR-Kassan Pro:</Text>
             {[
               'Obegränsade Swish-betalningar',
               'Statistik & rapporter',
               'Flera användare/kassor',
               'Offline-läge',
               'Digitala kvitton via e-post',
-              'Support via e-post',
+              'Prioriterad support',
             ].map((feature, i) => (
               <View key={i} style={styles.featureRow}>
                 <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
@@ -2031,8 +2155,51 @@ const styles = StyleSheet.create({
   },
   swishPayButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
   paymentNote: { fontSize: 12, color: Colors.textMuted, textAlign: 'center', marginTop: 16, maxWidth: 280 },
-  featuresSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 20 },
+  featuresSection: { backgroundColor: Colors.surface, borderRadius: 16, padding: 20, marginTop: 24 },
   featuresSectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16 },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   featureText: { fontSize: 15, color: Colors.textPrimary },
+  // New subscription styles
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
+  loadingText: { marginTop: 12, fontSize: 16, color: Colors.textSecondary },
+  activeSubscriptionBadge: {
+    width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.primary,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  subscriptionInfoCard: {
+    backgroundColor: Colors.surface, borderRadius: 16, padding: 20, marginTop: 24,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  subscriptionInfoRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border,
+  },
+  subscriptionInfoLabel: { fontSize: 15, color: Colors.textSecondary },
+  subscriptionInfoValue: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
+  activeBadge: {
+    backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12,
+  },
+  activeBadgeText: { color: Colors.primary, fontWeight: '600', fontSize: 14 },
+  manageSubscriptionBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 20, paddingVertical: 14, backgroundColor: Colors.surfaceHighlight,
+    borderRadius: 12, borderWidth: 1, borderColor: Colors.border,
+  },
+  manageSubscriptionBtnText: { color: Colors.primary, fontSize: 16, fontWeight: '600' },
+  purchaseButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: Colors.primary, paddingVertical: 18, borderRadius: 14, marginTop: 24,
+  },
+  purchaseButtonDisabled: { opacity: 0.6 },
+  purchaseButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  restoreButton: {
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 14, marginTop: 12,
+  },
+  restoreButtonText: { color: Colors.primary, fontSize: 15, fontWeight: '500' },
+  devNotice: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 24,
+    padding: 16, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 12,
+    borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  devNoticeText: { flex: 1, fontSize: 13, color: Colors.warning, lineHeight: 20 },
 });
