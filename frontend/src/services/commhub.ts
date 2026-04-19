@@ -661,7 +661,7 @@ class CommHubService {
             phone: phone || '',
             name: name || '',
             login_code: loginCode, // Save login code
-            email_verified: false,
+            email_verified: true, // Auto-verified since no backend for verification
             subscription_active: true,
             created_at: new Date().toISOString(),
           },
@@ -684,7 +684,7 @@ class CommHubService {
       organization_name: organizationName,
       phone: phone || '',
       login_code: loginCode,
-      email_verified: false,
+      email_verified: true,
       subscription_active: true,
     };
 
