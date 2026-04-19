@@ -9,7 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Colors } from '../../src/utils/colors';
-import { api } from '../../src/utils/api';
+import { commhub as api } from '../../src/services/commhub';
 import { localStore } from '../../src/utils/localFirstStore';
 import { commHubWS } from '../../src/services/commHubWebSocket';
 import { useAuth } from '../../src/contexts/AuthContext';

@@ -5,7 +5,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { api } from './api';
+import { commhub as api } from '../services/commhub';
 import NetInfo from '@react-native-community/netinfo';
 
 const CACHE_PREFIX = '@qrkassa_cache_';

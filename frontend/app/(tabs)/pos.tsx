@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../src/utils/colors';
-import { api } from '../../src/utils/api';
+import { commhub as api } from '../../src/services/commhub';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRealtimeSync } from '../../src/hooks/useRealtimeSync';
 import { useNetworkStatus } from '../../src/hooks/useNetworkStatus';

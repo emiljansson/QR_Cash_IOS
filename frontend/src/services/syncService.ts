@@ -5,7 +5,7 @@
 
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import * as OfflineDB from './offlineDatabase';
-import { api } from '../utils/api';
+import { commhub as api } from '../services/commhub';
 
 type SyncStatus = 'idle' | 'syncing' | 'error';
 type NetworkStatus = 'online' | 'offline' | 'unknown';

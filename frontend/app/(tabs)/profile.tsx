@@ -8,7 +8,7 @@ import Constants from 'expo-constants';
 import { Colors } from '../../src/utils/colors';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRouter } from 'expo-router';
-import { api } from '../../src/utils/api';
+import { commhub as api } from '../../src/services/commhub';
 
 const appVersion = Constants.expoConfig?.version || '2.0.0';
 
