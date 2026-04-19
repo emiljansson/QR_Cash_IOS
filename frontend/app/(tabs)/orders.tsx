@@ -127,11 +127,11 @@ export default function OrdersScreen() {
     if (!receiptModal || !receiptEmail.trim()) return;
     setSendingReceipt(true);
     try {
-      await api.sendReceipt(receiptModal.id, receiptEmail.trim());
+      // Use the new sendReceipt that takes Order object
+      await api.sendReceipt(receiptModal, receiptEmail.trim());
       Alert.alert('Skickat!', `Kvitto skickat till ${receiptEmail.trim()}`);
       setReceiptModal(null);
       setReceiptEmail('');
-      loadOrders();
     } catch (e: any) {
       Alert.alert('Fel', e.message || 'Kunde inte skicka kvitto');
     } finally { setSendingReceipt(false); }

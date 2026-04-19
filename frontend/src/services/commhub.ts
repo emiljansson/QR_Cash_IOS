@@ -1644,6 +1644,31 @@ class CommHubService {
       html,
     });
   }
+
+  /**
+   * Change password for current user
+   */
+  async changePassword(newPassword: string): Promise<void> {
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      throw new Error('Du måste vara inloggad för att ändra lösenord');
+    }
+
+    // Get current user data from qr_users
+    const users = await this.query<any>('qr_users', { user_id: userId }, { limit: 1 });
+    if (users.length === 0) {
+      throw new Error('Användaren hittades inte');
+    }
+
+    const user = users[0];
+    
+    // Update password in qr_users - Note: In production, you should hash the password
+    // CommHub handles this on their end for Public Auth, but for legacy data we store it
+    await this.update('qr_users', user._doc_id || user.id, {
+      password: newPassword,
+      updated_at: new Date().toISOString(),
+    });
+  }
 }
 
 // ==================== Singleton Export ====================

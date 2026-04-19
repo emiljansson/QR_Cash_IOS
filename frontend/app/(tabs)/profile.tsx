@@ -69,10 +69,7 @@ export default function ProfileScreen() {
 
     setSavingPassword(true);
     try {
-      await api.fetch('/auth/change-password', {
-        method: 'POST',
-        body: JSON.stringify({ new_password: newPassword }),
-      });
+      await api.changePassword(newPassword);
       setShowPasswordModal(false);
       setNewPassword('');
       setConfirmPassword('');
