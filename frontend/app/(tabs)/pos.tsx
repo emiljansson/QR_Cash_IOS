@@ -181,16 +181,38 @@ export default function POSScreen() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    
+    // Generate QR data locally (works offline)
+    const qrData = generateOrderQR(
+      settings.swish_phone || '',
+      cartTotal,
+      `Order ${Date.now()}`
+    );
+    
     try {
       const order = await api.createOrder({
         items: cart.map(({ product_id, name, price, quantity }) => ({ product_id, name, price, quantity })),
         total: cartTotal,
         swish_phone: settings.swish_phone || '',
+        qr_data: qrData,  // Include QR data in order
       });
-      setCurrentOrder(order);
+      setCurrentOrder({ ...order, qr_data: qrData });
       setShowQR(true);
     } catch (e: any) {
-      Alert.alert('Fel', e.message || 'Kunde inte skapa order');
+      // Offline mode - create local order with QR code
+      const offlineOrder = {
+        id: `offline_${Date.now()}`,
+        items: cart.map(({ product_id, name, price, quantity }) => ({ product_id, name, price, quantity })),
+        total: cartTotal,
+        swish_phone: settings.swish_phone || '',
+        qr_data: qrData,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        offline: true,
+      };
+      setCurrentOrder(offlineOrder);
+      setShowQR(true);
+      console.log('[POS] Created offline order with QR code');
     }
   };
 

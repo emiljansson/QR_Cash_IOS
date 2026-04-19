@@ -60,6 +60,7 @@ interface UserSalesStatsProps {
 // Separate component for User Sales Statistics
 function UserSalesStats({ isWide, showAlert }: UserSalesStatsProps) {
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year' | 'custom'>('day');
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -76,6 +77,7 @@ function UserSalesStats({ isWide, showAlert }: UserSalesStatsProps) {
 
   const loadStats = useCallback(async () => {
     setLoading(true);
+    setIsOffline(false);
     try {
       const data = await api.getUserSalesStats(
         period,
@@ -84,7 +86,12 @@ function UserSalesStats({ isWide, showAlert }: UserSalesStatsProps) {
       );
       setStats(data);
     } catch (e: any) {
-      showAlert('Fel', e.message || 'Kunde inte hämta statistik');
+      // Check if it's a network error
+      if (e.message?.includes('Network') || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')) {
+        setIsOffline(true);
+      } else {
+        showAlert('Fel', e.message || 'Kunde inte hämta statistik');
+      }
     } finally {
       setLoading(false);
     }
@@ -220,6 +227,21 @@ function UserSalesStats({ isWide, showAlert }: UserSalesStatsProps) {
 
       {loading ? (
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
+      ) : isOffline ? (
+        // Offline mode message
+        <View style={userStatsStyles.offlineContainer}>
+          <View style={userStatsStyles.offlineIconWrap}>
+            <Ionicons name="cloud-offline-outline" size={48} color={Colors.warning} />
+          </View>
+          <Text style={userStatsStyles.offlineTitle}>Du är offline</Text>
+          <Text style={userStatsStyles.offlineText}>
+            Försäljningsstatistik kräver internetanslutning för att visa aktuell data.
+          </Text>
+          <TouchableOpacity style={userStatsStyles.retryBtn} onPress={loadStats}>
+            <Ionicons name="refresh-outline" size={18} color={Colors.white} />
+            <Text style={userStatsStyles.retryBtnText}>Försök igen</Text>
+          </TouchableOpacity>
+        </View>
       ) : statsView === 'users' ? (
         // User statistics view
         stats?.users && stats.users.length > 0 ? (
@@ -438,6 +460,48 @@ const userStatsStyles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  offlineContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+  },
+  offlineIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.warning + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  offlineTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  offlineText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    gap: 8,
+  },
+  retryBtnText: {
+    color: Colors.white,
+    fontSize: 15,
+    fontWeight: '600',
   },
   userRank: {
     width: 28,
