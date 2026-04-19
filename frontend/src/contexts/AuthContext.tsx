@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { commhub, UserProfile } from '../services/commhub';
 import { localStore } from '../utils/localFirstStore';
+import NetInfo from '@react-native-community/netinfo';
 
 interface User {
   user_id: string;
@@ -56,6 +57,8 @@ function profileToUser(profile: UserProfile): User {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const wasOfflineRef = useRef(false);
+  const sessionRefreshInProgressRef = useRef(false);
 
   const loadSession = useCallback(async () => {
     try {
@@ -63,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (commhub.getToken()) {
         const profile = await commhub.getMe();
         setUser(profileToUser(profile));
+        console.log('[Auth] Session loaded for:', profile.email);
       }
     } catch (e) {
       console.log('[Auth] Session expired or invalid');
@@ -72,9 +76,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Refresh session when coming back online
+  const refreshSessionOnReconnect = useCallback(async () => {
+    if (sessionRefreshInProgressRef.current) return;
+    
+    try {
+      sessionRefreshInProgressRef.current = true;
+      console.log('[Auth] Refreshing session after reconnect...');
+      
+      if (commhub.getToken()) {
+        const profile = await commhub.getMe();
+        setUser(profileToUser(profile));
+        console.log('[Auth] Session refreshed for:', profile.email);
+        
+        // Also trigger a sync of cached data
+        if (profile.user_id) {
+          localStore.forceSyncAll(profile.user_id).catch(e => 
+            console.log('[Auth] Background sync failed:', e.message)
+          );
+        }
+      }
+    } catch (e: any) {
+      console.log('[Auth] Failed to refresh session:', e.message);
+    } finally {
+      sessionRefreshInProgressRef.current = false;
+    }
+  }, []);
+
   useEffect(() => {
     loadSession();
   }, [loadSession]);
+
+  // Listen for network changes and refresh session when coming back online
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      const isOnline = state.isConnected && state.isInternetReachable !== false;
+      
+      if (wasOfflineRef.current && isOnline && user) {
+        // We were offline and now we're online - refresh session
+        console.log('[Auth] Network restored, refreshing session...');
+        refreshSessionOnReconnect();
+      }
+      
+      wasOfflineRef.current = !isOnline;
+    });
+
+    return () => unsubscribe();
+  }, [user, refreshSessionOnReconnect]);
 
   const login = async (email: string, password: string | null, token?: string) => {
     // If token is provided, use it directly (for code login)
