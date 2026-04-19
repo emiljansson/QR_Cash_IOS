@@ -1565,8 +1565,9 @@ class CommHubService {
   /**
    * Send welcome email to new user
    */
-  async sendWelcomeEmail(email: string, name: string, loginCode?: string, organizationName?: string, swishNumber?: string): Promise<void> {
+  async sendWelcomeEmail(email: string, name: string, loginCode?: string, organizationName?: string, swishNumber?: string, phone?: string): Promise<void> {
     const manualUrl = 'https://d20xqn30bfw65x.cloudfront.net/fcd81e2d/documents/7d92485d/71866d44-b712-4f93-a19e-d58c4547d5a5.html';
+    const createdDate = new Date().toLocaleDateString('sv-SE', { year: 'numeric', month: 'long', day: 'numeric' });
     
     const html = `
       <!DOCTYPE html>
@@ -1576,59 +1577,90 @@ class CommHubService {
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
           .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-          .header { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; padding: 32px; text-align: center; }
-          .header h1 { margin: 0 0 8px; font-size: 28px; }
-          .header p { margin: 0; opacity: 0.9; font-size: 16px; }
+          .header { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; padding: 40px 32px; text-align: center; }
+          .header h1 { margin: 0 0 8px; font-size: 32px; }
+          .header p { margin: 0; opacity: 0.9; font-size: 18px; }
           .content { padding: 32px; }
-          .code { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 12px; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 6px; margin: 24px 0; color: #16a34a; }
-          .info-box { background: #f9fafb; border-radius: 8px; padding: 20px; margin: 20px 0; }
-          .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+          .code { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 12px; padding: 24px; text-align: center; font-size: 36px; font-weight: bold; letter-spacing: 8px; margin: 24px 0; color: #16a34a; }
+          .info-box { background: #f9fafb; border-radius: 12px; padding: 24px; margin: 24px 0; }
+          .info-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
           .info-row:last-child { border-bottom: none; }
           .info-label { color: #6b7280; font-size: 14px; }
           .info-value { font-weight: 600; color: #1f2937; }
-          .button { display: inline-block; background: #22c55e; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 16px 0; }
+          .button { display: inline-block; background: #22c55e; color: white; padding: 16px 36px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
+          .button-secondary { display: inline-block; background: #f3f4f6; color: #374151; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; margin: 8px; }
           .steps { margin: 24px 0; }
-          .step { display: flex; gap: 16px; margin-bottom: 16px; align-items: flex-start; }
-          .step-num { background: #22c55e; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+          .step { display: flex; gap: 16px; margin-bottom: 20px; align-items: flex-start; }
+          .step-num { background: #22c55e; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; flex-shrink: 0; }
           .step-text { flex: 1; }
-          .step-text strong { display: block; margin-bottom: 4px; }
+          .step-text strong { display: block; margin-bottom: 4px; color: #1f2937; }
+          .step-text p { margin: 0; color: #6b7280; font-size: 14px; }
+          .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
+          .feature { background: #f9fafb; border-radius: 8px; padding: 16px; text-align: center; }
+          .feature-icon { font-size: 28px; margin-bottom: 8px; }
+          .feature-title { font-weight: 600; color: #1f2937; margin-bottom: 4px; }
+          .feature-desc { font-size: 12px; color: #6b7280; }
+          .highlight { background: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px 20px; margin: 24px 0; border-radius: 0 8px 8px 0; }
+          .highlight strong { color: #16a34a; }
+          .section-title { font-size: 20px; color: #1f2937; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb; }
+          .tips { background: #fef3c7; border-radius: 8px; padding: 16px; margin: 24px 0; }
+          .tips-title { color: #92400e; font-weight: 600; margin-bottom: 8px; }
+          .tips ul { margin: 0; padding-left: 20px; color: #92400e; }
+          .tips li { margin-bottom: 4px; }
           .footer { text-align: center; padding: 24px; color: #6b7280; font-size: 13px; background: #f9fafb; }
           .footer a { color: #22c55e; text-decoration: none; }
+          @media (max-width: 500px) {
+            .feature-grid { grid-template-columns: 1fr; }
+          }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>Välkommen till QR-Kassan!</h1>
-            <p>Ditt kassasystem är redo att användas</p>
+            <h1>🎉 Välkommen till QR-Kassan!</h1>
+            <p>Sveriges smartaste kassasystem för småföretagare</p>
           </div>
           <div class="content">
             <p style="font-size: 18px; margin-bottom: 24px;">Hej <strong>${name || 'där'}</strong>!</p>
             
-            <p>Grattis! Ditt konto hos QR-Kassan har nu skapats och du kan börja ta emot Swish-betalningar direkt.</p>
+            <p>Grattis till ditt nya QR-Kassan-konto! Du har nu tillgång till ett komplett kassasystem som gör det enkelt att ta betalt – var du än befinner dig.</p>
+
+            <p>Med QR-Kassan kan du ta emot <strong>Swish-betalningar</strong> via QR-kod, hantera <strong>kontantbetalningar</strong>, hålla koll på din <strong>försäljningsstatistik</strong> och mycket mer. Appen fungerar på både mobil och webb, och det bästa av allt – <strong>den fungerar även offline!</strong></p>
 
             ${loginCode ? `
-            <p style="margin-top: 24px;"><strong>Din personliga inloggningskod:</strong></p>
+            <div class="section-title">🔐 Din inloggningskod</div>
             <div class="code">${loginCode}</div>
-            <p style="color: #6b7280; font-size: 14px; text-align: center;">Spara denna kod - den fungerar även offline!</p>
+            <p style="color: #6b7280; font-size: 14px; text-align: center; margin-top: -8px;">
+              Memorera eller spara denna kod säkert – du kan logga in med den även utan internet!
+            </p>
             ` : ''}
 
             <div class="info-box">
-              <h3 style="margin: 0 0 16px; font-size: 16px; color: #374151;">Dina kontouppgifter</h3>
+              <h3 style="margin: 0 0 16px; font-size: 18px; color: #374151;">📋 Dina registrerade uppgifter</h3>
               <div class="info-row">
-                <span class="info-label">E-post</span>
+                <span class="info-label">Konto skapat</span>
+                <span class="info-value">${createdDate}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">E-postadress</span>
                 <span class="info-value">${email}</span>
               </div>
+              ${name ? `
+              <div class="info-row">
+                <span class="info-label">Namn</span>
+                <span class="info-value">${name}</span>
+              </div>
+              ` : ''}
               ${organizationName ? `
               <div class="info-row">
-                <span class="info-label">Organisation</span>
+                <span class="info-label">Företag/Organisation</span>
                 <span class="info-value">${organizationName}</span>
               </div>
               ` : ''}
-              ${loginCode ? `
+              ${phone ? `
               <div class="info-row">
-                <span class="info-label">Inloggningskod</span>
-                <span class="info-value">${loginCode}</span>
+                <span class="info-label">Telefonnummer</span>
+                <span class="info-value">${phone}</span>
               </div>
               ` : ''}
               ${swishNumber ? `
@@ -1637,43 +1669,117 @@ class CommHubService {
                 <span class="info-value">${swishNumber}</span>
               </div>
               ` : ''}
+              ${loginCode ? `
+              <div class="info-row">
+                <span class="info-label">Inloggningskod</span>
+                <span class="info-value" style="font-family: monospace; letter-spacing: 2px;">${loginCode}</span>
+              </div>
+              ` : ''}
             </div>
 
-            <h3 style="margin: 32px 0 16px;">Kom igång på 3 enkla steg:</h3>
+            <div class="section-title">✨ Vad kan du göra med QR-Kassan?</div>
+            <div class="feature-grid">
+              <div class="feature">
+                <div class="feature-icon">📱</div>
+                <div class="feature-title">Swish QR-kod</div>
+                <div class="feature-desc">Generera QR-koder för snabba Swish-betalningar</div>
+              </div>
+              <div class="feature">
+                <div class="feature-icon">💵</div>
+                <div class="feature-title">Kontanthantering</div>
+                <div class="feature-desc">Registrera kontantbetalningar enkelt</div>
+              </div>
+              <div class="feature">
+                <div class="feature-icon">📊</div>
+                <div class="feature-title">Statistik</div>
+                <div class="feature-desc">Se din försäljning per dag, vecka eller månad</div>
+              </div>
+              <div class="feature">
+                <div class="feature-icon">👥</div>
+                <div class="feature-title">Personalhantering</div>
+                <div class="feature-desc">Bjud in medarbetare med egna inloggningar</div>
+              </div>
+              <div class="feature">
+                <div class="feature-icon">🛒</div>
+                <div class="feature-title">Parkera varukorg</div>
+                <div class="feature-desc">Pausa en order och hjälp nästa kund</div>
+              </div>
+              <div class="feature">
+                <div class="feature-icon">📧</div>
+                <div class="feature-title">Digitala kvitton</div>
+                <div class="feature-desc">Skicka kvitton direkt till kundens e-post</div>
+              </div>
+            </div>
+
+            <div class="highlight">
+              <strong>💡 Visste du?</strong> QR-Kassan fungerar även offline! Du kan logga in, ta emot betalningar och skapa ordrar utan internetuppkoppling. Allt synkas automatiskt när du kommer online igen.
+            </div>
+
+            <div class="section-title">🚀 Kom igång på 5 minuter</div>
             <div class="steps">
               <div class="step">
                 <div class="step-num">1</div>
                 <div class="step-text">
                   <strong>Ladda ner appen</strong>
-                  Sök efter "QR-Kassan" i App Store eller Google Play, eller använd webbversionen.
+                  <p>Sök efter "QR-Kassan" i App Store (iPhone) eller Google Play (Android). Du kan även använda webbversionen på din dator.</p>
                 </div>
               </div>
               <div class="step">
                 <div class="step-num">2</div>
                 <div class="step-text">
-                  <strong>Logga in</strong>
-                  Använd din inloggningskod eller e-post och lösenord.
+                  <strong>Logga in med din kod</strong>
+                  <p>Skriv in din 8-siffriga inloggningskod ${loginCode ? `<strong>${loginCode}</strong>` : ''} på startskärmen. Du kan också logga in med e-post och lösenord.</p>
                 </div>
               </div>
               <div class="step">
                 <div class="step-num">3</div>
                 <div class="step-text">
-                  <strong>Lägg till produkter</strong>
-                  Gå till Admin-fliken och lägg till dina varor med priser.
+                  <strong>Ställ in ditt Swish-nummer</strong>
+                  <p>Gå till Profil-fliken och ange ditt Swish-nummer för att kunna ta emot betalningar.</p>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-num">4</div>
+                <div class="step-text">
+                  <strong>Lägg till dina produkter</strong>
+                  <p>Under Admin-fliken kan du lägga till produkter med namn, pris och bild. Organisera dem i kategorier för snabbare kassaarbete.</p>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-num">5</div>
+                <div class="step-text">
+                  <strong>Börja sälja!</strong>
+                  <p>Gå till Kassa-fliken, välj produkter och generera en Swish QR-kod. Kunden skannar och betalar – klart!</p>
                 </div>
               </div>
             </div>
 
+            <div class="tips">
+              <div class="tips-title">💡 Tips för att få ut det mesta av QR-Kassan:</div>
+              <ul>
+                <li>Lägg till produktbilder – det gör kassan snabbare och snyggare</li>
+                <li>Använd kategorier för att organisera din meny</li>
+                <li>Bjud in din personal så de får egna inloggningskoder</li>
+                <li>Kolla statistiken regelbundet för att se vad som säljer bäst</li>
+              </ul>
+            </div>
+
             <p style="text-align: center; margin-top: 32px;">
-              <a href="${manualUrl}" class="button" style="color: white;">Läs hela manualen</a>
+              <a href="${manualUrl}" class="button" style="color: white;">📖 Läs hela manualen</a>
+            </p>
+            <p style="text-align: center; margin-top: 8px;">
+              <a href="https://apps.apple.com/app/qr-kassan" class="button-secondary">App Store</a>
+              <a href="https://play.google.com/store/apps/details?id=com.qrkassan" class="button-secondary">Google Play</a>
             </p>
 
-            <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">
+            <p style="color: #6b7280; font-size: 14px; margin-top: 32px; text-align: center;">
               <strong>Behöver du hjälp?</strong><br>
-              Kontakta oss på <a href="mailto:support@frontproduction.se">support@frontproduction.se</a> eller besök vår <a href="https://support.frontproduction.se/support/69bf526cd5d2ae24bbbc28e9">supportsida</a>.
+              Vi finns här för dig! Kontakta oss på <a href="mailto:support@frontproduction.se">support@frontproduction.se</a><br>
+              eller besök vårt <a href="https://support.frontproduction.se/support/69bf526cd5d2ae24bbbc28e9">hjälpcenter</a> för guider och vanliga frågor.
             </p>
           </div>
           <div class="footer">
+            <p style="font-size: 14px; margin-bottom: 12px;">Tack för att du valde QR-Kassan! 💚</p>
             <p>© 2024 QR-Kassan. Alla rättigheter förbehållna.</p>
             <p><a href="${manualUrl}">Manual</a> · <a href="mailto:support@frontproduction.se">Support</a> · <a href="https://support.frontproduction.se/support/69bf526cd5d2ae24bbbc28e9">Hjälpcenter</a></p>
           </div>
@@ -1684,7 +1790,7 @@ class CommHubService {
 
     await this.sendEmail({
       to: email,
-      subject: 'Välkommen till QR-Kassan! Här är dina inloggningsuppgifter',
+      subject: '🎉 Välkommen till QR-Kassan! Ditt konto är redo',
       html,
     });
   }
