@@ -59,17 +59,53 @@ async function adminFetch(path: string, opts: RequestInit = {}) {
     method = 'POST';
     body = JSON.stringify({ filter: { parent_user_id: userId }, limit: 100 });
   } else if (path.match(/^\/users\/([^/]+)\/subscription$/)) {
-    // Update subscription
+    // Update subscription - First fetch current user data, then update
     const userId = path.match(/^\/users\/([^/]+)\/subscription$/)?.[1];
-    url = `${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`;
-    method = 'PUT';
-  } else if (path.match(/^\/users\/([^/]+)\/verify$/)) {
-    // Verify email
-    const userId = path.match(/^\/users\/([^/]+)\/verify$/)?.[1];
-    url = `${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`;
-    method = 'PUT';
+    
+    // Fetch current user data first
+    const currentUserRes = await fetch(`${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+    });
+    
+    if (!currentUserRes.ok) {
+      throw new Error('Kunde inte hämta användardata');
+    }
+    
+    const currentUser = await currentUserRes.json();
+    const currentData = currentUser.data || currentUser;
     const inputData = opts.body ? JSON.parse(opts.body as string) : {};
-    body = JSON.stringify({ data: { ...inputData, email_verified: true } });
+    
+    url = `${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`;
+    method = 'PUT';
+    body = JSON.stringify({ data: { ...currentData, ...inputData } });
+  } else if (path.match(/^\/users\/([^/]+)\/verify$/)) {
+    // Verify email - First fetch current user data, then update
+    const userId = path.match(/^\/users\/([^/]+)\/verify$/)?.[1];
+    
+    // Fetch current user data first
+    const currentUserRes = await fetch(`${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+    });
+    
+    if (!currentUserRes.ok) {
+      throw new Error('Kunde inte hämta användardata');
+    }
+    
+    const currentUser = await currentUserRes.json();
+    const currentData = currentUser.data || currentUser;
+    
+    // Update with email_verified = true while preserving all other data
+    url = `${COMMHUB_URL}/api/data/qr_users/${userId}?app_id=${APP_ID}`;
+    method = 'PUT';
+    body = JSON.stringify({ 
+      data: { 
+        ...currentData, 
+        email_verified: true,
+        email_verified_at: new Date().toISOString(),
+      } 
+    });
   } else if (path.match(/^\/users\/([^/]+)$/)) {
     // Get/Update/Delete single user
     const userId = path.match(/^\/users\/([^/]+)$/)?.[1];
