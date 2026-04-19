@@ -17,6 +17,7 @@ const API_KEY = 'KHue8NLldN3dkeQxHllN9hAWjkLQx17LFXRbW2UnUCs';
 // Token storage key
 const TOKEN_KEY = 'commhub_token';
 const USER_KEY = 'commhub_user';
+const OFFLINE_LOGIN_KEY = 'commhub_offline_login'; // Cache for offline code login
 
 // ==================== Types ====================
 
@@ -290,9 +291,87 @@ class CommHubService {
   }
 
   /**
-   * Login with code (for sub-users)
+   * Login with code (for sub-users) - with offline support
    */
   async loginWithCode(code: string): Promise<AuthResponse> {
+    // First, try to login online
+    try {
+      const result = await this.loginWithCodeOnline(code);
+      
+      // Cache the successful login for offline use
+      await this.cacheOfflineLogin(code, result);
+      
+      return result;
+    } catch (e: any) {
+      // If network error, try offline login
+      if (e.message?.includes('Network') || e.message?.includes('fetch') || e.message?.includes('ansluta')) {
+        console.log('[CommHub] Network error, trying offline login...');
+        return this.loginWithCodeOffline(code);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Cache login credentials for offline use
+   */
+  private async cacheOfflineLogin(code: string, authResult: AuthResponse): Promise<void> {
+    try {
+      const cacheData = {
+        code: code.toUpperCase(),
+        token: authResult.token,
+        user: authResult.user,
+        user_id: authResult.user_id,
+        email: authResult.email,
+        org_id: authResult.org_id,
+        expires_at: authResult.expires_at,
+        cached_at: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem(OFFLINE_LOGIN_KEY, JSON.stringify(cacheData));
+      console.log('[CommHub] Offline login cached for code:', code.substring(0, 2) + '***');
+    } catch (e) {
+      console.error('[CommHub] Failed to cache offline login:', e);
+    }
+  }
+
+  /**
+   * Try to login offline using cached credentials
+   */
+  private async loginWithCodeOffline(code: string): Promise<AuthResponse> {
+    const cached = await AsyncStorage.getItem(OFFLINE_LOGIN_KEY);
+    
+    if (!cached) {
+      throw new Error('Ingen cachad inloggning. Anslut till internet för första inloggningen.');
+    }
+    
+    const cacheData = JSON.parse(cached);
+    
+    // Verify the code matches
+    if (cacheData.code !== code.toUpperCase()) {
+      throw new Error('Ogiltig inloggningskod');
+    }
+    
+    console.log('[CommHub] Offline login successful for:', cacheData.email);
+    
+    // Restore the session from cache
+    if (cacheData.user) {
+      await this.saveToken(cacheData.token, cacheData.user);
+    }
+    
+    return {
+      token: cacheData.token,
+      user_id: cacheData.user_id,
+      email: cacheData.email,
+      org_id: cacheData.org_id,
+      expires_at: cacheData.expires_at,
+      user: cacheData.user,
+    };
+  }
+
+  /**
+   * Online login with code
+   */
+  private async loginWithCodeOnline(code: string): Promise<AuthResponse> {
     // Query qr_org_users collection to find user by login code
     const response = await fetch(
       `${COMMHUB_URL}/api/data/qr_org_users/query?app_id=${APP_ID}`,

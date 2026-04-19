@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Colors } from '../src/utils/colors';
 import { Ionicons } from '@expo/vector-icons';
+import NetInfo from '@react-native-community/netinfo';
 
 export default function LoginScreen() {
   const { user, loading, login } = useAuth();
@@ -18,12 +19,21 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
       router.replace('/(tabs)/pos');
     }
   }, [user, loading]);
+
+  // Monitor network status
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsOffline(!(state.isConnected && state.isInternetReachable !== false));
+    });
+    return () => unsubscribe();
+  }, []);
 
   if (loading) {
     return (
@@ -93,6 +103,14 @@ export default function LoginScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Logga in</Text>
 
+          {/* Offline indicator */}
+          {isOffline && (
+            <View style={styles.offlineBox}>
+              <Ionicons name="cloud-offline" size={16} color={Colors.warning} />
+              <Text style={styles.offlineText}>Offline-läge - Använd inloggningskod</Text>
+            </View>
+          )}
+
           {error ? (
             <View style={styles.errorBox}>
               <Ionicons name="alert-circle" size={16} color={Colors.destructive} />
@@ -100,53 +118,58 @@ export default function LoginScreen() {
             </View>
           ) : null}
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>E-post</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
-              <TextInput
-                testID="login-email-input"
-                style={styles.input}
-                placeholder="din@email.se"
-                placeholderTextColor={Colors.textMuted}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-          </View>
+          {/* Show email/password only when online */}
+          {!isOffline && (
+            <>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>E-post</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="mail-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+                  <TextInput
+                    testID="login-email-input"
+                    style={styles.input}
+                    placeholder="din@email.se"
+                    placeholderTextColor={Colors.textMuted}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Lösenord</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
-              <TextInput
-                testID="login-password-input"
-                style={styles.input}
-                placeholder="Ditt lösenord"
-                placeholderTextColor={Colors.textMuted}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            {error ? (
-              <TouchableOpacity onPress={() => router.push('/reset-password')} style={styles.forgotPassword}>
-                <Text style={styles.forgotPasswordText}>Glömt lösenord?</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Lösenord</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+                  <TextInput
+                    testID="login-password-input"
+                    style={styles.input}
+                    placeholder="Ditt lösenord"
+                    placeholderTextColor={Colors.textMuted}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                    <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+                {error ? (
+                  <TouchableOpacity onPress={() => router.push('/reset-password')} style={styles.forgotPassword}>
+                    <Text style={styles.forgotPasswordText}>Glömt lösenord?</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>eller logga in med kod</Text>
-            <View style={styles.dividerLine} />
-          </View>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>eller logga in med kod</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            </>
+          )}
 
           <View style={styles.inputGroup}>
             <View style={styles.inputWrapper}>
@@ -225,6 +248,11 @@ const styles = StyleSheet.create({
     padding: 12, borderRadius: 8, marginBottom: 16, gap: 8,
   },
   errorText: { color: Colors.destructive, fontSize: 14, flex: 1 },
+  offlineBox: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(245,158,11,0.1)',
+    padding: 12, borderRadius: 8, marginBottom: 16, gap: 8,
+  },
+  offlineText: { color: Colors.warning, fontSize: 14, flex: 1 },
   inputGroup: { marginBottom: 16 },
   label: { fontSize: 14, fontWeight: '500', color: Colors.textSecondary, marginBottom: 6 },
   inputWrapper: {
