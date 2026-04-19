@@ -1415,8 +1415,6 @@ class CommHubService {
     subject: string;
     html?: string;
     text?: string;
-    from?: string;
-    reply_to?: string;
   }): Promise<{ success: boolean; message_id?: string }> {
     const response = await fetch(`${COMMHUB_URL}/api/email/send`, {
       method: 'POST',
@@ -1428,10 +1426,8 @@ class CommHubService {
         app_id: APP_ID,
         to: Array.isArray(params.to) ? params.to : [params.to],
         subject: params.subject,
-        html: params.html,
-        text: params.text,
-        from: params.from || 'hallo@resend.commhub.cloud',
-        reply_to: params.reply_to,
+        html_content: params.html,
+        text_content: params.text,
       }),
     });
 
