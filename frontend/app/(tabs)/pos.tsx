@@ -471,27 +471,23 @@ export default function POSScreen() {
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                {retrying || (retryCount > 0 && retryCount <= 5) ? (
-                  <>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={styles.emptyText}>Hämtar produkter...</Text>
-                    <Text style={styles.emptySubtext}>Försök {retryCount} av 5</Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
-                    <Text style={styles.emptyText}>Inga produkter</Text>
-                    <Text style={styles.emptySubtext}>Lägg till produkter i Admin-panelen</Text>
-                    {networkConnected && (
-                      <TouchableOpacity 
-                        style={styles.retryBtn} 
-                        onPress={handleManualRetry}
-                      >
-                        <Ionicons name="refresh" size={16} color={Colors.primary} />
-                        <Text style={styles.retryBtnText}>Försök igen</Text>
-                      </TouchableOpacity>
-                    )}
-                  </>
+                <Ionicons name="cube-outline" size={64} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>Inga varor hittades</Text>
+                <Text style={styles.emptySubtext}>
+                  Lägg till varor genom att gå till Admin-sidan och tryck på den gröna "+ Lägg till"-knappen uppe till höger.
+                </Text>
+                <TouchableOpacity 
+                  style={styles.addProductBtn} 
+                  onPress={() => router.push('/(tabs)/admin')}
+                >
+                  <Ionicons name="add-circle" size={20} color="#fff" />
+                  <Text style={styles.addProductBtnText}>Gå till Admin</Text>
+                </TouchableOpacity>
+                {retrying && (
+                  <View style={styles.backgroundSyncIndicator}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <Text style={styles.backgroundSyncText}>Söker efter produkter...</Text>
+                  </View>
                 )}
               </View>
             }
@@ -704,9 +700,20 @@ const styles = StyleSheet.create({
   productInfo: { padding: 8 },
   productName: { fontSize: 13, fontWeight: '500', color: Colors.textPrimary },
   productPrice: { fontSize: 15, fontWeight: '700', color: Colors.primary, marginTop: 2 },
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyText: { fontSize: 18, fontWeight: '600', color: Colors.textPrimary, marginTop: 12 },
-  emptySubtext: { fontSize: 14, color: Colors.textMuted, marginTop: 4 },
+  emptyState: { alignItems: 'center', paddingVertical: 60, paddingHorizontal: 24 },
+  emptyText: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary, marginTop: 16 },
+  emptySubtext: { fontSize: 15, color: Colors.textMuted, marginTop: 8, textAlign: 'center', lineHeight: 22 },
+  addProductBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24,
+    backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 14,
+    borderRadius: 12,
+  },
+  addProductBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  backgroundSyncIndicator: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20,
+    opacity: 0.6,
+  },
+  backgroundSyncText: { fontSize: 13, color: Colors.textMuted },
   retryBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 16,
     backgroundColor: 'rgba(34,197,94,0.1)', paddingHorizontal: 16, paddingVertical: 10,
