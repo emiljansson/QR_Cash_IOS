@@ -89,7 +89,7 @@ class LocalFirstStore {
     const cacheKey = activeOnly ? 'products_active' : 'products';
     const cached = await this.getCache<any[]>(cacheKey, userId);
     
-    if (cached && cached.length > 0) {
+    if (cached && Array.isArray(cached) && cached.length > 0) {
       // Verify cache is for this user by checking first product's user_id
       const firstProduct = cached[0];
       if (firstProduct && firstProduct.user_id === userId) {
@@ -98,6 +98,7 @@ class LocalFirstStore {
         if (age > CACHE_TTL_MS) {
           this.backgroundSyncProducts(userId, activeOnly);
         }
+        console.log('[LocalFirst] Returning', cached.length, 'cached products');
         return cached;
       } else {
         // Cache is for a different user - invalidate and fetch fresh
@@ -108,14 +109,22 @@ class LocalFirstStore {
 
     // 2. No valid cache - fetch from server
     try {
+      console.log('[LocalFirst] No cache, fetching products from API');
       const products = await api.getProducts(activeOnly);
+      const validProducts = Array.isArray(products) ? products : [];
+      console.log('[LocalFirst] Fetched', validProducts.length, 'products from API');
       // Only cache if we got products
-      if (products.length > 0) {
-        await this.setCache(cacheKey, userId, products);
+      if (validProducts.length > 0) {
+        await this.setCache(cacheKey, userId, validProducts);
       }
-      return products;
-    } catch (e) {
-      console.error('[LocalFirst] Failed to fetch products:', e);
+      return validProducts;
+    } catch (e: any) {
+      console.error('[LocalFirst] Failed to fetch products:', e.message);
+      // Return cached data even if it's for wrong user, as a fallback
+      if (cached && Array.isArray(cached)) {
+        console.log('[LocalFirst] Returning stale cache as fallback');
+        return cached;
+      }
       return [];
     }
   }

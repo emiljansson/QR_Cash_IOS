@@ -8,6 +8,7 @@ import { Colors } from '../../src/utils/colors';
 import { api } from '../../src/utils/api';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { useRealtimeSync } from '../../src/hooks/useRealtimeSync';
+import { useNetworkStatus } from '../../src/hooks/useNetworkStatus';
 import { commHubWS } from '../../src/services/commHubWebSocket';
 import { localStore } from '../../src/utils/localFirstStore';
 import { generateOrderQR } from '../../src/utils/swishQR';
@@ -50,16 +51,26 @@ export default function POSScreen() {
   const [parkedCount, setParkedCount] = useState(0);
   
   // Real-time sync - connect to CommHub WebSocket
-  const { isConnected, connectionStatus } = useRealtimeSync();
+  const { isConnected: wsConnected, connectionStatus } = useRealtimeSync();
+  // Network status - actual internet connectivity
+  const { isConnected: networkConnected } = useNetworkStatus();
 
   const loadProducts = useCallback(async () => {
-    if (!user?.user_id) return;
+    if (!user?.user_id) {
+      console.log('[POS] No user_id, skipping product load');
+      setLoading(false);
+      return;
+    }
     try {
+      console.log('[POS] Loading products for user:', user.user_id);
       // Use local-first store - returns cached data instantly, syncs in background
       const data = await localStore.getProducts(user.user_id, true);
-      setProducts(data);
-    } catch (e) {
-      // Silent fail - will show empty product list
+      console.log('[POS] Loaded', data?.length || 0, 'products');
+      setProducts(data || []);
+    } catch (e: any) {
+      console.error('[POS] Failed to load products:', e.message);
+      // Show empty list on error
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -299,10 +310,10 @@ export default function POSScreen() {
             <Text style={styles.headerTitle}>{settings.store_name || 'Kassa'}</Text>
             <View style={styles.headerSubtitleRow}>
               <Text style={styles.headerSubtitle}>{products.length} produkter</Text>
-              {/* Real-time sync indicator */}
-              <View style={[styles.syncIndicator, { backgroundColor: isConnected ? '#22c55e' : '#f59e0b' }]}>
+              {/* Network status indicator - shows actual internet connectivity */}
+              <View style={[styles.syncIndicator, { backgroundColor: networkConnected ? '#22c55e' : '#ef4444' }]}>
                 <Ionicons 
-                  name={isConnected ? 'cloud-done' : 'cloud-offline'} 
+                  name={networkConnected ? 'wifi' : 'cloud-offline'} 
                   size={10} 
                   color="#fff" 
                 />
