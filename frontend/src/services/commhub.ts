@@ -256,6 +256,27 @@ class CommHubService {
             orgId,
             organizationName,
           });
+          
+          // Cache the user's login code for offline use (if they have one)
+          if (legacyUser.login_code) {
+            await this.cacheOfflineLogin(legacyUser.login_code, {
+              token: data.token,
+              user_id: originalUserId,
+              email: legacyUser.email || email.toLowerCase(),
+              org_id: orgId,
+              expires_at: data.expires_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              user: {
+                user_id: originalUserId,
+                email: legacyUser.email || email.toLowerCase(),
+                name: userName,
+                organization_name: organizationName,
+                phone: userPhone,
+                role: userRole,
+                org_id: orgId,
+              },
+            });
+            console.log('[CommHub] Cached login code for offline use');
+          }
         }
       }
     } catch (e) {
