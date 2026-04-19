@@ -1566,7 +1566,7 @@ class CommHubService {
    * Send welcome email to new user
    */
   async sendWelcomeEmail(email: string, name: string, loginCode?: string, organizationName?: string, swishNumber?: string): Promise<void> {
-    const manualUrl = 'https://d20xqn30bfw65x.cloudfront.net/fcd81e2d-d8b9-48c4-9eeb-84116442b3e0/documents/c307195e-f8ac-4879-893c-ef27188a95f6_manual.html';
+    const manualUrl = 'https://d20xqn30bfw65x.cloudfront.net/fcd81e2d/documents/7d92485d/71866d44-b712-4f93-a19e-d58c4547d5a5.html';
     
     const html = `
       <!DOCTYPE html>
@@ -1693,7 +1693,7 @@ class CommHubService {
    * Send invite email to sub-user
    */
   async sendInviteEmail(email: string, name: string, loginCode: string, organizationName: string): Promise<void> {
-    const manualUrl = 'https://d20xqn30bfw65x.cloudfront.net/fcd81e2d-d8b9-48c4-9eeb-84116442b3e0/documents/c307195e-f8ac-4879-893c-ef27188a95f6_manual.html';
+    const manualUrl = 'https://d20xqn30bfw65x.cloudfront.net/fcd81e2d/documents/7d92485d/71866d44-b712-4f93-a19e-d58c4547d5a5.html';
     
     const html = `
       <!DOCTYPE html>
