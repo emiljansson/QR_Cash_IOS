@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR-Kassan Manual</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      color: #1f2937;
+      background: #f9fafb;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    header {
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    header h1 { font-size: 2.5rem; margin-bottom: 10px; }
+    header p { font-size: 1.2rem; opacity: 0.9; }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    h2 { color: #22c55e; margin-bottom: 16px; font-size: 1.5rem; }
+    h3 { color: #374151; margin: 20px 0 12px; font-size: 1.2rem; }
+    p { margin-bottom: 12px; }
+    ul, ol { margin: 12px 0 12px 24px; }
+    li { margin-bottom: 8px; }
+    .highlight {
+      background: #f0fdf4;
+      border-left: 4px solid #22c55e;
+      padding: 16px;
+      margin: 16px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .warning {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 16px;
+      margin: 16px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    code {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    .code-box {
+      background: #1f2937;
+      color: #e5e7eb;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: monospace;
+      margin: 12px 0;
+      overflow-x: auto;
+    }
+    .step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .step-number {
+      background: #22c55e;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+    .toc {
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .toc h3 { margin-bottom: 12px; }
+    .toc a { color: #22c55e; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .toc ul { list-style: none; margin-left: 0; }
+    .toc li { margin-bottom: 6px; }
+    footer {
+      text-align: center;
+      padding: 30px;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.8rem; }
+      .container { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>QR-Kassan Manual</h1>
+    <p>Komplett guide för att komma igång med ditt kassasystem</p>
+  </header>
+
+  <div class="container">
+    <div class="toc card">
+      <h3>Innehåll</h3>
+      <ul>
+        <li><a href="#kom-igang">1. Kom igång</a></li>
+        <li><a href="#inloggning">2. Inloggning</a></li>
+        <li><a href="#produkter">3. Hantera produkter</a></li>
+        <li><a href="#kassa">4. Använda kassan</a></li>
+        <li><a href="#betalningar">5. Ta emot betalningar</a></li>
+        <li><a href="#ordrar">6. Orderhistorik</a></li>
+        <li><a href="#statistik">7. Försäljningsstatistik</a></li>
+        <li><a href="#personal">8. Hantera personal</a></li>
+        <li><a href="#offline">9. Offline-läge</a></li>
+        <li><a href="#support">10. Support</a></li>
+      </ul>
+    </div>
+
+    <div id="kom-igang" class="card">
+      <h2>1. Kom igång</h2>
+      <p>Välkommen till QR-Kassan! Detta är ett modernt kassasystem som fungerar på både mobil och webb, med stöd för Swish-betalningar via QR-kod.</p>
+      
+      <h3>Vad du behöver</h3>
+      <ul>
+        <li>En smartphone (iPhone eller Android) eller dator</li>
+        <li>Internetanslutning (fungerar även offline, se avsnitt 9)</li>
+        <li>Swish-nummer för att ta emot betalningar</li>
+      </ul>
+
+      <h3>Installation</h3>
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>
+          <strong>Ladda ner appen</strong><br>
+          Sök efter "QR-Kassan" i App Store (iPhone) eller Google Play (Android), eller använd webbversionen på <code>qr-kassan.app</code>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>
+          <strong>Logga in</strong><br>
+          Använd din inloggningskod eller e-post och lösenord
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>
+          <strong>Konfigurera Swish</strong><br>
+          Gå till Profil och ange ditt Swish-nummer
+        </div>
+      </div>
+    </div>
+
+    <div id="inloggning" class="card">
+      <h2>2. Inloggning</h2>
+      <p>Det finns två sätt att logga in:</p>
+      
+      <h3>Med inloggningskod (rekommenderat)</h3>
+      <p>Din personliga 8-siffriga kod som du fått via mail. Perfekt för snabb inloggning, speciellt för kassapersonal.</p>
+      <div class="highlight">
+        <strong>Tips:</strong> Inloggningskoden fungerar även offline om du loggat in minst en gång tidigare!
+      </div>
+
+      <h3>Med e-post och lösenord</h3>
+      <p>Använd din registrerade e-postadress och lösenord. Kräver internetanslutning.</p>
+
+      <h3>Glömt lösenord?</h3>
+      <p>Klicka på "Glömt lösenord?" på inloggningssidan och följ instruktionerna. Du får ett mail med en återställningslänk.</p>
+    </div>
+
+    <div id="produkter" class="card">
+      <h2>3. Hantera produkter</h2>
+      <p>Gå till <strong>Admin</strong>-fliken för att hantera dina produkter.</p>
+
+      <h3>Lägg till produkt</h3>
+      <ol>
+        <li>Klicka på "+" eller "Lägg till produkt"</li>
+        <li>Fyll i produktnamn</li>
+        <li>Ange pris i kronor</li>
+        <li>Välj en kategori (valfritt)</li>
+        <li>Ladda upp en produktbild (valfritt)</li>
+        <li>Klicka "Spara"</li>
+      </ol>
+
+      <h3>Redigera produkt</h3>
+      <p>Klicka på produkten i listan, gör dina ändringar och klicka "Spara".</p>
+
+      <h3>Inaktivera/Aktivera produkt</h3>
+      <p>Inaktiverade produkter visas inte i kassan men finns kvar i systemet. Perfekt för säsongsvaror.</p>
+
+      <div class="warning">
+        <strong>OBS:</strong> Radering av produkter är permanent och kan inte ångras.
+      </div>
+    </div>
+
+    <div id="kassa" class="card">
+      <h2>4. Använda kassan</h2>
+      <p><strong>Kassa</strong>-fliken är ditt huvudverktyg för försäljning.</p>
+
+      <h3>Lägga till varor</h3>
+      <ul>
+        <li>Klicka på en produkt för att lägga till den i varukorgen</li>
+        <li>Klicka igen för att öka antal</li>
+        <li>Använd +/- knapparna för att justera</li>
+      </ul>
+
+      <h3>Parkera varukorg</h3>
+      <p>Behöver du pausera en försäljning? Klicka "Parkera" för att spara varukorgen och hjälpa nästa kund. Hämta tillbaka den senare via "Parkerade"-knappen.</p>
+
+      <h3>Ta bort varor</h3>
+      <p>Svep åt vänster på en vara i korgen eller använd "-" knappen.</p>
+    </div>
+
+    <div id="betalningar" class="card">
+      <h2>5. Ta emot betalningar</h2>
+      
+      <h3>Swish-betalning</h3>
+      <div class="step">
+        <div class="step-number">1</div>
+        <div>Klicka på "Swish QR" när kunden är klar</div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div>En QR-kod visas med beloppet</div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div>Kunden skannar koden med sin Swish-app och bekräftar</div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div>Klicka "Bekräfta betalning" när kunden betalat</div>
+      </div>
+
+      <h3>Kontantbetalning</h3>
+      <p>Klicka "Kontant" för att registrera en kontantbetalning. Ordern markeras som betald direkt.</p>
+
+      <h3>Kunddisplay</h3>
+      <p>Anslut en extra skärm för att visa QR-koden stort för kunderna. Gå till Profil → "Para kunddisplay" för att ansluta.</p>
+    </div>
+
+    <div id="ordrar" class="card">
+      <h2>6. Orderhistorik</h2>
+      <p>Under <strong>Ordrar</strong>-fliken ser du alla dina ordrar.</p>
+
+      <h3>Filtrera ordrar</h3>
+      <ul>
+        <li><strong>Alla:</strong> Visar samtliga ordrar</li>
+        <li><strong>Betalda:</strong> Endast genomförda betalningar</li>
+        <li><strong>Väntande:</strong> Ordrar som väntar på betalning</li>
+        <li><strong>Avbrutna:</strong> Makulerade ordrar</li>
+      </ul>
+
+      <h3>Skicka kvitto</h3>
+      <p>Klicka på en order och välj "Skicka kvitto" för att maila ett kvitto till kunden.</p>
+
+      <h3>Radera order</h3>
+      <p>Väntande och avbrutna ordrar kan raderas. Betalda ordrar sparas för bokföring.</p>
+    </div>
+
+    <div id="statistik" class="card">
+      <h2>7. Försäljningsstatistik</h2>
+      <p>I <strong>Admin</strong>-fliken under "Statistik" ser du din försäljning.</p>
+
+      <h3>Tidsperioder</h3>
+      <ul>
+        <li><strong>Idag:</strong> Dagens försäljning</li>
+        <li><strong>Vecka:</strong> Senaste 7 dagarna</li>
+        <li><strong>Månad:</strong> Senaste 30 dagarna</li>
+        <li><strong>År:</strong> Senaste 365 dagarna</li>
+      </ul>
+
+      <h3>Vad visas</h3>
+      <ul>
+        <li>Total försäljning i kronor</li>
+        <li>Antal ordrar</li>
+        <li>Snittorder (genomsnittligt belopp)</li>
+        <li>Försäljning per produkt</li>
+      </ul>
+    </div>
+
+    <div id="personal" class="card">
+      <h2>8. Hantera personal</h2>
+      <p>Under <strong>Admin → Personal</strong> kan du hantera medarbetare.</p>
+
+      <h3>Bjud in ny medarbetare</h3>
+      <ol>
+        <li>Klicka "Lägg till"</li>
+        <li>Fyll i namn och e-postadress</li>
+        <li>Medarbetaren får ett mail med inloggningskod</li>
+      </ol>
+
+      <h3>Hantera medarbetare</h3>
+      <ul>
+        <li><strong>Skicka inloggningsinfo:</strong> Skickar ny kod och lösenord via mail</li>
+        <li><strong>Ny kod:</strong> Genererar en ny inloggningskod</li>
+        <li><strong>Återställ lösenord:</strong> Skapar ett nytt temporärt lösenord</li>
+        <li><strong>Ta bort:</strong> Tar bort medarbetaren permanent</li>
+      </ul>
+    </div>
+
+    <div id="offline" class="card">
+      <h2>9. Offline-läge</h2>
+      <p>QR-Kassan fungerar även utan internet!</p>
+
+      <h3>Vad fungerar offline</h3>
+      <ul>
+        <li>✅ Visa produkter (cachade)</li>
+        <li>✅ Skapa ordrar och ta betalt</li>
+        <li>✅ Generera Swish QR-koder</li>
+        <li>✅ Kontantbetalningar</li>
+        <li>✅ Parkera och hämta varukorgar</li>
+        <li>✅ Inloggning med kod (om inloggad tidigare)</li>
+      </ul>
+
+      <h3>Vad kräver internet</h3>
+      <ul>
+        <li>❌ Försäljningsstatistik</li>
+        <li>❌ Första inloggningen</li>
+        <li>❌ Skicka kvitton via mail</li>
+      </ul>
+
+      <h3>Synkronisering</h3>
+      <p>Alla offline-ordrar synkas automatiskt när internet återkommer. Du ser en molnikon i kassan som visar anslutningsstatus:</p>
+      <ul>
+        <li>🟢 Grön = Online</li>
+        <li>🔴 Röd = Offline</li>
+      </ul>
+    </div>
+
+    <div id="support" class="card">
+      <h2>10. Support</h2>
+      
+      <h3>Vanliga frågor</h3>
+      
+      <p><strong>Varför syns inte min produkt i kassan?</strong><br>
+      Kontrollera att produkten är aktiverad i Admin.</p>
+
+      <p><strong>Kunden har betalat men ordern är kvar som "väntande"?</strong><br>
+      Klicka på ordern och välj "Bekräfta betalning" manuellt.</p>
+
+      <p><strong>Hur ändrar jag Swish-nummer?</strong><br>
+      Gå till Profil och uppdatera ditt Swish-nummer.</p>
+
+      <h3>Kontakta oss</h3>
+      <p>Behöver du mer hjälp? Kontakta oss:</p>
+      <ul>
+        <li>E-post: support@qr-kassan.se</li>
+        <li>Webb: qr-kassan.se/support</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    <p>© 2024 QR-Kassan. Alla rättigheter förbehållna.</p>
+    <p>Version 2.0</p>
+  </footer>
+</body>
+</html>

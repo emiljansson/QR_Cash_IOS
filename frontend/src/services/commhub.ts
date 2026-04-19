@@ -1563,7 +1563,9 @@ class CommHubService {
   /**
    * Send welcome email to new user
    */
-  async sendWelcomeEmail(email: string, name: string, loginCode?: string): Promise<void> {
+  async sendWelcomeEmail(email: string, name: string, loginCode?: string, organizationName?: string, swishNumber?: string): Promise<void> {
+    const manualUrl = 'https://d20xqn30bfw65x.cloudfront.net/fcd81e2d-d8b9-48c4-9eeb-84116442b3e0/documents/c307195e-f8ac-4879-893c-ef27188a95f6_manual.html';
+    
     const html = `
       <!DOCTYPE html>
       <html>
@@ -1571,26 +1573,107 @@ class CommHubService {
         <meta charset="utf-8">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-          .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-          .header { background: #22c55e; color: white; padding: 24px; text-align: center; }
-          .content { padding: 24px; }
-          .code { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; padding: 16px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 4px; margin: 16px 0; }
-          .footer { text-align: center; padding: 16px; color: #666; font-size: 12px; }
+          .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; padding: 32px; text-align: center; }
+          .header h1 { margin: 0 0 8px; font-size: 28px; }
+          .header p { margin: 0; opacity: 0.9; font-size: 16px; }
+          .content { padding: 32px; }
+          .code { background: #f0fdf4; border: 2px solid #22c55e; border-radius: 12px; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 6px; margin: 24px 0; color: #16a34a; }
+          .info-box { background: #f9fafb; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+          .info-row:last-child { border-bottom: none; }
+          .info-label { color: #6b7280; font-size: 14px; }
+          .info-value { font-weight: 600; color: #1f2937; }
+          .button { display: inline-block; background: #22c55e; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 16px 0; }
+          .steps { margin: 24px 0; }
+          .step { display: flex; gap: 16px; margin-bottom: 16px; align-items: flex-start; }
+          .step-num { background: #22c55e; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+          .step-text { flex: 1; }
+          .step-text strong { display: block; margin-bottom: 4px; }
+          .footer { text-align: center; padding: 24px; color: #6b7280; font-size: 13px; background: #f9fafb; }
+          .footer a { color: #22c55e; text-decoration: none; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
             <h1>Välkommen till QR-Kassan!</h1>
+            <p>Ditt kassasystem är redo att användas</p>
           </div>
           <div class="content">
-            <p>Hej ${name || 'där'}!</p>
-            <p>Ditt konto har skapats. ${loginCode ? 'Här är din inloggningskod:' : ''}</p>
-            ${loginCode ? `<div class="code">${loginCode}</div>` : ''}
-            <p>Du kan nu logga in och börja använda QR-Kassan för att ta emot betalningar.</p>
+            <p style="font-size: 18px; margin-bottom: 24px;">Hej <strong>${name || 'där'}</strong>!</p>
+            
+            <p>Grattis! Ditt konto hos QR-Kassan har nu skapats och du kan börja ta emot Swish-betalningar direkt.</p>
+
+            ${loginCode ? `
+            <p style="margin-top: 24px;"><strong>Din personliga inloggningskod:</strong></p>
+            <div class="code">${loginCode}</div>
+            <p style="color: #6b7280; font-size: 14px; text-align: center;">Spara denna kod - den fungerar även offline!</p>
+            ` : ''}
+
+            <div class="info-box">
+              <h3 style="margin: 0 0 16px; font-size: 16px; color: #374151;">Dina kontouppgifter</h3>
+              <div class="info-row">
+                <span class="info-label">E-post</span>
+                <span class="info-value">${email}</span>
+              </div>
+              ${organizationName ? `
+              <div class="info-row">
+                <span class="info-label">Organisation</span>
+                <span class="info-value">${organizationName}</span>
+              </div>
+              ` : ''}
+              ${loginCode ? `
+              <div class="info-row">
+                <span class="info-label">Inloggningskod</span>
+                <span class="info-value">${loginCode}</span>
+              </div>
+              ` : ''}
+              ${swishNumber ? `
+              <div class="info-row">
+                <span class="info-label">Swish-nummer</span>
+                <span class="info-value">${swishNumber}</span>
+              </div>
+              ` : ''}
+            </div>
+
+            <h3 style="margin: 32px 0 16px;">Kom igång på 3 enkla steg:</h3>
+            <div class="steps">
+              <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                  <strong>Ladda ner appen</strong>
+                  Sök efter "QR-Kassan" i App Store eller Google Play, eller använd webbversionen.
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                  <strong>Logga in</strong>
+                  Använd din inloggningskod eller e-post och lösenord.
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                  <strong>Lägg till produkter</strong>
+                  Gå till Admin-fliken och lägg till dina varor med priser.
+                </div>
+              </div>
+            </div>
+
+            <p style="text-align: center; margin-top: 32px;">
+              <a href="${manualUrl}" class="button" style="color: white;">Läs hela manualen</a>
+            </p>
+
+            <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">
+              <strong>Behöver du hjälp?</strong><br>
+              Kontakta oss på support@qr-kassan.se eller besök vår supportsida.
+            </p>
           </div>
           <div class="footer">
-            Powered by QR-Kassan
+            <p>© 2024 QR-Kassan. Alla rättigheter förbehållna.</p>
+            <p><a href="${manualUrl}">Manual</a> · <a href="mailto:support@qr-kassan.se">Support</a></p>
           </div>
         </div>
       </body>
@@ -1599,7 +1682,7 @@ class CommHubService {
 
     await this.sendEmail({
       to: email,
-      subject: 'Välkommen till QR-Kassan!',
+      subject: 'Välkommen till QR-Kassan! Här är dina inloggningsuppgifter',
       html,
     });
   }
@@ -1608,6 +1691,8 @@ class CommHubService {
    * Send invite email to sub-user
    */
   async sendInviteEmail(email: string, name: string, loginCode: string, organizationName: string): Promise<void> {
+    const manualUrl = 'https://d20xqn30bfw65x.cloudfront.net/fcd81e2d-d8b9-48c4-9eeb-84116442b3e0/documents/c307195e-f8ac-4879-893c-ef27188a95f6_manual.html';
+    
     const html = `
       <!DOCTYPE html>
       <html>
@@ -1615,29 +1700,94 @@ class CommHubService {
         <meta charset="utf-8">
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-          .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-          .header { background: #8b5cf6; color: white; padding: 24px; text-align: center; }
-          .content { padding: 24px; }
-          .code { background: #f5f3ff; border: 2px solid #8b5cf6; border-radius: 8px; padding: 16px; text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 4px; margin: 16px 0; }
-          .footer { text-align: center; padding: 16px; color: #666; font-size: 12px; }
+          .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 32px; text-align: center; }
+          .header h1 { margin: 0 0 8px; font-size: 28px; }
+          .header p { margin: 0; opacity: 0.9; font-size: 16px; }
+          .content { padding: 32px; }
+          .code { background: #f5f3ff; border: 2px solid #8b5cf6; border-radius: 12px; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 6px; margin: 24px 0; color: #7c3aed; }
+          .info-box { background: #f9fafb; border-radius: 8px; padding: 20px; margin: 20px 0; }
+          .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+          .info-row:last-child { border-bottom: none; }
+          .info-label { color: #6b7280; font-size: 14px; }
+          .info-value { font-weight: 600; color: #1f2937; }
+          .button { display: inline-block; background: #8b5cf6; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; margin: 16px 0; }
+          .steps { margin: 24px 0; }
+          .step { display: flex; gap: 16px; margin-bottom: 16px; align-items: flex-start; }
+          .step-num { background: #8b5cf6; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+          .step-text { flex: 1; }
+          .step-text strong { display: block; margin-bottom: 4px; }
+          .highlight { background: #f5f3ff; border-left: 4px solid #8b5cf6; padding: 16px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+          .footer { text-align: center; padding: 24px; color: #6b7280; font-size: 13px; background: #f9fafb; }
+          .footer a { color: #8b5cf6; text-decoration: none; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
             <h1>Du har bjudits in!</h1>
+            <p>Bli en del av ${organizationName}</p>
           </div>
           <div class="content">
-            <p>Hej ${name || 'där'}!</p>
-            <p>Du har bjudits in att använda QR-Kassan för <strong>${organizationName}</strong>.</p>
-            <p>Använd denna kod för att logga in:</p>
+            <p style="font-size: 18px; margin-bottom: 24px;">Hej <strong>${name || 'där'}</strong>!</p>
+            
+            <p>Du har bjudits in att använda <strong>QR-Kassan</strong> för <strong>${organizationName}</strong>. Med QR-Kassan kan du enkelt ta emot Swish-betalningar via QR-kod.</p>
+
+            <p style="margin-top: 24px;"><strong>Din personliga inloggningskod:</strong></p>
             <div class="code">${loginCode}</div>
-            <p style="color: #666; font-size: 14px;">
-              Ladda ner QR-Kassan-appen och ange koden för att komma igång.
+            
+            <div class="highlight">
+              <strong>💡 Bra att veta:</strong> Din inloggningskod fungerar även när du är offline! Perfekt om du behöver ta betalt på platser med dålig uppkoppling.
+            </div>
+
+            <div class="info-box">
+              <h3 style="margin: 0 0 16px; font-size: 16px; color: #374151;">Dina uppgifter</h3>
+              <div class="info-row">
+                <span class="info-label">E-post</span>
+                <span class="info-value">${email}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Organisation</span>
+                <span class="info-value">${organizationName}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Inloggningskod</span>
+                <span class="info-value">${loginCode}</span>
+              </div>
+            </div>
+
+            <h3 style="margin: 32px 0 16px;">Så kommer du igång:</h3>
+            <div class="steps">
+              <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                  <strong>Ladda ner appen</strong>
+                  Sök efter "QR-Kassan" i App Store (iPhone) eller Google Play (Android).
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                  <strong>Ange din kod</strong>
+                  Skriv in koden <strong>${loginCode}</strong> på inloggningsskärmen.
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                  <strong>Börja sälja!</strong>
+                  Du är nu redo att ta emot betalningar för ${organizationName}.
+                </div>
+              </div>
+            </div>
+
+            <p style="text-align: center; margin-top: 32px;">
+              <a href="${manualUrl}" class="button" style="color: white;">Läs hela manualen</a>
             </p>
           </div>
           <div class="footer">
-            Powered by QR-Kassan
+            <p>Detta mail skickades från ${organizationName} via QR-Kassan.</p>
+            <p><a href="${manualUrl}">Manual</a> · <a href="mailto:support@qr-kassan.se">Support</a></p>
           </div>
         </div>
       </body>
@@ -1646,7 +1796,7 @@ class CommHubService {
 
     await this.sendEmail({
       to: email,
-      subject: `Du har bjudits in till ${organizationName} - QR-Kassan`,
+      subject: `Du har bjudits in till ${organizationName} - Dina inloggningsuppgifter`,
       html,
     });
   }
