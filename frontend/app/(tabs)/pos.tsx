@@ -229,18 +229,38 @@ export default function POSScreen() {
 
   const handleConfirmPayment = async () => {
     if (!currentOrder) return;
+    
+    // Check if this is an offline order
+    const isOfflineOrder = currentOrder.offline || currentOrder.id?.startsWith('offline_');
+    
     try {
-      await api.confirmOrder(currentOrder.id);
+      if (!isOfflineOrder) {
+        // Online order - confirm via API
+        await api.confirmOrder(currentOrder.id);
+      } else {
+        // Offline order - save confirmation to sync queue
+        console.log('[POS] Confirming offline order:', currentOrder.id);
+        await localStore.queueOfflineConfirmation(user?.user_id || '', currentOrder);
+      }
+      
       setPaymentConfirmed(true);
       setTimeout(() => {
         setShowQR(false);
         setPaymentConfirmed(false);
         setCurrentOrder(null);
         setCart([]);
-        // Don't reset display here - let the display app handle its own countdown
       }, 2000);
     } catch (e: any) {
-      Alert.alert('Fel', e.message);
+      // Even if API fails, treat as offline confirmation
+      console.log('[POS] API failed, saving offline confirmation');
+      await localStore.queueOfflineConfirmation(user?.user_id || '', currentOrder);
+      setPaymentConfirmed(true);
+      setTimeout(() => {
+        setShowQR(false);
+        setPaymentConfirmed(false);
+        setCurrentOrder(null);
+        setCart([]);
+      }, 2000);
     }
   };
 
@@ -255,18 +275,35 @@ export default function POSScreen() {
 
   const handleCashPayment = async () => {
     if (cart.length === 0) return;
+    
+    const orderData = {
+      items: cart.map(({ product_id, name, price, quantity }) => ({ product_id, name, price, quantity })),
+      total: cartTotal,
+      swish_phone: settings.swish_phone || '',
+      payment_method: 'cash',
+    };
+    
     try {
-      const order = await api.createOrder({
-        items: cart.map(({ product_id, name, price, quantity }) => ({ product_id, name, price, quantity })),
-        total: cartTotal,
-        swish_phone: settings.swish_phone || '',
-      });
+      const order = await api.createOrder(orderData);
       await api.confirmOrder(order.id);
       setCart([]);
-      Alert.alert('Betalning mottagen', `${cartTotal.toFixed(2)} kr kontant`);
-      // Don't reset display here - let the display app handle its own countdown
+      Alert.alert('Betalning mottagen', `${cartTotal.toFixed(0)} kr kontant`);
     } catch (e: any) {
-      Alert.alert('Fel', e.message);
+      // Offline mode - create local cash order
+      console.log('[POS] Creating offline cash order');
+      const offlineOrder = {
+        ...orderData,
+        id: `offline_cash_${Date.now()}`,
+        status: 'paid', // Cash is immediately paid
+        created_at: new Date().toISOString(),
+        offline: true,
+      };
+      
+      // Queue for sync when online
+      await localStore.queueOfflineOrder(user?.user_id || '', offlineOrder);
+      
+      setCart([]);
+      Alert.alert('Betalning mottagen', `${cartTotal.toFixed(0)} kr kontant\n\n(Sparad offline - synkas automatiskt)`);
     }
   };
 

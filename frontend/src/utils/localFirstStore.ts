@@ -302,7 +302,63 @@ class LocalFirstStore {
     }
   }
 
-  // ==================== SYNC MANAGEMENT ====================
+  // Queue an offline order for later sync (for cash payments)
+  async queueOfflineOrder(userId: string, orderData: any): Promise<void> {
+    console.log('[LocalFirst] Queuing offline order:', orderData.id);
+    
+    // Add to local orders cache
+    const orders = await this.getCache<any[]>('orders', userId) || [];
+    orders.unshift(orderData);
+    await this.setCache('orders', userId, orders);
+    
+    // Add to sync queue
+    this.pendingChanges.push({
+      type: 'create_order',
+      data: {
+        ...orderData,
+        // Remove offline-specific fields before syncing
+        offline: undefined,
+      },
+      timestamp: Date.now(),
+    });
+    await this.savePendingChanges();
+    console.log('[LocalFirst] Offline order queued for sync');
+  }
+
+  // Queue an offline order confirmation for later sync
+  async queueOfflineConfirmation(userId: string, order: any): Promise<void> {
+    console.log('[LocalFirst] Queuing offline confirmation for:', order.id);
+    
+    // Update local order status
+    const orders = await this.getCache<any[]>('orders', userId) || [];
+    const updatedOrders = orders.map((o: any) => 
+      o.id === order.id ? { ...o, status: 'paid', confirmed_offline: true } : o
+    );
+    await this.setCache('orders', userId, updatedOrders);
+    
+    // If it's a truly offline order (not yet synced), update the pending create
+    const isOfflineOrder = order.offline || order.id?.startsWith('offline_');
+    
+    if (isOfflineOrder) {
+      // The order itself hasn't been synced yet - update its status in the queue
+      this.pendingChanges = this.pendingChanges.map((change: any) => {
+        if (change.type === 'create_order' && change.data?.id === order.id) {
+          return { ...change, data: { ...change.data, status: 'paid' } };
+        }
+        return change;
+      });
+    } else {
+      // Online order that we're confirming offline - add confirmation to queue
+      this.pendingChanges.push({
+        type: 'confirm_order',
+        orderId: order.id,
+        timestamp: Date.now(),
+      });
+    }
+    
+    await this.savePendingChanges();
+    console.log('[LocalFirst] Offline confirmation queued');
+  }
 
   async forceSyncAll(userId: string): Promise<void> {
     console.log('[LocalFirst] Force syncing all data...');
@@ -372,17 +428,34 @@ class LocalFirstStore {
     for (const change of this.pendingChanges) {
       try {
         if (change.type === 'create_order') {
-          await api.createOrder(change.data);
+          // Create the order and get the real ID
+          const createdOrder = await api.createOrder(change.data);
+          console.log('[LocalFirst] Synced offline order:', change.data.id, '→', createdOrder.id);
+          
+          // If the order was already confirmed offline, confirm it now
+          if (change.data.status === 'paid') {
+            await api.confirmOrder(createdOrder.id);
+            console.log('[LocalFirst] Confirmed synced order:', createdOrder.id);
+          }
+        } else if (change.type === 'confirm_order') {
+          // Confirm an existing online order
+          await api.confirmOrder(change.orderId);
+          console.log('[LocalFirst] Synced order confirmation:', change.orderId);
         }
-        // Add other change types as needed
-      } catch (e) {
-        console.error('[LocalFirst] Failed to sync change:', e);
+      } catch (e: any) {
+        console.error('[LocalFirst] Failed to sync change:', e.message);
         remaining.push(change);
       }
     }
 
     this.pendingChanges = remaining;
     await this.savePendingChanges();
+    
+    if (remaining.length > 0) {
+      console.log(`[LocalFirst] ${remaining.length} changes still pending`);
+    } else {
+      console.log('[LocalFirst] All pending changes synced!');
+    }
   }
 
   // ==================== CACHE INVALIDATION ====================

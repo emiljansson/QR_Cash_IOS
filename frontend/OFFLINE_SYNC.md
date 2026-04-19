@@ -67,7 +67,9 @@ NetInfo.addEventListener(state => {
 | Funktion | Offline | Anteckning |
 |----------|---------|------------|
 | Visa produkter | ✅ | Cachad data |
-| Skapa order | ✅ | Lokal order + QR-kod |
+| Skapa order (Swish QR) | ✅ | QR genereras lokalt |
+| Bekräfta betalning | ✅ | Sparas i sync-kö |
+| Kontant betalning | ✅ | Sparas i sync-kö |
 | Visa orderhistorik | ✅ | Cachad data |
 | Parkerade kundkorgar | ✅ | Cachad data |
 | Statistik | ❌ | Kräver live-data |
