@@ -56,57 +56,75 @@ export default function POSScreen() {
   const { isConnected: wsConnected, connectionStatus } = useRealtimeSync();
   // Network status - actual internet connectivity
   const { isConnected: networkConnected } = useNetworkStatus();
+  
+  // Ref to track retry attempts without causing re-renders
+  const retryAttemptsRef = React.useRef(0);
 
-  const loadProducts = useCallback(async (isRetry = false) => {
+  const loadProducts = useCallback(async () => {
     if (!user?.user_id) {
       console.log('[POS] No user_id, skipping product load');
       setLoading(false);
       return;
     }
     
-    if (isRetry) {
+    const currentAttempt = retryAttemptsRef.current;
+    if (currentAttempt > 0) {
       setRetrying(true);
     }
     
     try {
-      console.log('[POS] Loading products for user:', user.user_id, isRetry ? `(retry #${retryCount + 1})` : '');
+      console.log('[POS] Loading products for user:', user.user_id, currentAttempt > 0 ? `(attempt #${currentAttempt})` : '');
       // Use local-first store - returns cached data instantly, syncs in background
       const data = await localStore.getProducts(user.user_id, true);
       const productList = data || [];
       console.log('[POS] Loaded', productList.length, 'products');
       setProducts(productList);
-      setRetryCount(0);
-      setRetrying(false);
       
-      // If no products found and we have network, schedule a retry
-      if (productList.length === 0 && networkConnected && retryCount < 5) {
-        console.log('[POS] No products found, will retry in 3 seconds...');
-        setRetryCount(prev => prev + 1);
+      if (productList.length > 0) {
+        // Success! Reset retry counter
+        retryAttemptsRef.current = 0;
+        setRetryCount(0);
+        setRetrying(false);
+      } else if (networkConnected && retryAttemptsRef.current < 5) {
+        // No products found, schedule retry
+        retryAttemptsRef.current += 1;
+        setRetryCount(retryAttemptsRef.current);
+        const delay = Math.min(3000 * retryAttemptsRef.current, 15000);
+        console.log(`[POS] No products, retrying in ${delay/1000}s (attempt ${retryAttemptsRef.current}/5)`);
+        setTimeout(() => {
+          loadProducts();
+        }, delay);
+      } else {
+        // Max retries reached or no network
+        setRetrying(false);
       }
     } catch (e: any) {
       console.error('[POS] Failed to load products:', e.message);
       setProducts([]);
-      // Schedule retry on error
-      if (networkConnected && retryCount < 5) {
-        setRetryCount(prev => prev + 1);
+      
+      if (networkConnected && retryAttemptsRef.current < 5) {
+        retryAttemptsRef.current += 1;
+        setRetryCount(retryAttemptsRef.current);
+        const delay = Math.min(3000 * retryAttemptsRef.current, 15000);
+        console.log(`[POS] Error, retrying in ${delay/1000}s (attempt ${retryAttemptsRef.current}/5)`);
+        setTimeout(() => {
+          loadProducts();
+        }, delay);
+      } else {
+        setRetrying(false);
       }
     } finally {
       setLoading(false);
-      setRetrying(false);
     }
-  }, [user?.user_id, networkConnected, retryCount]);
+  }, [user?.user_id, networkConnected]);
 
-  // Auto-retry when products are empty
-  useEffect(() => {
-    if (retryCount > 0 && retryCount <= 5 && products.length === 0 && !loading && !retrying) {
-      const delay = Math.min(3000 * retryCount, 15000); // 3s, 6s, 9s, 12s, 15s
-      console.log(`[POS] Scheduling retry #${retryCount} in ${delay/1000}s`);
-      const timer = setTimeout(() => {
-        loadProducts(true);
-      }, delay);
-      return () => clearTimeout(timer);
-    }
-  }, [retryCount, products.length, loading, retrying, loadProducts]);
+  // Manual retry function
+  const handleManualRetry = useCallback(() => {
+    retryAttemptsRef.current = 1;
+    setRetryCount(1);
+    setRetrying(true);
+    loadProducts();
+  }, [loadProducts]);
 
   const loadSettings = useCallback(async () => {
     if (!user?.user_id) return;
@@ -435,10 +453,7 @@ export default function POSScreen() {
                     {networkConnected && (
                       <TouchableOpacity 
                         style={styles.retryBtn} 
-                        onPress={() => {
-                          setRetryCount(1);
-                          loadProducts(true);
-                        }}
+                        onPress={handleManualRetry}
                       >
                         <Ionicons name="refresh" size={16} color={Colors.primary} />
                         <Text style={styles.retryBtnText}>Försök igen</Text>
