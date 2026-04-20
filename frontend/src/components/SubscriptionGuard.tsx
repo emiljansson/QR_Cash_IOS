@@ -22,6 +22,8 @@ interface SubscriptionGuardProps {
   gracePeriodDays?: number;
   // If true, only check database status (faster, works offline)
   offlineMode?: boolean;
+  // If true, bypass subscription check (for development)
+  bypassCheck?: boolean;
 }
 
 export function SubscriptionGuard({ 
@@ -29,6 +31,7 @@ export function SubscriptionGuard({
   userId,
   gracePeriodDays = 7,
   offlineMode = false,
+  bypassCheck = __DEV__, // Bypass in development mode by default
 }: SubscriptionGuardProps) {
   const [loading, setLoading] = useState(true);
   const [isActive, setIsActive] = useState(false);
@@ -37,8 +40,15 @@ export function SubscriptionGuard({
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
 
   useEffect(() => {
+    // Bypass check in development mode
+    if (bypassCheck) {
+      console.log('[SubscriptionGuard] Bypassing subscription check (dev mode)');
+      setIsActive(true);
+      setLoading(false);
+      return;
+    }
     checkSubscription();
-  }, [userId]);
+  }, [userId, bypassCheck]);
 
   const checkSubscription = async () => {
     setLoading(true);
