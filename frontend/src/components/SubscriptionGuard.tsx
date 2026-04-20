@@ -22,8 +22,6 @@ interface SubscriptionGuardProps {
   gracePeriodDays?: number;
   // If true, only check database status (faster, works offline)
   offlineMode?: boolean;
-  // If true, bypass subscription check (for development)
-  bypassCheck?: boolean;
 }
 
 export function SubscriptionGuard({ 
@@ -31,7 +29,6 @@ export function SubscriptionGuard({
   userId,
   gracePeriodDays = 7,
   offlineMode = false,
-  bypassCheck = __DEV__, // Bypass in development mode by default
 }: SubscriptionGuardProps) {
   const [loading, setLoading] = useState(true);
   const [isActive, setIsActive] = useState(false);
@@ -40,99 +37,78 @@ export function SubscriptionGuard({
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
 
   useEffect(() => {
-    // Bypass check in development mode
-    if (bypassCheck) {
-      console.log('[SubscriptionGuard] Bypassing subscription check (dev mode)');
-      setIsActive(true);
-      setLoading(false);
-      return;
-    }
     checkSubscription();
-  }, [userId, bypassCheck]);
+  }, [userId]);
 
   const checkSubscription = async () => {
     setLoading(true);
     
     try {
-      // First check local database for cached status (works offline)
+      // FIRST: Check Commhub database (superadmin can activate accounts here)
       if (userId) {
         const userProfile = await commhub.getCurrentUser();
-        if (userProfile?.subscription_active) {
-          // Check if subscription hasn't expired
+        
+        // If subscription_active is true in database, allow access
+        if (userProfile?.subscription_active === true) {
+          console.log('[SubscriptionGuard] Subscription active in database');
+          setIsActive(true);
+          
+          // Check expiration if set
           if (userProfile.subscription_end) {
             const endDate = new Date(userProfile.subscription_end);
             const now = new Date();
-            const graceEnd = new Date(endDate.getTime() + gracePeriodDays * 24 * 60 * 60 * 1000);
+            const days = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+            setDaysRemaining(days > 0 ? days : 0);
             
-            if (now < graceEnd) {
-              setIsActive(true);
-              const days = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-              setDaysRemaining(days > 0 ? days : 0);
-              setLoading(false);
-              
-              // If offline mode, don't check RevenueCat
-              if (offlineMode) return;
+            // If expired, check grace period
+            if (now > endDate) {
+              const graceEnd = new Date(endDate.getTime() + gracePeriodDays * 24 * 60 * 60 * 1000);
+              if (now > graceEnd) {
+                console.log('[SubscriptionGuard] Subscription expired and grace period over');
+                setIsActive(false);
+              } else {
+                const graceDays = Math.ceil((graceEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+                setDaysRemaining(-graceDays); // Negative = in grace period
+              }
             }
-          } else {
-            // No end date = lifetime or active
-            setIsActive(true);
-            setLoading(false);
-            if (offlineMode) return;
           }
+          
+          setLoading(false);
+          
+          // Don't check RevenueCat if database says active (faster, works offline)
+          if (offlineMode) return;
         }
       }
 
-      // Check RevenueCat for real-time status (requires network)
-      await revenueCat.initialize(userId);
-      const rcStatus = await revenueCat.checkSubscriptionStatus();
-      setStatus(rcStatus);
-      
-      if (rcStatus.isActive) {
-        setIsActive(true);
-        
-        // Sync to database
-        if (userId) {
-          await syncSubscriptionToDatabase(userId, rcStatus);
-        }
-        
-        if (rcStatus.expirationDate) {
-          const endDate = new Date(rcStatus.expirationDate);
-          const now = new Date();
-          const days = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-          setDaysRemaining(days > 0 ? days : null);
-        }
-      } else {
-        // Check grace period from database
-        if (userId) {
-          const userProfile = await commhub.getCurrentUser();
-          if (userProfile?.subscription_end) {
-            const endDate = new Date(userProfile.subscription_end);
-            const now = new Date();
-            const graceEnd = new Date(endDate.getTime() + gracePeriodDays * 24 * 60 * 60 * 1000);
+      // SECOND: Check RevenueCat for real-time status (if not already active from database)
+      if (!isActive) {
+        try {
+          await revenueCat.initialize(userId);
+          const rcStatus = await revenueCat.checkSubscriptionStatus();
+          setStatus(rcStatus);
+          
+          if (rcStatus.isActive) {
+            console.log('[SubscriptionGuard] Subscription active in RevenueCat');
+            setIsActive(true);
             
-            if (now < graceEnd) {
-              setIsActive(true);
-              const graceDays = Math.ceil((graceEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-              setDaysRemaining(-graceDays); // Negative = in grace period
-            } else {
-              setIsActive(false);
-              // Mark as inactive in database
+            // Sync RevenueCat status to Commhub database
+            if (userId) {
               await syncSubscriptionToDatabase(userId, rcStatus);
             }
-          } else {
-            setIsActive(false);
+            
+            if (rcStatus.expirationDate) {
+              const endDate = new Date(rcStatus.expirationDate);
+              const now = new Date();
+              const days = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+              setDaysRemaining(days > 0 ? days : null);
+            }
           }
-        } else {
-          setIsActive(false);
+        } catch (e) {
+          console.log('[SubscriptionGuard] RevenueCat check failed, using database status');
         }
       }
     } catch (error) {
       console.error('[SubscriptionGuard] Error checking subscription:', error);
-      // On error, check database cache
-      if (userId) {
-        const userProfile = await commhub.getCurrentUser();
-        setIsActive(userProfile?.subscription_active === true);
-      }
     } finally {
       setLoading(false);
     }
