@@ -774,6 +774,102 @@ class CommHubService {
     return user;
   }
 
+  /**
+   * Get current user (alias for getMe)
+   */
+  async getCurrentUser(): Promise<UserProfile | null> {
+    try {
+      return await this.getMe();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Update current user's subscription status in database
+   */
+  async updateCurrentUser(data: {
+    subscription_active?: boolean;
+    subscription_start?: string;
+    subscription_end?: string;
+    subscription_product?: string;
+  }): Promise<void> {
+    const userId = await this.getUserIdAsync();
+    if (!userId) {
+      console.warn('[CommHub] Cannot update user: no user_id');
+      return;
+    }
+
+    try {
+      // First get the current user document
+      const response = await fetch(
+        `${COMMHUB_URL}/api/data/qr_users/query?app_id=${APP_ID}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY,
+          },
+          body: JSON.stringify({
+            filter: { $or: [{ id: userId }, { _id: userId }] },
+            limit: 1,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user');
+      }
+
+      const result = await response.json();
+      const users = result.documents || result;
+      
+      if (!users || users.length === 0) {
+        console.warn('[CommHub] User not found for update');
+        return;
+      }
+
+      const existingUser = users[0];
+      const docId = existingUser.id || existingUser._id;
+      const existingData = existingUser.data || existingUser;
+
+      // Update the user document
+      const updateResponse = await fetch(
+        `${COMMHUB_URL}/api/data/qr_users/${docId}?app_id=${APP_ID}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY,
+          },
+          body: JSON.stringify({
+            data: {
+              ...existingData,
+              ...data,
+              updated_at: new Date().toISOString(),
+            },
+          }),
+        }
+      );
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to update user');
+      }
+
+      // Update local cache too
+      const storedUser = await AsyncStorage.getItem(USER_KEY);
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify({ ...user, ...data }));
+      }
+
+      console.log('[CommHub] User subscription updated:', data);
+    } catch (e) {
+      console.error('[CommHub] Failed to update user:', e);
+      throw e;
+    }
+  }
+
   async updateProfile(data: Partial<UserProfile>): Promise<UserProfile> {
     const response = await fetch(`${COMMHUB_URL}/api/public/${APP_ID}/me`, {
       method: 'PUT',
