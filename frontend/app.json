@@ -2,7 +2,7 @@
   "expo": {
     "name": "QR-Kassan",
     "slug": "frontend",
-    "version": "2.0.533",
+    "version": "2.0.534",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -13,7 +13,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Fotografera produktbilder för kassan",
         "NSPhotoLibraryUsageDescription": "Välj produktbilder från galleriet"
-      }
+      },
+      "bundleIdentifier": "com.emergent.githubimport.crmidv"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +26,8 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
-      ]
+      ],
+      "package": "com.emergent.githubimport.crmidv"
     },
     "web": {
       "bundler": "metro",
