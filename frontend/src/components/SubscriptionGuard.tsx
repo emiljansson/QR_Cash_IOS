@@ -44,68 +44,66 @@ export function SubscriptionGuard({
     setLoading(true);
     
     try {
-      // FIRST: Check Commhub database (superadmin can activate accounts here)
+      // FIRST: Check Commhub database directly (superadmin can activate accounts here)
       if (userId) {
-        const userProfile = await commhub.getCurrentUser();
+        // Query database directly to get fresh subscription status
+        // Try multiple ways to find the user
+        let userFromDb = null;
         
-        // If subscription_active is true in database, allow access
-        if (userProfile?.subscription_active === true) {
-          console.log('[SubscriptionGuard] Subscription active in database');
-          setIsActive(true);
-          
-          // Check expiration if set
-          if (userProfile.subscription_end) {
-            const endDate = new Date(userProfile.subscription_end);
-            const now = new Date();
-            const days = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-            setDaysRemaining(days > 0 ? days : 0);
-            
-            // If expired, check grace period
-            if (now > endDate) {
-              const graceEnd = new Date(endDate.getTime() + gracePeriodDays * 24 * 60 * 60 * 1000);
-              if (now > graceEnd) {
-                console.log('[SubscriptionGuard] Subscription expired and grace period over');
-                setIsActive(false);
-              } else {
-                const graceDays = Math.ceil((graceEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-                setDaysRemaining(-graceDays); // Negative = in grace period
-              }
+        try {
+          const users = await commhub.query('qr_users', { user_id: userId }, { limit: 1 });
+          userFromDb = users[0];
+        } catch (e) {
+          console.log('[SubscriptionGuard] Query by user_id failed, trying email');
+        }
+        
+        // If not found, try to get cached user and search by email
+        if (!userFromDb) {
+          const cachedUser = await commhub.getCurrentUser();
+          if (cachedUser?.email) {
+            try {
+              const users = await commhub.query('qr_users', { email: cachedUser.email }, { limit: 1 });
+              userFromDb = users[0];
+            } catch (e) {
+              console.log('[SubscriptionGuard] Query by email failed');
             }
           }
           
+          // Check cached user's subscription status as last resort
+          if (!userFromDb && cachedUser?.subscription_active === true) {
+            console.log('[SubscriptionGuard] Using cached subscription status');
+            setIsActive(true);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        // If subscription_active is true in database, allow access
+        if (userFromDb?.subscription_active === true) {
+          console.log('[SubscriptionGuard] Subscription active in database for:', userFromDb.email);
+          setIsActive(true);
           setLoading(false);
-          
-          // Don't check RevenueCat if database says active (faster, works offline)
-          if (offlineMode) return;
+          return; // Exit early - subscription is valid
         }
       }
 
-      // SECOND: Check RevenueCat for real-time status (if not already active from database)
-      if (!isActive) {
-        try {
-          await revenueCat.initialize(userId);
-          const rcStatus = await revenueCat.checkSubscriptionStatus();
-          setStatus(rcStatus);
+      // SECOND: Check RevenueCat for real-time status
+      try {
+        await revenueCat.initialize(userId);
+        const rcStatus = await revenueCat.checkSubscriptionStatus();
+        setStatus(rcStatus);
+        
+        if (rcStatus.isActive) {
+          console.log('[SubscriptionGuard] Subscription active in RevenueCat');
+          setIsActive(true);
           
-          if (rcStatus.isActive) {
-            console.log('[SubscriptionGuard] Subscription active in RevenueCat');
-            setIsActive(true);
-            
-            // Sync RevenueCat status to Commhub database
-            if (userId) {
-              await syncSubscriptionToDatabase(userId, rcStatus);
-            }
-            
-            if (rcStatus.expirationDate) {
-              const endDate = new Date(rcStatus.expirationDate);
-              const now = new Date();
-              const days = Math.ceil((endDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-              setDaysRemaining(days > 0 ? days : null);
-            }
+          // Sync RevenueCat status to Commhub database
+          if (userId) {
+            await syncSubscriptionToDatabase(userId, rcStatus);
           }
-        } catch (e) {
-          console.log('[SubscriptionGuard] RevenueCat check failed, using database status');
         }
+      } catch (e) {
+        console.log('[SubscriptionGuard] RevenueCat check failed:', e);
       }
     } catch (error) {
       console.error('[SubscriptionGuard] Error checking subscription:', error);
