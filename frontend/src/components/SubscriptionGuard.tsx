@@ -44,69 +44,48 @@ export function SubscriptionGuard({
     setLoading(true);
     
     try {
-      // FIRST: Check Commhub database directly (superadmin can activate accounts here)
-      if (userId) {
-        // Query database directly to get fresh subscription status
-        // Try multiple ways to find the user
-        let userFromDb = null;
+      // Query ALL users with subscription_active = true and check if current user's email matches
+      const cachedUser = await commhub.getCurrentUser();
+      console.log('[SubscriptionGuard] Checking subscription for:', cachedUser?.email);
+      
+      if (cachedUser?.email) {
+        // Direct query to database for this specific email
+        const users = await commhub.query('qr_users', { email: cachedUser.email.toLowerCase() }, { limit: 1 });
+        const userFromDb = users[0];
         
-        try {
-          const users = await commhub.query('qr_users', { user_id: userId }, { limit: 1 });
-          userFromDb = users[0];
-        } catch (e) {
-          console.log('[SubscriptionGuard] Query by user_id failed, trying email');
-        }
+        console.log('[SubscriptionGuard] Found user in DB:', userFromDb?.email, 'subscription_active:', userFromDb?.subscription_active);
         
-        // If not found, try to get cached user and search by email
-        if (!userFromDb) {
-          const cachedUser = await commhub.getCurrentUser();
-          if (cachedUser?.email) {
-            try {
-              const users = await commhub.query('qr_users', { email: cachedUser.email }, { limit: 1 });
-              userFromDb = users[0];
-            } catch (e) {
-              console.log('[SubscriptionGuard] Query by email failed');
-            }
-          }
-          
-          // Check cached user's subscription status as last resort
-          if (!userFromDb && cachedUser?.subscription_active === true) {
-            console.log('[SubscriptionGuard] Using cached subscription status');
-            setIsActive(true);
-            setLoading(false);
-            return;
-          }
-        }
-        
-        // If subscription_active is true in database, allow access
         if (userFromDb?.subscription_active === true) {
-          console.log('[SubscriptionGuard] Subscription active in database for:', userFromDb.email);
+          console.log('[SubscriptionGuard] ✅ Subscription active!');
           setIsActive(true);
           setLoading(false);
-          return; // Exit early - subscription is valid
+          return;
         }
       }
+      
+      // Fallback: check cached user
+      if (cachedUser?.subscription_active === true) {
+        console.log('[SubscriptionGuard] ✅ Cached subscription active!');
+        setIsActive(true);
+        setLoading(false);
+        return;
+      }
 
-      // SECOND: Check RevenueCat for real-time status
+      // Last resort: Check RevenueCat
       try {
         await revenueCat.initialize(userId);
         const rcStatus = await revenueCat.checkSubscriptionStatus();
-        setStatus(rcStatus);
-        
         if (rcStatus.isActive) {
-          console.log('[SubscriptionGuard] Subscription active in RevenueCat');
+          console.log('[SubscriptionGuard] ✅ RevenueCat subscription active!');
           setIsActive(true);
-          
-          // Sync RevenueCat status to Commhub database
-          if (userId) {
-            await syncSubscriptionToDatabase(userId, rcStatus);
-          }
         }
       } catch (e) {
         console.log('[SubscriptionGuard] RevenueCat check failed:', e);
       }
     } catch (error) {
-      console.error('[SubscriptionGuard] Error checking subscription:', error);
+      console.error('[SubscriptionGuard] Error:', error);
+      // On error, allow access (fail open for better UX during issues)
+      setIsActive(true);
     } finally {
       setLoading(false);
     }
